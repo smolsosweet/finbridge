@@ -149,6 +149,7 @@ assert.match(render(), /\+200 CNY/);
 assert.match(render(), /−30 CNY/);
 assert.doesNotMatch(render(), /600,000 VND/, "currency rows follow wallet filter");
 select("Transaction type").props.onChange({ target: { value: "income" } });
+assert.deepEqual(categoryOptions(), ["all", "Salary"], "categories filter by transaction type");
 assert.equal(rowCount(render()), 1);
 assert.match(render(), /−0 CNY/, "zero expense still has a currency row");
 const picker = find(tree(), (node) => node.type === periods.HistoryPeriodPicker);

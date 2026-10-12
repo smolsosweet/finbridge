@@ -60,10 +60,14 @@ export function TransactionHistory({ navigate }: { navigate: (screen: string) =>
     return item ? item.name === "." ? (lang === "vi" ? "Ví chính" : lang === "zh" ? "主钱包" : "Main wallet") : item.name : text.missingWallet;
   };
   const base: HistoryRecord[] = sample ? DASHBOARD_SAMPLE.map((record) => ({ ...record, wallet: record.wallet || state.wallets.find((wallet) => wallet.currency === record.currency)?.id })) : state.transactions;
-  const walletRecords = base.filter((record) => walletId === "all" || record.wallet === walletId || record.targetWallet === walletId);
   const categoryKey = (name: string) => name.trim().normalize("NFC").toLocaleLowerCase(locale);
   const categoryNames = new Map<string, string>();
-  walletRecords.forEach((record) => {
+  const categoryRecords = base.filter((record) => {
+    const matchesWallet = walletId === "all" || record.wallet === walletId || record.targetWallet === walletId;
+    const matchesKind = kind === "all" || record.type === kind;
+    return matchesWallet && matchesKind;
+  });
+  categoryRecords.forEach((record) => {
     if (record.category && record.category.trim() && !categoryNames.has(categoryKey(record.category))) {
       categoryNames.set(categoryKey(record.category), record.category.trim());
     }
@@ -72,7 +76,10 @@ export function TransactionHistory({ navigate }: { navigate: (screen: string) =>
     state.categories.forEach((cat) => {
       const trimmed = cat.trim();
       const meta = state.categoryMeta?.[trimmed];
-      if (trimmed && !meta?.archived && !categoryNames.has(categoryKey(trimmed))) {
+      if (!trimmed || meta?.archived) return;
+      const catType = meta?.type || "expense";
+      const matchesKind = kind === "all" || catType === kind;
+      if (matchesKind && !categoryNames.has(categoryKey(trimmed))) {
         categoryNames.set(categoryKey(trimmed), trimmed);
       }
     });
@@ -194,7 +201,7 @@ export function TransactionHistory({ navigate }: { navigate: (screen: string) =>
           <div className="fb-select-wrap">
             <select
               value={kind}
-              onChange={(event) => { setKind(event.target.value as Kind); setPage(1); }}
+              onChange={(event) => { setKind(event.target.value as Kind); setCategory("all"); setPage(1); }}
             >
               <option value="all">{text.all}</option>
               <option value="expense">{text.expense}</option>
@@ -213,6 +220,9 @@ export function TransactionHistory({ navigate }: { navigate: (screen: string) =>
               onChange={(event) => { setCategory(event.target.value); setPage(1); }}
             >
               <option value="all">{allCategoriesLabel}</option>
+              {category !== "all" && !availableCategories.includes(category) && (
+                <option value={category}>{category}</option>
+              )}
               {availableCategories.map((value) => (
                 <option key={value} value={value}>{value}</option>
               ))}
@@ -278,10 +288,6 @@ export function TransactionHistory({ navigate }: { navigate: (screen: string) =>
           <ReceiptText size={30} />
           <h3>{text.empty}</h3>
           <p>{text.emptyHint}</p>
-          <button type="button" className="fb-history-clear" onClick={reset}>
-            <RotateCcw size={14} />
-            <span>{text.clear}</span>
-          </button>
         </div>
       ) : (
         visible.map((record) => {
