@@ -5,11 +5,12 @@ import { useSyncExternalStore } from "react";
 export interface Wallet { id: string; name: string; currency: string; initial: number; type: string; limit?: number; archived?: boolean; }
 export interface Transaction { id: string; title: string; amount: number; type: "expense" | "income" | "transfer"; category: string; subcategory?: string; date: string; wallet: string; targetWallet?: string; note: string; image?: string; interval?: number; unit?: string; }
 export interface Goal { id: string; kind: string; title: string; amount: number; saved: number; currency: string; date: string; cycle: string; category: string; wallet: string; direction: string; person: string; }
+export interface FixedExpense { id: string; budgetId: string; title: string; amount: number; category: string; dueDate: string; recurrence: "once" | "weekly" | "monthly" | "yearly"; active: boolean; }
 export interface CategoryMetadata { type: string; icon: string; children: string[]; archived?: boolean; }
-export interface AppState { wallets: Wallet[]; transactions: Transaction[]; goals: Goal[]; recurring: Transaction[]; rules: string[]; categories: string[]; categoryMeta: Record<string, CategoryMetadata>; receiptDraft?: string; settings: Record<string, string | boolean>; }
+export interface AppState { wallets: Wallet[]; transactions: Transaction[]; goals: Goal[]; fixedExpenses?: FixedExpense[]; recurring: Transaction[]; rules: string[]; categories: string[]; categoryMeta: Record<string, CategoryMetadata>; receiptDraft?: string; settings: Record<string, string | boolean>; }
 export const initialState: AppState = {
   wallets: [{ id: "default", name: ".", currency: "USD", initial: 0, type: "cash" }],
-  transactions: [], goals: [], recurring: [], rules: [],
+  transactions: [], goals: [], fixedExpenses: [], recurring: [], rules: [],
   categories: ["Chưa được phân loại", "Thức ăn & Đồ uống", "Nhà", "Mua sắm", "Thu nhập", "Lương", "Quà tặng"],
   categoryMeta: {
     "Chưa được phân loại": { type: "expense", icon: "❓", children: [] },

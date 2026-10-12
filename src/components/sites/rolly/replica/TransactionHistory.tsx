@@ -8,6 +8,7 @@ import { localDateKey } from "./chartWeek";
 import { HistoryPeriodPicker, matchesHistoryPeriod, type HistoryPeriod } from "./HistoryPeriodPicker";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
 import { useAppState } from "./store";
+import { FinBridgeHeader } from "./FinBridgeHeader";
 
 const PAGE_SIZE = 5;
 type Kind = "all" | "expense" | "income" | "transfer";
@@ -125,15 +126,7 @@ export function TransactionHistory({ navigate }: { navigate: (screen: string) =>
   const addActionLabel = lang === "vi" ? "Thêm giao dịch" : lang === "zh" ? "添加交易" : "Add transaction";
 
   return <main className="r-dashboard fb-home fb-history">
-    <header className="fb-home-header">
-      <div className="fb-brand">
-        <span className="fb-brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" fill="none">
-            <path d="M5 24V13M27 24V13M5 17C11 5 21 5 27 17M5 20H27M11 20V24M16 20V24M21 20V24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-          </svg>
-        </span>
-        <span>FinBridge<small>{lang === "vi" ? "Không gian tài chính của bạn" : lang === "zh" ? "您的财务空间" : "Your financial workspace"}</small></span>
-      </div>
+    <FinBridgeHeader lang={lang}>
       <div className="fb-header-actions">
         <button
           type="button"
@@ -146,7 +139,7 @@ export function TransactionHistory({ navigate }: { navigate: (screen: string) =>
           <span className="fb-header-btn-text">{lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar"}</span>
         </button>
       </div>
-    </header>
+    </FinBridgeHeader>
 
     <div className="fb-home-intro fb-history-header">
       <div>
