@@ -1,0 +1,13 @@
+services:
+  auth-db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: finbridge_app
+      POSTGRES_PASSWORD: ${FINBRIDGE_LOCAL_DB_PASSWORD:?Set a local database password}
+      POSTGRES_DB: finbridge_auth
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - finbridge-auth-data:/var/lib/postgresql/data
+volumes:
+  finbridge-auth-data:

@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { readUserWorkspace, userWorkspaceKey, importLegacyWorkspace as copyLegacyWorkspace } from "@/lib/workspace-storage";
 
 export interface Wallet { id: string; name: string; currency: string; initial: number; type: string; limit?: number; archived?: boolean; }
 export interface Transaction { id: string; title: string; amount: number; type: "expense" | "income" | "transfer"; category: string; subcategory?: string; date: string; wallet: string; targetWallet?: string; note: string; image?: string; interval?: number; unit?: string; }
@@ -25,14 +26,35 @@ export const initialState: AppState = {
 };
 let current = initialState;
 let initialized = false;
+let activeOwner: string | null = null;
+let ownerName = "";
 const listeners = new Set<() => void>();
+function notify() { listeners.forEach((listener) => listener()); }
+export function workspaceOwner() { return activeOwner; }
+export function activateUserWorkspace(userId: string, name: string) {
+  if (!userId.trim()) throw new Error("A server-authenticated user is required.");
+  if (activeOwner === userId) return;
+  activeOwner = userId; ownerName = name; initialized = false;
+  current = { ...structuredClone(initialState), settings: { ...initialState.settings, name, language: "English" } };
+  getSnapshot(); notify();
+}
+export function clearUserWorkspace(expectedOwner?: string) {
+  if (expectedOwner && activeOwner !== expectedOwner) return;
+  activeOwner = null; ownerName = ""; initialized = false; current = initialState; notify();
+}
+export function importOldWorkspace(explicitlyConfirmed: boolean) {
+  if (!activeOwner) throw new Error("No active user workspace.");
+  copyLegacyWorkspace(localStorage, activeOwner, explicitlyConfirmed);
+  initialized = false; getSnapshot(); notify();
+}
 function getSnapshot() {
+  if (!activeOwner) return initialState;
   if (!initialized && typeof window !== "undefined") {
     initialized = true;
     try {
-      const saved = JSON.parse(localStorage.getItem("rolly-replica-v2") || "null") as AppState | null;
-      if (saved?.wallets && saved?.settings) current = { ...initialState, ...saved, settings: { ...initialState.settings, ...saved.settings } };
-    } catch { /* Invalid saved data starts with the observed empty state. */ }
+      const saved = readUserWorkspace(localStorage, activeOwner);
+      if (saved) current = { ...initialState, ...saved, settings: { ...initialState.settings, name: ownerName, language: "English", ...saved.settings } };
+    } catch { /* User data and the unclaimed legacy record remain untouched. */ }
   }
   return current;
 }
@@ -40,10 +62,12 @@ function subscribe(callback: () => void) {
   listeners.add(callback);
   return () => { listeners.delete(callback); };
 }
+export const subscribeWorkspace = subscribe;
 export function updateState(update: (value: AppState) => AppState) {
+  if (!activeOwner) throw new Error("No active user workspace.");
   current = update(getSnapshot());
-  try { localStorage.setItem("rolly-replica-v2", JSON.stringify(current)); } catch { /* In-memory editing remains available. */ }
-  listeners.forEach((listener) => listener());
+  try { localStorage.setItem(userWorkspaceKey(activeOwner), JSON.stringify(current)); } catch { /* In-memory editing remains available. */ }
+  notify();
 }
 export function useAppState() { return useSyncExternalStore(subscribe, getSnapshot, () => initialState); }
 export function setSetting(name: string, value: string | boolean) { updateState((s) => ({ ...s, settings: { ...s.settings, [name]: value } })); }
