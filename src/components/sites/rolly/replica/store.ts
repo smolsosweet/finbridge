@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-export interface Wallet { id: string; name: string; currency: string; initial: number; type: string; limit?: number; }
+export interface Wallet { id: string; name: string; currency: string; initial: number; type: string; limit?: number; archived?: boolean; }
 export interface Transaction { id: string; title: string; amount: number; type: "expense" | "income" | "transfer"; category: string; subcategory?: string; date: string; wallet: string; targetWallet?: string; note: string; image?: string; interval?: number; unit?: string; }
 export interface Goal { id: string; kind: string; title: string; amount: number; saved: number; currency: string; date: string; cycle: string; category: string; wallet: string; direction: string; person: string; }
 export interface CategoryMetadata { type: string; icon: string; children: string[]; }

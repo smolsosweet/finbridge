@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowDownRight, ArrowRight, ArrowUpRight, CalendarDays, ChevronDown, Info, Pencil, Plus, ReceiptText, Search, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Ban, CalendarDays, ChevronDown, FolderTree, Info, Lock, Pencil, Plus, ReceiptText, RotateCcw, Search, Settings, SlidersHorizontal, Trash2, Wallet, X } from "lucide-react";
 import { EmptyState, Icon, Modal } from "./Ui";
 import { money, updateState, useAppState, type Transaction, type Wallet as WalletType } from "./store";
+import { categoryIcon } from "./Categories";
 import { calendarWeek, localDateKey, shiftCalendarWeek } from "./chartWeek";
 
 type DashboardSample = {
@@ -399,8 +400,10 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const queryWallet = searchParams.get("wallet");
   const querySource = searchParams.get("source");
 
-  const [walletId, setWalletId] = useState(queryWallet || state.wallets[0].id);
-  const wallet = state.wallets.find((w) => w.id === walletId) || state.wallets[0];
+  const activeWallets = state.wallets.filter((w) => !w.archived);
+  const archivedWallets = state.wallets.filter((w) => w.archived);
+  const [walletId, setWalletId] = useState(queryWallet || activeWallets[0]?.id || state.wallets[0].id);
+  const wallet = activeWallets.find((w) => w.id === walletId) || activeWallets[0] || state.wallets[0];
   const [period, setPeriod] = useState("Tháng");
   const [month, setMonth] = useState(9);
   const [year, setYear] = useState(2026);
@@ -452,6 +455,158 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
     updateState((s) => ({ ...s, wallets: [...s.wallets, nextWallet] }));
     setWalletId(newId);
     setModal("");
+  };
+
+  // Manage wallet modal state
+  const [editingWalletId, setEditingWalletId] = useState("");
+  const [manageWalletTab, setManageWalletTab] = useState<"details" | "categories">("details");
+  const [editWalletName, setEditWalletName] = useState("");
+  const [editWalletType, setEditWalletType] = useState<"cash" | "credit">("cash");
+  const [editWalletCurrency, setEditWalletCurrency] = useState("VND");
+  const [editWalletInitial, setEditWalletInitial] = useState("");
+  const [editWalletLimit, setEditWalletLimit] = useState("");
+  const [isReconciling, setIsReconciling] = useState(false);
+  const [newActualBalance, setNewActualBalance] = useState("");
+  const [catType, setCatType] = useState<"expense" | "income">("expense");
+  const [newCatName, setNewCatName] = useState("");
+
+  const openManageWalletModal = (targetWalletId: string) => {
+    const target = state.wallets.find((w) => w.id === targetWalletId) || wallet;
+    setEditingWalletId(target.id);
+    setEditWalletName(target.name === "." ? "Ví chính" : target.name);
+    setEditWalletType(target.type === "credit" ? "credit" : "cash");
+    setEditWalletCurrency(target.currency || "VND");
+    setEditWalletInitial(String(target.initial || 0));
+    setEditWalletLimit(target.limit ? String(target.limit) : "");
+    setManageWalletTab("details");
+    setIsReconciling(false);
+    setNewActualBalance("");
+    setNewCatName("");
+    setModal("manageWallet");
+  };
+
+  const handleSaveWalletInfo = (e: React.FormEvent) => {
+    e.preventDefault();
+    const target = state.wallets.find((w) => w.id === editingWalletId);
+    if (!target) return;
+    const txCount = state.transactions.filter((t) => t.wallet === target.id || t.targetWallet === target.id).length;
+    const hasTxs = txCount > 0;
+    const updated: WalletType = {
+      ...target,
+      name: editWalletName.trim() || target.name,
+      type: editWalletType,
+      limit: editWalletType === "credit" ? Number(editWalletLimit) || undefined : undefined,
+      currency: hasTxs ? target.currency : editWalletCurrency,
+      initial: hasTxs ? target.initial : Number(editWalletInitial || 0),
+    };
+    updateState((s) => ({
+      ...s,
+      wallets: s.wallets.map((w) => (w.id === target.id ? updated : w)),
+    }));
+    close();
+  };
+
+  const handleConfirmAdjustment = (e: React.FormEvent) => {
+    e.preventDefault();
+    const target = state.wallets.find((w) => w.id === editingWalletId);
+    if (!target) return;
+    const currentBal = target.initial + state.transactions.reduce((a, t) => a + (t.wallet === target.id ? (t.type === "income" ? t.amount : -t.amount) : t.targetWallet === target.id ? t.amount : 0), 0);
+    const targetBal = Number(newActualBalance);
+    if (isNaN(targetBal)) return;
+    const diff = targetBal - currentBal;
+    if (Math.abs(diff) > 0.0001) {
+      const adjTx: Transaction = {
+        id: crypto.randomUUID(),
+        date: localDateKey(new Date()),
+        title: diff > 0 ? "Điều chỉnh tăng số dư thực tế" : "Điều chỉnh giảm số dư thực tế",
+        amount: Math.abs(diff),
+        type: diff > 0 ? "income" : "expense",
+        category: "Điều chỉnh số dư",
+        wallet: target.id,
+        note: `Khớp số dư thực tế từ ${formatHomeMoney(currentBal, target.currency)} sang ${formatHomeMoney(targetBal, target.currency)}`,
+      };
+      updateState((s) => ({
+        ...s,
+        transactions: [adjTx, ...s.transactions],
+      }));
+    }
+    setIsReconciling(false);
+    setNewActualBalance("");
+  };
+
+  const handleArchiveOrDeleteWallet = () => {
+    const target = state.wallets.find((w) => w.id === editingWalletId);
+    if (!target) return;
+    const txCount = state.transactions.filter((t) => t.wallet === target.id || t.targetWallet === target.id).length;
+    const activeCount = state.wallets.filter((w) => !w.archived).length;
+
+    if (activeCount <= 1 && !target.archived) {
+      alert("Hệ thống cần ít nhất 1 ví hoạt động. Bạn không thể hủy liên kết ví duy nhất này.");
+      return;
+    }
+
+    if (target.archived) {
+      updateState((s) => ({
+        ...s,
+        wallets: s.wallets.map((w) => (w.id === target.id ? { ...w, archived: false } : w)),
+      }));
+      close();
+      return;
+    }
+
+    if (txCount === 0) {
+      if (confirm(`Ví "${walletName(target.name)}" chưa có giao dịch nào. Bạn có chắc chắn muốn xóa vĩnh viễn ví này?`)) {
+        updateState((s) => ({
+          ...s,
+          wallets: s.wallets.filter((w) => w.id !== target.id),
+        }));
+        if (walletId === target.id) {
+          const remaining = state.wallets.filter((w) => w.id !== target.id && !w.archived);
+          if (remaining[0]) setWalletId(remaining[0].id);
+        }
+        close();
+      }
+    } else {
+      if (confirm(`Ví "${walletName(target.name)}" đã có ${txCount} giao dịch. Ví sẽ được chuyển sang trạng thái "Đã hủy liên kết" và ẩn khỏi màn hình thêm giao dịch. Tất cả ${txCount} giao dịch trước đây vẫn được lưu trữ an toàn. Bạn có muốn tiếp tục?`)) {
+        updateState((s) => ({
+          ...s,
+          wallets: s.wallets.map((w) => (w.id === target.id ? { ...w, archived: true } : w)),
+        }));
+        if (walletId === target.id) {
+          const remaining = state.wallets.filter((w) => w.id !== target.id && !w.archived);
+          if (remaining[0]) setWalletId(remaining[0].id);
+        }
+        close();
+      }
+    }
+  };
+
+  const handleAddCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newCatName.trim();
+    if (!trimmed || state.categories.includes(trimmed)) return;
+    updateState((s) => ({
+      ...s,
+      categories: [...s.categories, trimmed],
+      categoryMeta: {
+        ...s.categoryMeta,
+        [trimmed]: {
+          type: catType,
+          icon: catType === "income" ? "💰" : "🏷️",
+          children: [],
+        },
+      },
+    }));
+    setNewCatName("");
+  };
+
+  const handleDeleteCategory = (cat: string) => {
+    if (confirm(`Bạn có chắc chắn muốn xóa danh mục "${cat}"?`)) {
+      updateState((s) => ({
+        ...s,
+        categories: s.categories.filter((c) => c !== cat),
+      }));
+    }
   };
 
   const overviewCardRef = useRef<HTMLDivElement>(null);
@@ -575,7 +730,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const incomeList = overviewRecords.filter((t) => t.type === "income");
   const expenseList = overviewRecords.filter((t) => t.type === "expense");
 
-  const walletFlows = state.wallets.map((item) => {
+  const walletFlows = activeWallets.map((item) => {
     const walletRecords = overviewRecords.filter((transaction) => transaction.wallet === item.id);
     return {
       wallet: item,
@@ -594,7 +749,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const formatTotals = (field: "expense" | "income" | "net") => totalsByCurrency(field).map((total) => formatHomeMoney(total.amount, total.currency)).join(" · ");
 
   const walletBalanceTotals = currencies.map((curr) => {
-    const amount = state.wallets.filter((item) => item.currency === curr).reduce((sum, item) => sum + item.initial + state.transactions.reduce((balance, transaction) => balance + (transaction.wallet === item.id ? (transaction.type === "income" ? transaction.amount : -transaction.amount) : transaction.targetWallet === item.id ? transaction.amount : 0), 0), 0);
+    const amount = activeWallets.filter((item) => item.currency === curr).reduce((sum, item) => sum + item.initial + state.transactions.reduce((balance, transaction) => balance + (transaction.wallet === item.id ? (transaction.type === "income" ? transaction.amount : -transaction.amount) : transaction.targetWallet === item.id ? transaction.amount : 0), 0), 0);
     return formatHomeMoney(amount, curr);
   }).join(" · ");
 
@@ -717,7 +872,27 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
       )}
     </div>
   );
-  const transactionRows = <div className="r-record-list">{list.map((t) => <button key={t.id} type="button" className="r-record" onClick={() => navigate("editTransaction?id=" + t.id)}><span className="r-category-symbol">{transactionsTab ? (t.category === "Thức ăn & Đồ uống" ? "🍔" : t.type === "income" ? "💰" : "🛍️") : t.type === "income" ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}</span><span><b>{t.category}</b><small>{t.title} · {t.date}</small></span><b className={t.type === "income" ? "r-income" : "r-expense"}>{t.type === "income" ? "+" : "−"}{money(t.amount, wallet.currency)}</b></button>)}</div>;
+  const transactionRows = (
+    <div className="r-record-list">
+      {list.map((t) => {
+        const txW = state.wallets.find((item) => item.id === t.wallet);
+        return (
+          <button key={t.id} type="button" className="r-record" onClick={() => navigate("editTransaction?id=" + t.id)}>
+            <span className="r-category-symbol">
+              {transactionsTab ? (t.category === "Thức ăn & Đồ uống" ? "🍔" : t.type === "income" ? "💰" : "🛍️") : t.type === "income" ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
+            </span>
+            <span>
+              <b>{t.category}</b>
+              <small>{t.title}{txW?.archived ? " (Đã hủy liên kết)" : ""} · {t.date}</small>
+            </span>
+            <b className={t.type === "income" ? "r-income" : "r-expense"}>
+              {t.type === "income" ? "+" : "−"}{money(t.amount, wallet.currency)}
+            </b>
+          </button>
+        );
+      })}
+    </div>
+  );
 
   const focusedBucket = buckets.find((b) => b.key === focusedBucketKey);
 
@@ -734,8 +909,42 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
         <div className="fb-brand"><span className="fb-brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 24V13M27 24V13M5 17C11 5 21 5 27 17M5 20H27M11 20V24M16 20V24M21 20V24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg></span><span>FinBridge<small>Không gian tài chính của bạn</small></span></div>
       </header>
       <div className="fb-home-intro"><div><p className="fb-eyebrow">TỔNG QUAN</p><h1>{state.settings.name && state.settings.name !== "." ? `Chào ${state.settings.name}` : "Tiền của bạn, trong tầm tay."}</h1><p>Theo dõi dòng tiền. Chủ động cho những kế hoạch tiếp theo.</p></div><button type="button" className="fb-add-button" onClick={addTransaction}><Plus size={18} />Thêm giao dịch</button></div>
-      <section className="fb-wallet-section" aria-label="Ví của bạn"><div className="fb-section-heading"><h2>Ví của bạn</h2><span>{state.wallets.length} ví</span></div>
-        <div className="r-wallets">{state.wallets.map((w) => <div key={w.id} className={"r-wallet-card " + (w.id === wallet.id ? "is-selected" : "")}><button type="button" onClick={() => setWalletId(w.id)} className="r-wallet-content" aria-label={"Chọn ví " + w.name} aria-pressed={w.id === wallet.id}><Wallet size={19} /><span>{walletName(w.name)}</span><b>{formatHomeMoney(w.initial + state.transactions.reduce((a, t) => a + (t.wallet === w.id ? (t.type === "income" ? t.amount : -t.amount) : t.targetWallet === w.id ? t.amount : 0), 0), w.currency)}</b></button><button type="button" className="r-wallet-edit" aria-label={"Sửa ví " + w.name} onClick={() => navigate("walletSettings?wallet=" + w.id)}><Pencil size={14} /></button></div>)}<button type="button" className="r-new-wallet" onClick={openAddWalletModal}><Plus size={20} /><span>Thêm ví</span></button></div>
+      <section className="fb-wallet-section" aria-label="Ví của bạn">
+        <div className="fb-section-heading">
+          <div>
+            <h2>Ví của bạn</h2>
+            <span>{activeWallets.length} ví hoạt động{archivedWallets.length > 0 ? ` · ${archivedWallets.length} đã hủy liên kết` : ""}</span>
+          </div>
+          {archivedWallets.length > 0 && (
+            <button
+              type="button"
+              className="fb-archived-wallets-chip"
+              onClick={() => openManageWalletModal(archivedWallets[0].id)}
+              title="Xem danh sách ví đã hủy liên kết"
+            >
+              <Ban size={13} />
+              <span>Đã hủy ({archivedWallets.length})</span>
+            </button>
+          )}
+        </div>
+        <div className="r-wallets">
+          {activeWallets.map((w) => (
+            <div key={w.id} className={"r-wallet-card " + (w.id === wallet.id ? "is-selected" : "")}>
+              <button type="button" onClick={() => setWalletId(w.id)} className="r-wallet-content" aria-label={"Chọn ví " + w.name} aria-pressed={w.id === wallet.id}>
+                <Wallet size={19} />
+                <span>{walletName(w.name)}</span>
+                <b>{formatHomeMoney(w.initial + state.transactions.reduce((a, t) => a + (t.wallet === w.id ? (t.type === "income" ? t.amount : -t.amount) : t.targetWallet === w.id ? t.amount : 0), 0), w.currency)}</b>
+              </button>
+              <button type="button" className="r-wallet-edit" aria-label={"Quản lý ví " + w.name} onClick={() => openManageWalletModal(w.id)}>
+                <Pencil size={14} />
+              </button>
+            </div>
+          ))}
+          <button type="button" className="r-new-wallet" onClick={openAddWalletModal}>
+            <Plus size={20} />
+            <span>Thêm ví</span>
+          </button>
+        </div>
       </section>
       <section className="fb-finance-dashboard" aria-label="Dashboard dòng tiền">
         <section ref={overviewCardRef} className="fb-overview fb-finance-overview"><div className="fb-section-heading"><div><h2>Dòng tiền trong kỳ</h2><p className="fb-section-note">Tổng hợp từ tất cả ví đã tích hợp</p></div>{periodControls}</div>
@@ -1047,7 +1256,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
             </>
           )}
         </section>
-        <section className="fb-wallet-flow-card" style={overviewHeight ? { height: `${overviewHeight}px`, maxHeight: `${overviewHeight}px` } : undefined}><div className="fb-section-heading"><div><h2>Chi & thu theo ví</h2><p className="fb-section-note">Số liệu của từng ví đã tích hợp trong kỳ</p></div><button type="button" className="fb-view-transactions" onClick={openAddWalletModal}><Plus size={15} />Thêm ví</button></div><div className="fb-wallet-flow-list">{walletFlows.map((flow) => <button type="button" key={flow.wallet.id} className={flow.wallet.id === wallet.id ? "is-selected" : ""} onClick={() => { setWalletId(flow.wallet.id); setDashboardCategory("all"); setFocusedBucketKey(null); }}><span><b>{walletName(flow.wallet.name)}</b><small>{flow.wallet.currency}</small></span><span className="fb-wallet-flow-numbers"><small className="r-expense">Chi {formatHomeMoney(flow.expense, flow.wallet.currency)}</small><small className="r-income">Thu {formatHomeMoney(flow.income, flow.wallet.currency)}</small></span><ArrowRight size={16} /></button>)}</div><button type="button" className="fb-manage-wallets" onClick={() => navigate("walletSettings?wallet=" + wallet.id)}>Quản lý ví<ArrowRight size={16} /></button></section>
+        <section className="fb-wallet-flow-card" style={overviewHeight ? { height: `${overviewHeight}px`, maxHeight: `${overviewHeight}px` } : undefined}><div className="fb-section-heading"><div><h2>Chi & thu theo ví</h2><p className="fb-section-note">Số liệu của từng ví đã tích hợp trong kỳ</p></div><button type="button" className="fb-view-transactions" onClick={openAddWalletModal}><Plus size={15} />Thêm ví</button></div><div className="fb-wallet-flow-list">{walletFlows.map((flow) => <button type="button" key={flow.wallet.id} className={flow.wallet.id === wallet.id ? "is-selected" : ""} onClick={() => { setWalletId(flow.wallet.id); setDashboardCategory("all"); setFocusedBucketKey(null); }}><span><b>{walletName(flow.wallet.name)}</b><small>{flow.wallet.currency}</small></span><span className="fb-wallet-flow-numbers"><small className="r-expense">Chi {formatHomeMoney(flow.expense, flow.wallet.currency)}</small><small className="r-income">Thu {formatHomeMoney(flow.income, flow.wallet.currency)}</small></span><ArrowRight size={16} /></button>)}</div><button type="button" className="fb-manage-wallets" onClick={() => openManageWalletModal(wallet.id)}>Quản lý ví<ArrowRight size={16} /></button></section>
       </section>
       <div className="fb-workspace"><div className="fb-main-column">
         <section className="fb-overview"><div className="fb-section-heading"><h2>Dòng tiền trong kỳ</h2>{periodControls}</div>
@@ -1056,7 +1265,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
         <section className="fb-activity"><div className="fb-section-heading"><h2>Giao dịch trong kỳ</h2><div className="r-type-pills"><button type="button" className={type === "expense" ? "active" : ""} onClick={() => setType("expense")}>Chi phí</button><button type="button" className={type === "income" ? "active" : ""} onClick={() => setType("income")}>Thu nhập</button></div></div>
           {list.length === 0 ? <div className="fb-empty"><span className="fb-empty-icon"><ReceiptText size={26} /></span><h3>Chưa có {type === "expense" ? "khoản chi" : "khoản thu"} trong kỳ này</h3><p>Ghi lại một giao dịch để bắt đầu theo dõi dòng tiền.</p><button type="button" className="fb-empty-action" onClick={addTransaction}><Plus size={16} />Thêm giao dịch</button></div> : transactionRows}
         </section>
-      </div><aside className="fb-side-column">{state.settings.totalBalance && <section className="fb-balance-card"><span className="fb-balance-icon"><Wallet size={20} /></span><p>Số dư ví đã chọn</p><h2>{formatHomeMoney(allBalance, wallet.currency)}</h2><small>{walletName(wallet.name)} · {wallet.currency}</small><div className="fb-balance-decor" aria-hidden="true"><span /><span /><span /><span /><span /></div><button type="button" onClick={() => navigate("walletSettings?wallet=" + wallet.id)}>Quản lý ví<ArrowRight size={16} /></button></section>}
+      </div><aside className="fb-side-column">{state.settings.totalBalance && <section className="fb-balance-card"><span className="fb-balance-icon"><Wallet size={20} /></span><p>Số dư ví đã chọn</p><h2>{formatHomeMoney(allBalance, wallet.currency)}</h2><small>{walletName(wallet.name)} · {wallet.currency}</small><div className="fb-balance-decor" aria-hidden="true"><span /><span /><span /><span /><span /></div><button type="button" onClick={() => openManageWalletModal(wallet.id)}>Quản lý ví<ArrowRight size={16} /></button></section>}
         <section className="fb-habit-card"><p className="fb-eyebrow">MỖI NGÀY MỘT CHÚT</p><h3>Hiểu tiền của mình hơn.</h3><p>Ghi lại các khoản thu và chi để có một bức tranh rõ ràng hơn.</p><button type="button" onClick={() => navigate("?tab=transactions")}>Xem giao dịch<ArrowRight size={16} /></button></section>
       </aside></div>
       <button type="button" className="r-fab fb-mobile-add" aria-label="Thêm giao dịch" onClick={addTransaction}><Plus size={26} /></button>
@@ -1070,6 +1279,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
         : modal === "flowIncomeDetails" ? "Chi tiết các khoản thu"
         : modal === "flowExpenseDetails" ? "Chi tiết các khoản chi"
         : modal === "flowComparisonChart" ? "Phân tích Thu & Chi trong kỳ"
+        : modal === "manageWallet" ? `Quản lý ví: ${walletName(state.wallets.find((w) => w.id === editingWalletId)?.name || wallet.name)}`
         : modal === "pickDay" ? "Chọn ngày"
         : modal === "pickWeek" ? "Chọn tuần"
         : modal === "pickMonth" ? "Chọn tháng"
@@ -1078,7 +1288,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
         : undefined}
       onClose={close}
       sheet={["period", "search", "wallet"].includes(modal)}
-      wide={modal === "flowComparisonChart"}
+      wide={["flowComparisonChart", "manageWallet"].includes(modal)}
     >
       {modal === "period" && (
         <div className="r-period-options">
@@ -1509,7 +1719,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                     </span>
                     <div className="fb-tx-modal-info">
                       <b>{t.title || t.category}</b>
-                      <small>{t.category} · {w ? walletName(w.name) : ""} · {t.date}</small>
+                      <small>{t.category} · {w ? walletName(w.name) : ""}{w?.archived ? " (Đã hủy liên kết)" : ""} · {t.date}</small>
                     </div>
                     <b className="fb-tx-modal-amount r-income">
                       +{formatHomeMoney(t.amount, curr)}
@@ -1564,7 +1774,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                     </span>
                     <div className="fb-tx-modal-info">
                       <b>{t.title || t.category}</b>
-                      <small>{t.category} · {w ? walletName(w.name) : ""} · {t.date}</small>
+                      <small>{t.category} · {w ? walletName(w.name) : ""}{w?.archived ? " (Đã hủy liên kết)" : ""} · {t.date}</small>
                     </div>
                     <b className="fb-tx-modal-amount r-expense">
                       −{formatHomeMoney(t.amount, curr)}
@@ -1640,6 +1850,339 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
           </div>
         </div>
       )}
+
+      {modal === "manageWallet" && (() => {
+        const targetWallet = state.wallets.find((w) => w.id === editingWalletId) || wallet;
+        const targetTxs = state.transactions.filter((t) => t.wallet === targetWallet.id || t.targetWallet === targetWallet.id);
+        const hasTxs = targetTxs.length > 0;
+        const currentBal = targetWallet.initial + state.transactions.reduce((a, t) => a + (t.wallet === targetWallet.id ? (t.type === "income" ? t.amount : -t.amount) : t.targetWallet === targetWallet.id ? t.amount : 0), 0);
+
+        return (
+          <div className="fb-manage-wallet-modal">
+            <div className="fb-modal-tab-bar">
+              <button
+                type="button"
+                className={`fb-tab-btn ${manageWalletTab === "details" ? "active" : ""}`}
+                onClick={() => setManageWalletTab("details")}
+              >
+                <Settings size={15} />
+                <span>Thông tin ví</span>
+              </button>
+              <button
+                type="button"
+                className={`fb-tab-btn ${manageWalletTab === "categories" ? "active" : ""}`}
+                onClick={() => setManageWalletTab("categories")}
+              >
+                <FolderTree size={15} />
+                <span>Quản lý danh mục</span>
+              </button>
+            </div>
+
+            {targetWallet.archived && (
+              <div className="fb-wallet-archived-banner">
+                <Ban size={16} />
+                <div>
+                  <b>Ví đang ở trạng thái hủy liên kết (đã lưu trữ)</b>
+                  <p>Ví này bị ẩn khỏi mục chọn khi tạo giao dịch mới, nhưng tất cả lịch sử giao dịch vẫn được giữ nguyên.</p>
+                </div>
+              </div>
+            )}
+
+            {manageWalletTab === "details" && (
+              <form className="fb-wallet-edit-form" onSubmit={handleSaveWalletInfo}>
+                <div className="fb-form-group">
+                  <label className="fb-form-label" htmlFor="edit-wallet-name">Tên ví</label>
+                  <input
+                    id="edit-wallet-name"
+                    type="text"
+                    required
+                    className="fb-input"
+                    value={editWalletName}
+                    onChange={(e) => setEditWalletName(e.target.value)}
+                  />
+                </div>
+
+                <div className="fb-form-group">
+                  <label className="fb-form-label">Loại ví</label>
+                  <div className="r-two-options">
+                    <button
+                      type="button"
+                      className={editWalletType === "cash" ? "active" : ""}
+                      onClick={() => setEditWalletType("cash")}
+                    >
+                      <Wallet size={16} />
+                      <span>Tiền mặt</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={editWalletType === "credit" ? "active" : ""}
+                      onClick={() => setEditWalletType("credit")}
+                    >
+                      <ReceiptText size={16} />
+                      <span>Thẻ tín dụng</span>
+                    </button>
+                  </div>
+                </div>
+
+                {editWalletType === "credit" && (
+                  <div className="fb-form-group">
+                    <label className="fb-form-label" htmlFor="edit-wallet-limit">Hạn mức tín dụng</label>
+                    <input
+                      id="edit-wallet-limit"
+                      type="number"
+                      step="any"
+                      required
+                      placeholder="Ví dụ: 50,000,000"
+                      className="fb-input"
+                      value={editWalletLimit}
+                      onChange={(e) => setEditWalletLimit(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                <div className="fb-form-group">
+                  <div className="fb-form-label-row">
+                    <label className="fb-form-label" htmlFor="edit-wallet-currency">Đơn vị tiền tệ</label>
+                    {hasTxs && (
+                      <span className="fb-locked-badge">
+                        <Lock size={12} /> Đã khóa (đã phát sinh giao dịch)
+                      </span>
+                    )}
+                  </div>
+                  {hasTxs ? (
+                    <input
+                      id="edit-wallet-currency"
+                      type="text"
+                      disabled
+                      className="fb-input fb-input-locked"
+                      value={`${editWalletCurrency} (${targetWallet.currency})`}
+                    />
+                  ) : (
+                    <select
+                      id="edit-wallet-currency"
+                      value={editWalletCurrency}
+                      onChange={(e) => setEditWalletCurrency(e.target.value)}
+                      className="fb-select"
+                    >
+                      <option value="VND">VND (Việt Nam Đồng)</option>
+                      <option value="USD">USD (Đô la Mỹ)</option>
+                      <option value="EUR">EUR (Euro)</option>
+                      <option value="JPY">JPY (Yên Nhật)</option>
+                      <option value="SGD">SGD (Đô la Singapore)</option>
+                      <option value="GBP">GBP (Bảng Anh)</option>
+                      <option value="AUD">AUD (Đô la Úc)</option>
+                    </select>
+                  )}
+                  {hasTxs && (
+                    <p className="fb-helper-text">
+                      Không thể đổi tiền tệ khi đã có giao dịch để tránh xung đột tỷ giá và dữ liệu lịch sử.
+                    </p>
+                  )}
+                </div>
+
+                <div className="fb-form-group">
+                  <div className="fb-form-label-row">
+                    <label className="fb-form-label" htmlFor="edit-wallet-initial">
+                      {editWalletType === "credit" ? "Số dư chưa thanh toán ban đầu" : "Số dư ban đầu"}
+                    </label>
+                    {hasTxs && (
+                      <span className="fb-locked-badge">
+                        <Lock size={12} /> Đã khóa (đã phát sinh giao dịch)
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    id="edit-wallet-initial"
+                    type="number"
+                    step="any"
+                    disabled={hasTxs}
+                    className={`fb-input ${hasTxs ? "fb-input-locked" : ""}`}
+                    value={editWalletInitial}
+                    onChange={(e) => setEditWalletInitial(e.target.value)}
+                  />
+                  {hasTxs ? (
+                    <p className="fb-helper-text">
+                      Số dư ban đầu được cố định để bảo toàn tính toàn vẹn của sổ sách. Để cập nhật số dư theo tài khoản ngân hàng thực tế, vui lòng sử dụng tính năng <b>Điều chỉnh số dư thực tế</b> bên dưới.
+                    </p>
+                  ) : (
+                    <p className="fb-helper-text">Ví chưa có giao dịch nào, bạn có thể tự do điều chỉnh số dư ban đầu.</p>
+                  )}
+                </div>
+
+                {hasTxs && (
+                  <div className="fb-balance-reconcile-card">
+                    <div className="fb-reconcile-info">
+                      <div className="fb-reconcile-header">
+                        <SlidersHorizontal size={16} />
+                        <b>Khớp số dư thực tế</b>
+                      </div>
+                      <p>
+                        Số dư sổ sách hiện tại: <strong>{formatHomeMoney(currentBal, targetWallet.currency)}</strong>. Nếu không khớp với thực tế ngoài đời, hãy nhập số dư thực tế để hệ thống tự động bù trừ.
+                      </p>
+                    </div>
+
+                    {!isReconciling ? (
+                      <button
+                        type="button"
+                        className="fb-reconcile-btn"
+                        onClick={() => {
+                          setIsReconciling(true);
+                          setNewActualBalance(currentBal.toString());
+                        }}
+                      >
+                        <SlidersHorizontal size={14} />
+                        <span>Điều chỉnh số dư thực tế</span>
+                      </button>
+                    ) : (
+                      <div className="fb-reconcile-form-box">
+                        <div className="fb-form-group">
+                          <label className="fb-form-label" htmlFor="actual-balance-input">
+                            Số dư thực tế trong ví / tài khoản ngân hàng ({targetWallet.currency})
+                          </label>
+                          <input
+                            id="actual-balance-input"
+                            type="number"
+                            step="any"
+                            required
+                            className="fb-input"
+                            value={newActualBalance}
+                            onChange={(e) => setNewActualBalance(e.target.value)}
+                            placeholder="Nhập số dư thực tế hiện tại"
+                          />
+                        </div>
+                        <div className="fb-reconcile-actions">
+                          <button
+                            type="button"
+                            className="r-secondary"
+                            onClick={() => {
+                              setIsReconciling(false);
+                              setNewActualBalance("");
+                            }}
+                          >
+                            Hủy
+                          </button>
+                          <button
+                            type="button"
+                            className="r-primary"
+                            onClick={handleConfirmAdjustment}
+                          >
+                            Xác nhận điều chỉnh
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="fb-modal-actions">
+                  <button type="button" className="r-secondary" onClick={close}>Đóng</button>
+                  <button type="submit" className="r-primary">Lưu thay đổi</button>
+                </div>
+
+                <div className="fb-wallet-danger-zone">
+                  <div className="fb-danger-zone-header">
+                    <AlertTriangle size={15} />
+                    <span>Thao tác bảo mật ví</span>
+                  </div>
+                  <p className="fb-danger-zone-desc">
+                    {hasTxs
+                      ? targetWallet.archived
+                        ? "Ví này hiện đang bị hủy liên kết. Bạn có thể khôi phục để tiếp tục ghi chép giao dịch."
+                        : `Ví này đã ghi nhận ${targetTxs.length} giao dịch. Hệ thống sẽ áp dụng chính sách xóa mềm (Hủy liên kết): ví sẽ bị ẩn nhưng ${targetTxs.length} giao dịch lịch sử vẫn được bảo toàn nguyên vẹn.`
+                      : "Ví này chưa có giao dịch nào. Bạn có thể xóa vĩnh viễn ví khỏi hệ thống."}
+                  </p>
+                  <button
+                    type="button"
+                    className={targetWallet.archived ? "fb-restore-wallet-btn" : "fb-archive-wallet-btn"}
+                    onClick={handleArchiveOrDeleteWallet}
+                  >
+                    {targetWallet.archived ? (
+                      <>
+                        <RotateCcw size={15} />
+                        <span>Kích hoạt lại ví này</span>
+                      </>
+                    ) : hasTxs ? (
+                      <>
+                        <Ban size={15} />
+                        <span>Hủy liên kết ví (Lưu trữ)</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 size={15} />
+                        <span>Xóa vĩnh viễn ví này</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {manageWalletTab === "categories" && (
+              <div className="fb-cat-manage-box">
+                <div className="fb-cat-type-toggle">
+                  <button
+                    type="button"
+                    className={`fb-cat-toggle-btn ${catType === "expense" ? "active" : ""}`}
+                    onClick={() => setCatType("expense")}
+                  >
+                    <ArrowDownRight size={14} />
+                    <span>Danh mục Chi phí</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`fb-cat-toggle-btn ${catType === "income" ? "active" : ""}`}
+                    onClick={() => setCatType("income")}
+                  >
+                    <ArrowUpRight size={14} />
+                    <span>Danh mục Thu nhập</span>
+                  </button>
+                </div>
+
+                <form className="fb-cat-add-form" onSubmit={handleAddCategory}>
+                  <input
+                    type="text"
+                    required
+                    placeholder={`Thêm danh mục ${catType === "income" ? "thu" : "chi"} mới...`}
+                    className="fb-input"
+                    value={newCatName}
+                    onChange={(e) => setNewCatName(e.target.value)}
+                  />
+                  <button type="submit" className="r-primary">
+                    <Plus size={15} />
+                    <span>Thêm</span>
+                  </button>
+                </form>
+
+                <div className="fb-cat-list">
+                  {state.categories
+                    .filter((c) => {
+                      const meta = state.categoryMeta?.[c];
+                      return !meta || meta.type === catType;
+                    })
+                    .map((cat) => (
+                      <div key={cat} className="fb-cat-item">
+                        <div className="fb-cat-item-left">
+                          <span className="fb-cat-icon-badge">
+                            {categoryIcon(cat, state.categoryMeta)}
+                          </span>
+                          <span className="fb-cat-name">{cat}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="fb-cat-delete-btn"
+                          title={`Xóa danh mục ${cat}`}
+                          onClick={() => handleDeleteCategory(cat)}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </Modal>}
   </div>;
 }
