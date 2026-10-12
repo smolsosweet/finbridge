@@ -426,6 +426,13 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
     return money(amount, curr);
   }).join(" · ");
 
+  const walletBalancesByCurrency = currencies.map((curr) => {
+    const amount = state.wallets.filter((item) => item.currency === curr).reduce((sum, item) => sum + item.initial + state.transactions.reduce((balance, transaction) => balance + (transaction.wallet === item.id ? (transaction.type === "income" ? transaction.amount : -transaction.amount) : transaction.targetWallet === item.id ? transaction.amount : 0), 0), 0);
+    return { currency: curr, amount, formatted: money(amount, curr) };
+  });
+  const incomeTotals = totalsByCurrency("income");
+  const expenseTotals = totalsByCurrency("expense");
+
   const list = transactionsTab ? records : records.filter((t) => t.type === type);
   const close = () => setModal("");
   const addTransaction = () => navigate(state.settings.manual ? "addTransaction" : "addTransactionChatMode");
@@ -454,7 +461,63 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
       </section>
       <section className="fb-finance-dashboard" aria-label="Dashboard dòng tiền">
         <section className="fb-overview fb-finance-overview"><div className="fb-section-heading"><div><h2>Dòng tiền trong kỳ</h2><p className="fb-section-note">Tổng hợp từ tất cả ví đã tích hợp</p></div>{periodControls}</div>
-          <button type="button" className="r-summary" onClick={() => setModal("homeTotals")} aria-label="Xem chi tiết tổng dòng tiền"><div className="r-summary-top"><span><small>Tổng số dư tất cả ví</small><b>{walletBalanceTotals}</b><small>{state.wallets.length} ví · Số dư hiện tại</small></span><span className="fb-detail-label">Chi tiết<Info size={16} /></span></div><div className="r-summary-cards"><div className="r-expense"><span><ArrowDownRight size={18} />Tổng chi</span><b>{formatTotals("expense")}</b><small>Từ mọi ví trong kỳ</small></div><div className="r-income"><span><ArrowUpRight size={18} />Tổng thu</span><b>{formatTotals("income")}</b><small>Từ mọi ví trong kỳ</small></div></div><p className="fb-currency-note">Tiền tệ được hiển thị riêng, không quy đổi tỷ giá.</p></button>
+          <div className="r-summary fb-flow-summary-container">
+            <div className="r-summary-top fb-summary-top-vertical" onClick={() => setModal("homeTotals")} role="button" tabIndex={0} aria-label="Xem chi tiết tổng dòng tiền">
+              <div className="fb-total-balance-block">
+                <small>Tổng số dư tất cả ví</small>
+                <div className="fb-total-balance-list">
+                  {walletBalancesByCurrency.map((item) => (
+                    <div key={item.currency} className="fb-balance-currency-row">
+                      <b className="fb-balance-val">{item.formatted}</b>
+                      {currencies.length > 1 && <span className="fb-currency-tag">{item.currency}</span>}
+                    </div>
+                  ))}
+                </div>
+                <small className="fb-total-balance-sub">{state.wallets.length} ví · Số dư hiện tại</small>
+              </div>
+              <span className="fb-detail-label">Chi tiết<Info size={16} /></span>
+            </div>
+
+            <div className="fb-flow-vertical-stack">
+              <div className="fb-flow-row r-income" onClick={() => setModal("homeTotals")} role="button" tabIndex={0}>
+                <div className="fb-flow-row-header">
+                  <span className="fb-flow-row-label">
+                    <ArrowUpRight size={18} />
+                    <span>Tổng thu</span>
+                  </span>
+                  <small>Từ mọi ví trong kỳ</small>
+                </div>
+                <div className="fb-flow-row-amounts">
+                  {incomeTotals.map((item) => (
+                    <div key={item.currency} className="fb-flow-amount-line">
+                      <b>+{money(item.amount, item.currency)}</b>
+                      {currencies.length > 1 && <span className="fb-currency-tag">{item.currency}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="fb-flow-row r-expense" onClick={() => setModal("homeTotals")} role="button" tabIndex={0}>
+                <div className="fb-flow-row-header">
+                  <span className="fb-flow-row-label">
+                    <ArrowDownRight size={18} />
+                    <span>Tổng chi</span>
+                  </span>
+                  <small>Từ mọi ví trong kỳ</small>
+                </div>
+                <div className="fb-flow-row-amounts">
+                  {expenseTotals.map((item) => (
+                    <div key={item.currency} className="fb-flow-amount-line">
+                      <b>−{money(item.amount, item.currency)}</b>
+                      {currencies.length > 1 && <span className="fb-currency-tag">{item.currency}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <p className="fb-currency-note">Tiền tệ được hiển thị riêng, không quy đổi tỷ giá.</p>
+          </div>
         </section>
 
         {/* Production-grade Spending Trend card */}

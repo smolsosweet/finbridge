@@ -397,6 +397,32 @@
 .fb-home .r-summary-cards b{font-size:20px;font-weight:600;letter-spacing:-.4px;overflow-wrap:anywhere}
 .fb-home .r-summary-cards .r-expense svg{color:#b86151}
 .fb-home .r-summary-cards .r-income svg{color:#147d78}
+
+/* Vertical cash flow stack (Dòng tiền trong kỳ - Lựa chọn 2) */
+.fb-flow-summary-container{display:flex;flex-direction:column;gap:16px;cursor:default}
+.fb-summary-top-vertical{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:4px 0 6px;cursor:pointer;border-radius:12px;transition:background .15s}
+.fb-total-balance-block{display:flex;flex-direction:column;gap:4px;text-align:left}
+.fb-total-balance-block>small{font-size:12px;color:var(--r-muted)}
+.fb-total-balance-list{display:flex;flex-direction:column;gap:5px;margin:5px 0 3px}
+.fb-balance-currency-row{display:flex;align-items:baseline;gap:8px}
+.fb-balance-val{font-size:28px;line-height:1.2;letter-spacing:-.8px;font-weight:600;color:var(--r-text);overflow-wrap:anywhere}
+.fb-currency-tag{font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;background:var(--r-line);color:var(--r-muted);letter-spacing:.3px;text-transform:uppercase}
+.fb-total-balance-sub{font-size:11px;color:var(--r-muted);margin-top:2px}
+.fb-flow-vertical-stack{display:flex;flex-direction:column;gap:10px;width:100%}
+.fb-flow-row{display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--r-bg);border:1px solid var(--r-line);border-radius:12px;padding:14px 16px;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s}
+.fb-flow-row:hover{background:var(--r-secondary);border-color:#83bcb2}
+.fb-flow-row-header{display:flex;flex-direction:column;gap:3px;text-align:left}
+.fb-flow-row-label{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600}
+.fb-flow-row.r-income .fb-flow-row-label{color:#147d78}
+.fb-flow-row.r-income .fb-flow-row-label svg{color:#147d78}
+.fb-flow-row.r-expense .fb-flow-row-label{color:#b86151}
+.fb-flow-row.r-expense .fb-flow-row-label svg{color:#b86151}
+.fb-flow-row-header small{font-size:11px;color:var(--r-muted)}
+.fb-flow-row-amounts{display:flex;flex-direction:column;gap:4px;align-items:flex-end;text-align:right;flex-shrink:0}
+.fb-flow-amount-line{display:flex;align-items:center;gap:6px}
+.fb-flow-amount-line b{font-size:18px;font-weight:600;letter-spacing:-.3px}
+.fb-flow-row.r-income .fb-flow-amount-line b{color:#147d78}
+.fb-flow-row.r-expense .fb-flow-amount-line b{color:#b86151}
 .fb-home .r-type-pills{margin:0;gap:3px;border:1px solid var(--r-line);padding:3px;border-radius:10px;background:var(--r-bg)}
 .fb-home .r-type-pills button{border-radius:7px;padding:6px 9px;font-size:11px;background:transparent;color:var(--r-muted)}
 .fb-home .r-type-pills button.active{background:var(--r-surface);color:var(--r-teal);box-shadow:0 1px 3px #173e5012}
