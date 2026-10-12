@@ -2,9 +2,9 @@
 
 import { useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowDownRight, ArrowRight, ArrowUpRight, CalendarDays, ChevronDown, Info, Pencil, Plus, ReceiptText, Search, Trophy, Wallet, X } from "lucide-react";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, CalendarDays, ChevronDown, Info, Pencil, Plus, ReceiptText, Search, Wallet, X } from "lucide-react";
 import { EmptyState, Icon, Modal } from "./Ui";
-import { currencySymbol, money, useAppState, type Transaction } from "./store";
+import { money, updateState, useAppState, type Transaction, type Wallet as WalletType } from "./store";
 import { calendarWeek, localDateKey, shiftCalendarWeek } from "./chartWeek";
 
 type DashboardSample = {
@@ -213,33 +213,165 @@ function getNiceScale(maxValue: number, tickCount = 4) {
   return { max: ticks[ticks.length - 1], step: niceStep, ticks };
 }
 
+export function formatHomeMoney(amount: number, currency = "VND", withSign = false) {
+  const isNeg = amount < 0;
+  const absVal = Math.abs(amount);
+  const formatted = absVal.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  const curr = (currency || "VND").toUpperCase();
+  if (withSign) {
+    const sign = amount > 0 ? "+" : isNeg ? "−" : "";
+    return `${sign}${formatted} ${curr}`;
+  }
+  return `${isNeg ? "−" : ""}${formatted} ${curr}`;
+}
+
 function formatCompactMoney(amount: number, currency: string, lang: "vi" | "en" | "zh") {
-  if (amount === 0) return currency === "VND" ? "0 ₫" : currencySymbol(currency) + "0";
-  if (currency === "VND") {
+  const curr = (currency || "VND").toUpperCase();
+  if (amount === 0) return `0 ${curr}`;
+  if (curr === "VND") {
     if (amount >= 1_000_000_000) {
       const v = (amount / 1_000_000_000).toLocaleString(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: 1 });
-      return lang === "vi" ? `${v} tỷ ₫` : lang === "zh" ? `${v}0亿 ₫` : `${v}B ₫`;
+      return lang === "vi" ? `${v} tỷ VND` : lang === "zh" ? `${v}0亿 VND` : `${v}B VND`;
     }
     if (amount >= 1_000_000) {
       const v = (amount / 1_000_000).toLocaleString(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: 1 });
-      return lang === "vi" ? `${v} tr ₫` : lang === "zh" ? `${Math.round(amount / 10000)}万 ₫` : `${v}M ₫`;
+      return lang === "vi" ? `${v} tr VND` : lang === "zh" ? `${Math.round(amount / 10000)}万 VND` : `${v}M VND`;
     }
     if (amount >= 1_000) {
       const v = (amount / 1_000).toLocaleString(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: 0 });
-      return lang === "vi" ? `${v} k ₫` : lang === "zh" ? `${(amount / 10000).toFixed(1)}万 ₫` : `${v}K ₫`;
+      return lang === "vi" ? `${v} k VND` : lang === "zh" ? `${(amount / 10000).toFixed(1)}万 VND` : `${v}K VND`;
     }
-    return `${amount.toLocaleString(lang === "vi" ? "vi-VN" : "en-US")} ₫`;
+    return `${amount.toLocaleString(lang === "vi" ? "vi-VN" : "en-US")} VND`;
   }
-  const sym = currencySymbol(currency);
   if (amount >= 1_000_000) {
     const v = (amount / 1_000_000).toLocaleString(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: 1 });
-    return `${sym}${v}M`;
+    return `${v}M ${curr}`;
   }
   if (amount >= 1_000) {
     const v = (amount / 1_000).toLocaleString(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: 1 });
-    return `${sym}${v}K`;
+    return `${v}K ${curr}`;
   }
-  return `${sym}${amount.toLocaleString("en-US")}`;
+  return `${amount.toLocaleString("en-US")} ${curr}`;
+}
+
+const INCOME_COLORS = ["#0d9488", "#10b981", "#0284c7", "#6366f1", "#f59e0b", "#8b5cf6", "#ec4899"];
+const EXPENSE_COLORS = ["#e11d48", "#f97316", "#7c3aed", "#2563eb", "#059669", "#d97706", "#db2777", "#0891b2"];
+
+function getCategoryBreakdown(records: Transaction[], fallbackCurrency: string, colors: string[]) {
+  const map = new Map<string, number>();
+  let total = 0;
+  for (const r of records) {
+    const prev = map.get(r.category) || 0;
+    map.set(r.category, prev + r.amount);
+    total += r.amount;
+  }
+  const items = Array.from(map.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([category, amount], idx) => ({
+      category,
+      amount,
+      percent: total > 0 ? (amount / total) * 100 : 0,
+      color: colors[idx % colors.length],
+      currency: fallbackCurrency,
+    }));
+  return { total, items };
+}
+
+function SvgDonut({
+  type,
+  items,
+  total,
+  currency,
+}: {
+  type: "income" | "expense";
+  items: { category: string; amount: number; percent: number; color: string }[];
+  total: number;
+  currency: string;
+}) {
+  const radius = 52;
+  const circumference = 2 * Math.PI * radius;
+  let accumulated = 0;
+
+  return (
+    <div className="fb-donut-card">
+      <div className="fb-donut-header">
+        <span className={"fb-donut-badge " + (type === "income" ? "r-income" : "r-expense")}>
+          {type === "income" ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+          <span>{type === "income" ? "Cơ cấu Thu nhập" : "Cơ cấu Chi tiêu"}</span>
+        </span>
+      </div>
+
+      <div className="fb-donut-visual-container">
+        <svg viewBox="0 0 160 160" className="fb-donut-svg">
+          <circle
+            cx="80"
+            cy="80"
+            r={radius}
+            fill="none"
+            stroke={type === "income" ? "#ecfdf5" : "#fff1f2"}
+            strokeWidth="22"
+          />
+          {total === 0 || items.length === 0 ? (
+            <circle
+              cx="80"
+              cy="80"
+              r={radius}
+              fill="none"
+              stroke="#cbd5e1"
+              strokeWidth="20"
+              strokeDasharray="6 6"
+            />
+          ) : (
+            items.map((item) => {
+              const sliceLength = (item.percent / 100) * circumference;
+              const offset = -accumulated;
+              accumulated += sliceLength;
+              return (
+                <circle
+                  key={item.category}
+                  cx="80"
+                  cy="80"
+                  r={radius}
+                  fill="none"
+                  stroke={item.color}
+                  strokeWidth="22"
+                  strokeDasharray={`${Math.max(1, sliceLength - (items.length > 1 ? 1.5 : 0))} ${circumference}`}
+                  strokeDashoffset={offset}
+                  transform="rotate(-90 80 80)"
+                  strokeLinecap="round"
+                />
+              );
+            })
+          )}
+        </svg>
+        <div className="fb-donut-center-info">
+          <span className="fb-donut-center-label">{type === "income" ? "Tổng thu" : "Tổng chi"}</span>
+          <b className={"fb-donut-center-value " + (type === "income" ? "r-income" : "r-expense")}>
+            {total === 0 ? `0 ${currency}` : (type === "income" ? "+" : "−") + formatHomeMoney(total, currency)}
+          </b>
+        </div>
+      </div>
+
+      <div className="fb-donut-legend">
+        {items.length === 0 ? (
+          <p className="fb-donut-empty-text">Chưa có giao dịch {type === "income" ? "thu" : "chi"} trong kỳ này</p>
+        ) : (
+          items.map((item) => (
+            <div key={item.category} className="fb-donut-legend-item">
+              <div className="fb-donut-legend-left">
+                <i className="fb-donut-dot" style={{ backgroundColor: item.color }} />
+                <span className="fb-donut-cat-name" title={item.category}>{item.category}</span>
+              </div>
+              <div className="fb-donut-legend-right">
+                <span className="fb-donut-pct">{item.percent.toFixed(1)}%</span>
+                <b className="fb-donut-val">{formatHomeMoney(item.amount, currency)}</b>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
 }
 
 
@@ -288,6 +420,39 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
 
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState("");
+
+  // Add wallet modal state
+  const [newWalletName, setNewWalletName] = useState("");
+  const [newWalletAmount, setNewWalletAmount] = useState("");
+  const [newWalletCurrency, setNewWalletCurrency] = useState("VND");
+  const [newWalletType, setNewWalletType] = useState<"cash" | "credit">("cash");
+  const [newWalletLimit, setNewWalletLimit] = useState("");
+
+  const openAddWalletModal = () => {
+    setNewWalletName("");
+    setNewWalletAmount("");
+    setNewWalletCurrency(wallet.currency || "VND");
+    setNewWalletType("cash");
+    setNewWalletLimit("");
+    setModal("addWallet");
+  };
+
+  const handleCreateWallet = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newWalletName.trim()) return;
+    const newId = crypto.randomUUID();
+    const nextWallet: WalletType = {
+      id: newId,
+      name: newWalletName.trim(),
+      initial: Number(newWalletAmount || 0),
+      currency: newWalletCurrency,
+      type: newWalletType,
+      limit: newWalletType === "credit" ? Number(newWalletLimit) || undefined : undefined,
+    };
+    updateState((s) => ({ ...s, wallets: [...s.wallets, nextWallet] }));
+    setWalletId(newId);
+    setModal("");
+  };
 
   const currencies = Array.from(new Set(state.wallets.map((item) => item.currency)));
   // Sample rows without a wallet ID belong to the first wallet with their currency.
@@ -403,6 +568,22 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
     return true;
   };
   const overviewRecords = state.transactions.filter((transaction) => isInSelectedPeriod(transaction.date));
+  const incomeList = overviewRecords.filter((t) => t.type === "income");
+  const expenseList = overviewRecords.filter((t) => t.type === "expense");
+  const incomeBreakdown = getCategoryBreakdown(incomeList, wallet.currency || "VND", INCOME_COLORS);
+  const expenseBreakdown = getCategoryBreakdown(expenseList, wallet.currency || "VND", EXPENSE_COLORS);
+  const periodIncomeTotal = incomeList.reduce((sum, t) => sum + t.amount, 0);
+  const periodExpenseTotal = expenseList.reduce((sum, t) => sum + t.amount, 0);
+  const periodNetTotal = periodIncomeTotal - periodExpenseTotal;
+
+  const selectedPeriodText = period === "Tháng"
+    ? `tháng ${month + 1} năm ${year}`
+    : period === "Năm"
+      ? `năm ${year}`
+      : period === "Ngày"
+        ? day
+        : `${from} – ${to}`;
+
   const walletFlows = state.wallets.map((item) => {
     const walletRecords = overviewRecords.filter((transaction) => transaction.wallet === item.id);
     return {
@@ -419,11 +600,11 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
     });
     return Array.from(groups, ([curr, amount]) => ({ currency: curr, amount }));
   };
-  const formatTotals = (field: "expense" | "income" | "net") => totalsByCurrency(field).map((total) => money(total.amount, total.currency)).join(" · ");
+  const formatTotals = (field: "expense" | "income" | "net") => totalsByCurrency(field).map((total) => formatHomeMoney(total.amount, total.currency)).join(" · ");
 
   const walletBalanceTotals = currencies.map((curr) => {
     const amount = state.wallets.filter((item) => item.currency === curr).reduce((sum, item) => sum + item.initial + state.transactions.reduce((balance, transaction) => balance + (transaction.wallet === item.id ? (transaction.type === "income" ? transaction.amount : -transaction.amount) : transaction.targetWallet === item.id ? transaction.amount : 0), 0), 0);
-    return money(amount, curr);
+    return formatHomeMoney(amount, curr);
   }).join(" · ");
 
   const incomeTotals = totalsByCurrency("income");
@@ -449,17 +630,16 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
     </> : <>
       <header className="fb-home-header">
         <div className="fb-brand"><span className="fb-brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 24V13M27 24V13M5 17C11 5 21 5 27 17M5 20H27M11 20V24M16 20V24M21 20V24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg></span><span>FinBridge<small>Không gian tài chính của bạn</small></span></div>
-        <button type="button" className="fb-milestones" onClick={() => navigate("milestones")}><Trophy size={17} />Những cột mốc<ArrowRight size={15} /></button>
       </header>
       <div className="fb-home-intro"><div><p className="fb-eyebrow">TỔNG QUAN</p><h1>{state.settings.name && state.settings.name !== "." ? `Chào ${state.settings.name}` : "Tiền của bạn, trong tầm tay."}</h1><p>Theo dõi dòng tiền. Chủ động cho những kế hoạch tiếp theo.</p></div><button type="button" className="fb-add-button" onClick={addTransaction}><Plus size={18} />Thêm giao dịch</button></div>
       <section className="fb-wallet-section" aria-label="Ví của bạn"><div className="fb-section-heading"><h2>Ví của bạn</h2><span>{state.wallets.length} ví</span></div>
-        <div className="r-wallets">{state.wallets.map((w) => <div key={w.id} className={"r-wallet-card " + (w.id === wallet.id ? "is-selected" : "")}><button type="button" onClick={() => setWalletId(w.id)} className="r-wallet-content" aria-label={"Chọn ví " + w.name} aria-pressed={w.id === wallet.id}><Wallet size={19} /><span>{walletName(w.name)}</span><b>{money(w.initial + state.transactions.reduce((a, t) => a + (t.wallet === w.id ? (t.type === "income" ? t.amount : -t.amount) : t.targetWallet === w.id ? t.amount : 0), 0), w.currency)}</b></button><button type="button" className="r-wallet-edit" aria-label={"Sửa ví " + w.name} onClick={() => navigate("walletSettings?wallet=" + w.id)}><Pencil size={14} /></button></div>)}<button type="button" className="r-new-wallet" onClick={() => navigate("createWallet1")}><Plus size={20} /><span>Thêm ví</span></button></div>
+        <div className="r-wallets">{state.wallets.map((w) => <div key={w.id} className={"r-wallet-card " + (w.id === wallet.id ? "is-selected" : "")}><button type="button" onClick={() => setWalletId(w.id)} className="r-wallet-content" aria-label={"Chọn ví " + w.name} aria-pressed={w.id === wallet.id}><Wallet size={19} /><span>{walletName(w.name)}</span><b>{formatHomeMoney(w.initial + state.transactions.reduce((a, t) => a + (t.wallet === w.id ? (t.type === "income" ? t.amount : -t.amount) : t.targetWallet === w.id ? t.amount : 0), 0), w.currency)}</b></button><button type="button" className="r-wallet-edit" aria-label={"Sửa ví " + w.name} onClick={() => navigate("walletSettings?wallet=" + w.id)}><Pencil size={14} /></button></div>)}<button type="button" className="r-new-wallet" onClick={openAddWalletModal}><Plus size={20} /><span>Thêm ví</span></button></div>
       </section>
       <section className="fb-finance-dashboard" aria-label="Dashboard dòng tiền">
         <section className="fb-overview fb-finance-overview"><div className="fb-section-heading"><div><h2>Dòng tiền trong kỳ</h2><p className="fb-section-note">Tổng hợp từ tất cả ví đã tích hợp</p></div>{periodControls}</div>
           <div className="r-summary fb-flow-summary-container">
             <div className="fb-flow-vertical-stack">
-              <div className="fb-flow-row r-income" onClick={() => setModal("homeTotals")} role="button" tabIndex={0}>
+              <div className="fb-flow-row r-income" onClick={() => setModal("flowIncomeDetails")} role="button" tabIndex={0}>
                 <div className="fb-flow-row-header">
                   <span className="fb-flow-row-label">
                     <ArrowUpRight size={18} />
@@ -470,14 +650,13 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                 <div className="fb-flow-row-amounts">
                   {incomeTotals.map((item) => (
                     <div key={item.currency} className="fb-flow-amount-line">
-                      <b>+{money(item.amount, item.currency)}</b>
-                      {currencies.length > 1 && <span className="fb-currency-tag">{item.currency}</span>}
+                      <b>+{formatHomeMoney(item.amount, item.currency)}</b>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="fb-flow-row r-expense" onClick={() => setModal("homeTotals")} role="button" tabIndex={0}>
+              <div className="fb-flow-row r-expense" onClick={() => setModal("flowExpenseDetails")} role="button" tabIndex={0}>
                 <div className="fb-flow-row-header">
                   <span className="fb-flow-row-label">
                     <ArrowDownRight size={18} />
@@ -488,8 +667,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                 <div className="fb-flow-row-amounts">
                   {expenseTotals.map((item) => (
                     <div key={item.currency} className="fb-flow-amount-line">
-                      <b>−{money(item.amount, item.currency)}</b>
-                      {currencies.length > 1 && <span className="fb-currency-tag">{item.currency}</span>}
+                      <b>−{formatHomeMoney(item.amount, item.currency)}</b>
                     </div>
                   ))}
                 </div>
@@ -498,7 +676,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
 
             <div className="fb-flow-footer-row">
               <p className="fb-currency-note">Tiền tệ được hiển thị riêng, không quy đổi tỷ giá.</p>
-              <button type="button" className="fb-flow-detail-link" onClick={() => setModal("homeTotals")}>
+              <button type="button" className="fb-flow-detail-link" onClick={() => setModal("flowComparisonChart")}>
                 <span>Chi tiết</span>
                 <Info size={13} />
               </button>
@@ -637,9 +815,9 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                 {focusedBucket && (
                   <div className="fb-chart-tooltip" role="tooltip">
                     <span className="fb-chart-tooltip-period">{focusedBucket.fullDateLabel}</span>
-                    {dashboardType !== "expense" && <span>{t.summaryIncome}: {money(focusedBucket.income, dashboardCurrency)}</span>}
-                    {dashboardType !== "income" && <span>{t.summaryExpense}: {money(focusedBucket.expense, dashboardCurrency)}</span>}
-                    {dashboardType === "all" && <span>{t.summaryNet}: {focusedBucket.income >= focusedBucket.expense ? "+" : "−"}{money(Math.abs(focusedBucket.income - focusedBucket.expense), dashboardCurrency)}</span>}
+                    {dashboardType !== "expense" && <span>{t.summaryIncome}: {formatHomeMoney(focusedBucket.income, dashboardCurrency)}</span>}
+                    {dashboardType !== "income" && <span>{t.summaryExpense}: {formatHomeMoney(focusedBucket.expense, dashboardCurrency)}</span>}
+                    {dashboardType === "all" && <span>{t.summaryNet}: {formatHomeMoney(focusedBucket.income - focusedBucket.expense, dashboardCurrency, true)}</span>}
                     <span>{t.tooltipCount}: {focusedBucket.count}</span>
                   </div>
                 )}
@@ -694,7 +872,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                         key={b.key}
                         tabIndex={0}
                         role="button"
-                        aria-label={`${b.fullDateLabel}: ${t.summaryIncome} ${money(b.income, dashboardCurrency)}, ${t.summaryExpense} ${money(b.expense, dashboardCurrency)}`}
+                        aria-label={`${b.fullDateLabel}: ${t.summaryIncome} ${formatHomeMoney(b.income, dashboardCurrency)}, ${t.summaryExpense} ${formatHomeMoney(b.expense, dashboardCurrency)}`}
                         className="fb-bar-group"
                         onMouseEnter={() => setFocusedBucketKey(b.key)}
                         onMouseLeave={() => setFocusedBucketKey((k) => k === b.key ? null : k)}
@@ -741,9 +919,9 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                     {buckets.map((b) => (
                       <tr key={b.key}>
                         <td>{b.fullDateLabel}</td>
-                        <td>{money(b.income, dashboardCurrency)}</td>
-                        <td>{money(b.expense, dashboardCurrency)}</td>
-                        <td>{money(b.income - b.expense, dashboardCurrency)}</td>
+                        <td>{formatHomeMoney(b.income, dashboardCurrency)}</td>
+                        <td>{formatHomeMoney(b.expense, dashboardCurrency)}</td>
+                        <td>{formatHomeMoney(b.income - b.expense, dashboardCurrency, true)}</td>
                         <td>{b.count}</td>
                       </tr>
                     ))}
@@ -754,11 +932,11 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
               {/* Summary line */}
               <div className="fb-chart-summary">
                 <div className="fb-chart-summary-data">
-                  <span>{t.summaryIncome} {money(totalIncome, dashboardCurrency)}</span>
+                  <span>{t.summaryIncome} {formatHomeMoney(totalIncome, dashboardCurrency)}</span>
                   <span aria-hidden="true">·</span>
-                  <span>{t.summaryExpense} {money(totalExpense, dashboardCurrency)}</span>
+                  <span>{t.summaryExpense} {formatHomeMoney(totalExpense, dashboardCurrency)}</span>
                   <span aria-hidden="true">·</span>
-                  <span>{t.summaryNet} {totalNet >= 0 ? "+" : "−"}{money(Math.abs(totalNet), dashboardCurrency)}</span>
+                  <span>{t.summaryNet} {formatHomeMoney(totalNet, dashboardCurrency, true)}</span>
                   <span aria-hidden="true">·</span>
                   <span>{totalCount} {t.summaryTransactions}</span>
                 </div>
@@ -767,28 +945,262 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
             </>
           )}
         </section>
-        <section className="fb-wallet-flow-card"><div className="fb-section-heading"><div><h2>Chi & thu theo ví</h2><p className="fb-section-note">Số liệu của từng ví đã tích hợp trong kỳ</p></div><button type="button" className="fb-view-transactions" onClick={() => navigate("createWallet1")}><Plus size={15} />Thêm ví</button></div><div className="fb-wallet-flow-list">{walletFlows.map((flow) => <button type="button" key={flow.wallet.id} className={flow.wallet.id === wallet.id ? "is-selected" : ""} onClick={() => { setWalletId(flow.wallet.id); setDashboardCategory("all"); setFocusedBucketKey(null); }}><span><b>{walletName(flow.wallet.name)}</b><small>{flow.wallet.currency}</small></span><span className="fb-wallet-flow-numbers"><small className="r-expense">Chi {money(flow.expense, flow.wallet.currency)}</small><small className="r-income">Thu {money(flow.income, flow.wallet.currency)}</small></span><ArrowRight size={16} /></button>)}</div><button type="button" className="fb-manage-wallets" onClick={() => navigate("walletSettings?wallet=" + wallet.id)}>Quản lý ví<ArrowRight size={16} /></button></section>
+        <section className="fb-wallet-flow-card"><div className="fb-section-heading"><div><h2>Chi & thu theo ví</h2><p className="fb-section-note">Số liệu của từng ví đã tích hợp trong kỳ</p></div><button type="button" className="fb-view-transactions" onClick={openAddWalletModal}><Plus size={15} />Thêm ví</button></div><div className="fb-wallet-flow-list">{walletFlows.map((flow) => <button type="button" key={flow.wallet.id} className={flow.wallet.id === wallet.id ? "is-selected" : ""} onClick={() => { setWalletId(flow.wallet.id); setDashboardCategory("all"); setFocusedBucketKey(null); }}><span><b>{walletName(flow.wallet.name)}</b><small>{flow.wallet.currency}</small></span><span className="fb-wallet-flow-numbers"><small className="r-expense">Chi {formatHomeMoney(flow.expense, flow.wallet.currency)}</small><small className="r-income">Thu {formatHomeMoney(flow.income, flow.wallet.currency)}</small></span><ArrowRight size={16} /></button>)}</div><button type="button" className="fb-manage-wallets" onClick={() => navigate("walletSettings?wallet=" + wallet.id)}>Quản lý ví<ArrowRight size={16} /></button></section>
       </section>
       <div className="fb-workspace"><div className="fb-main-column">
         <section className="fb-overview"><div className="fb-section-heading"><h2>Dòng tiền trong kỳ</h2>{periodControls}</div>
-          <button type="button" className="r-summary" onClick={() => setModal("totals")} aria-label="Xem chi tiết dòng tiền"><div className="r-summary-top"><span><small>Thay đổi ròng</small><b>{money(income - expense, wallet.currency)}</b></span><span className="fb-detail-label">Chi tiết<Info size={16} /></span></div><div className="r-summary-cards"><div className="r-expense"><span><ArrowDownRight size={18} />Chi phí</span><b>{money(expense, wallet.currency)}</b></div><div className="r-income"><span><ArrowUpRight size={18} />Thu nhập</span><b>{money(income, wallet.currency)}</b></div></div></button>
+          <button type="button" className="r-summary" onClick={() => setModal("totals")} aria-label="Xem chi tiết dòng tiền"><div className="r-summary-top"><span><small>Thay đổi ròng</small><b>{formatHomeMoney(income - expense, wallet.currency, true)}</b></span><span className="fb-detail-label">Chi tiết<Info size={16} /></span></div><div className="r-summary-cards"><div className="r-expense"><span><ArrowDownRight size={18} />Chi phí</span><b>{formatHomeMoney(expense, wallet.currency)}</b></div><div className="r-income"><span><ArrowUpRight size={18} />Thu nhập</span><b>{formatHomeMoney(income, wallet.currency)}</b></div></div></button>
         </section>
         <section className="fb-activity"><div className="fb-section-heading"><h2>Giao dịch trong kỳ</h2><div className="r-type-pills"><button type="button" className={type === "expense" ? "active" : ""} onClick={() => setType("expense")}>Chi phí</button><button type="button" className={type === "income" ? "active" : ""} onClick={() => setType("income")}>Thu nhập</button></div></div>
           {list.length === 0 ? <div className="fb-empty"><span className="fb-empty-icon"><ReceiptText size={26} /></span><h3>Chưa có {type === "expense" ? "khoản chi" : "khoản thu"} trong kỳ này</h3><p>Ghi lại một giao dịch để bắt đầu theo dõi dòng tiền.</p><button type="button" className="fb-empty-action" onClick={addTransaction}><Plus size={16} />Thêm giao dịch</button></div> : transactionRows}
         </section>
-      </div><aside className="fb-side-column">{state.settings.totalBalance && <section className="fb-balance-card"><span className="fb-balance-icon"><Wallet size={20} /></span><p>Số dư ví đã chọn</p><h2>{money(allBalance, wallet.currency)}</h2><small>{walletName(wallet.name)} · {wallet.currency}</small><div className="fb-balance-decor" aria-hidden="true"><span /><span /><span /><span /><span /></div><button type="button" onClick={() => navigate("walletSettings?wallet=" + wallet.id)}>Quản lý ví<ArrowRight size={16} /></button></section>}
+      </div><aside className="fb-side-column">{state.settings.totalBalance && <section className="fb-balance-card"><span className="fb-balance-icon"><Wallet size={20} /></span><p>Số dư ví đã chọn</p><h2>{formatHomeMoney(allBalance, wallet.currency)}</h2><small>{walletName(wallet.name)} · {wallet.currency}</small><div className="fb-balance-decor" aria-hidden="true"><span /><span /><span /><span /><span /></div><button type="button" onClick={() => navigate("walletSettings?wallet=" + wallet.id)}>Quản lý ví<ArrowRight size={16} /></button></section>}
         <section className="fb-habit-card"><p className="fb-eyebrow">MỖI NGÀY MỘT CHÚT</p><h3>Hiểu tiền của mình hơn.</h3><p>Ghi lại các khoản thu và chi để có một bức tranh rõ ràng hơn.</p><button type="button" onClick={() => navigate("?tab=transactions")}>Xem giao dịch<ArrowRight size={16} /></button></section>
       </aside></div>
       <button type="button" className="r-fab fb-mobile-add" aria-label="Thêm giao dịch" onClick={addTransaction}><Plus size={26} /></button>
     </>}
-    {modal && <Modal title={modal === "period" ? "Chọn khoảng thời gian" : modal === "search" ? "Tìm kiếm giao dịch" : modal === "wallet" ? "Chọn ví" : modal === "homeTotals" ? "Tổng dòng tiền" : undefined} onClose={close} sheet={["period", "search", "wallet"].includes(modal)}>
+    {modal && <Modal
+      title={modal === "period" ? "Chọn khoảng thời gian"
+        : modal === "search" ? "Tìm kiếm giao dịch"
+        : modal === "wallet" ? "Chọn ví"
+        : modal === "homeTotals" ? "Tổng dòng tiền"
+        : modal === "addWallet" ? "Thêm ví mới"
+        : modal === "flowIncomeDetails" ? "Chi tiết các khoản thu"
+        : modal === "flowExpenseDetails" ? "Chi tiết các khoản chi"
+        : modal === "flowComparisonChart" ? "Phân tích Thu & Chi trong kỳ"
+        : undefined}
+      onClose={close}
+      sheet={["period", "search", "wallet"].includes(modal)}
+      wide={modal === "flowComparisonChart"}
+    >
       {modal === "period" && <div className="r-period-options">{["Ngày", "Tuần", "Tháng", "Năm", "Mọi thời gian", "Phạm vi tùy chỉnh"].map((p) => <button key={p} type="button" className={p === period ? "is-selected" : ""} onClick={() => { setPeriod(p); if (p === "Tuần") { const date = new Date(day + "T12:00:00"); date.setDate(date.getDate() - (date.getDay() + 6) % 7); const start = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-"); date.setDate(date.getDate() + 6); setFrom(start); setTo([date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-")); } setModal(p === "Phạm vi tùy chỉnh" ? "range" : ""); }}><CalendarDays size={22} />{p}</button>)}</div>}
       {modal === "month" && <div className="r-month-picker"><aside><span>Thg {month + 1} {year}</span><button type="button" onClick={() => setYear(year - 1)}>⌃</button><b>{year}</b><button type="button" onClick={() => setYear(year + 1)}>⌄</button></aside><div><div className="r-month-grid">{Array.from({ length: 12 }, (_, i) => <button key={i} type="button" className={i === month ? "active" : ""} onClick={() => setMonth(i)}>Thg {i + 1}</button>)}</div><footer><button type="button" onClick={close}>Huỷ</button><button type="button" onClick={close}>OK</button></footer></div></div>}
       {modal === "range" && <div className="r-form"><label>Ngày<input aria-label="Ngày" type="date" value={day} onChange={(e) => setDay(e.target.value)} /></label><label>Từ ngày<input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label><label>Đến ngày<input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label><input aria-label="Năm" type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} /><button type="button" className="r-primary" onClick={close}>Xác nhận</button></div>}
       {modal === "search" && <div className="r-form"><input aria-label="Tìm kiếm giao dịch" placeholder="Tìm kiếm giao dịch..." value={search} onChange={(e) => setSearch(e.target.value)} /><button type="button" className="r-primary" onClick={close}>Tìm kiếm</button>{search && <button type="button" className="r-secondary" onClick={() => { setSearch(""); close(); }}><X size={16} />Xóa tìm kiếm</button>}</div>}
-      {modal === "wallet" && <div className="r-wallet-options">{state.wallets.map((w) => <button key={w.id} type="button" onClick={() => { setWalletId(w.id); close(); }} className={w.id === wallet.id ? "active" : ""}><Icon code="f555" />{w.name}<span>{money(w.initial, w.currency)}</span></button>)}</div>}
+      {modal === "wallet" && <div className="r-wallet-options">{state.wallets.map((w) => <button key={w.id} type="button" onClick={() => { setWalletId(w.id); close(); }} className={w.id === wallet.id ? "active" : ""}><Icon code="f555" />{w.name}<span>{formatHomeMoney(w.initial, w.currency)}</span></button>)}</div>}
       {modal === "homeTotals" && <div className="r-breakdown"><p><span>Tổng số dư tất cả ví</span>{walletBalanceTotals}</p><p className="r-expense"><span>Tổng chi từ các ví</span>{formatTotals("expense")}</p><p className="r-income"><span>Tổng thu từ các ví</span>{formatTotals("income")}</p><p className="r-breakdown-total"><span>Thay đổi ròng</span>{formatTotals("net")}</p><small className="fb-modal-note">Các tiền tệ được tách riêng, không quy đổi tỷ giá.</small></div>}
-      {modal === "totals" && <div className="r-breakdown"><p className="r-expense"><span>Chi phí</span>{money(expense, wallet.currency)}</p><p className="r-income"><span>Thu nhập</span>{money(income, wallet.currency)}</p><p><span>Chuyển khoản</span>{money(records.filter((r) => r.type === "transfer").reduce((a, r) => a + r.amount, 0), wallet.currency)}</p><p className="r-breakdown-total"><span>Tổng cộng</span>{money(income - expense, wallet.currency)}</p></div>}
+      {modal === "totals" && <div className="r-breakdown"><p className="r-expense"><span>Chi phí</span>{formatHomeMoney(expense, wallet.currency)}</p><p className="r-income"><span>Thu nhập</span>{formatHomeMoney(income, wallet.currency)}</p><p><span>Chuyển khoản</span>{formatHomeMoney(records.filter((r) => r.type === "transfer").reduce((a, r) => a + r.amount, 0), wallet.currency)}</p><p className="r-breakdown-total"><span>Tổng cộng</span>{formatHomeMoney(income - expense, wallet.currency, true)}</p></div>}
+
+      {modal === "addWallet" && (
+        <form className="fb-add-wallet-form" onSubmit={handleCreateWallet}>
+          <p className="fb-modal-subheading">Tạo ví để phân bổ tài chính và quản lý dòng tiền chi tiết.</p>
+
+          <div className="fb-form-group">
+            <label className="fb-form-label">Loại ví</label>
+            <div className="r-two-options">
+              <button
+                type="button"
+                className={newWalletType === "cash" ? "active" : ""}
+                onClick={() => setNewWalletType("cash")}
+              >
+                <Wallet size={16} />
+                <span>Tiền mặt</span>
+              </button>
+              <button
+                type="button"
+                className={newWalletType === "credit" ? "active" : ""}
+                onClick={() => setNewWalletType("credit")}
+              >
+                <ReceiptText size={16} />
+                <span>Thẻ tín dụng</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="fb-form-group">
+            <label className="fb-form-label" htmlFor="new-wallet-name">Tên ví</label>
+            <input
+              id="new-wallet-name"
+              type="text"
+              required
+              placeholder="Ví dụ: Ví tiêu dùng, Techcombank, VIB..."
+              value={newWalletName}
+              onChange={(e) => setNewWalletName(e.target.value)}
+              className="fb-input"
+            />
+          </div>
+
+          <div className="fb-form-group">
+            <label className="fb-form-label" htmlFor="new-wallet-currency">Đơn vị tiền tệ</label>
+            <select
+              id="new-wallet-currency"
+              value={newWalletCurrency}
+              onChange={(e) => setNewWalletCurrency(e.target.value)}
+              className="fb-select"
+            >
+              <option value="VND">VND (Việt Nam Đồng)</option>
+              <option value="USD">USD (Đô la Mỹ)</option>
+              <option value="EUR">EUR (Euro)</option>
+              <option value="JPY">JPY (Yên Nhật)</option>
+              <option value="SGD">SGD (Đô la Singapore)</option>
+              <option value="GBP">GBP (Bảng Anh)</option>
+              <option value="AUD">AUD (Đô la Úc)</option>
+            </select>
+          </div>
+
+          <div className="fb-form-group">
+            <label className="fb-form-label" htmlFor="new-wallet-initial">
+              {newWalletType === "credit" ? "Số dư chưa thanh toán" : "Số dư ban đầu"}
+            </label>
+            <input
+              id="new-wallet-initial"
+              type="number"
+              step="any"
+              placeholder="0"
+              value={newWalletAmount}
+              onChange={(e) => setNewWalletAmount(e.target.value)}
+              className="fb-input"
+            />
+          </div>
+
+          {newWalletType === "credit" && (
+            <div className="fb-form-group">
+              <label className="fb-form-label" htmlFor="new-wallet-limit">Hạn mức tín dụng</label>
+              <input
+                id="new-wallet-limit"
+                type="number"
+                step="any"
+                required
+                placeholder="Ví dụ: 50,000,000"
+                value={newWalletLimit}
+                onChange={(e) => setNewWalletLimit(e.target.value)}
+                className="fb-input"
+              />
+            </div>
+          )}
+
+          <div className="fb-modal-actions">
+            <button type="button" className="r-secondary" onClick={close}>Hủy</button>
+            <button type="submit" className="r-primary">Lưu ví</button>
+          </div>
+        </form>
+      )}
+
+      {modal === "flowIncomeDetails" && (
+        <div className="fb-flow-details-modal">
+          <div className="fb-tx-modal-summary-pill">
+            <span>Kỳ: <b>{selectedPeriodText}</b></span>
+            <b className="r-income">+{formatHomeMoney(periodIncomeTotal, wallet.currency || "VND")}</b>
+          </div>
+          {incomeList.length === 0 ? (
+            <div className="fb-modal-empty-state">
+              <ReceiptText size={38} />
+              <h4>Chưa có khoản thu nào trong kỳ này</h4>
+              <p>Các giao dịch thu nhập trong {selectedPeriodText} sẽ hiển thị tại đây.</p>
+              <button type="button" className="r-primary fb-modal-cta" onClick={addTransaction}>
+                <Plus size={16} />Thêm giao dịch thu
+              </button>
+            </div>
+          ) : (
+            <div className="fb-tx-modal-list">
+              {incomeList.map((t) => {
+                const w = state.wallets.find((item) => item.id === t.wallet);
+                const curr = w?.currency || wallet.currency || "VND";
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="fb-tx-modal-item"
+                    onClick={() => navigate("editTransaction?id=" + t.id)}
+                  >
+                    <span className="fb-tx-modal-icon r-income">
+                      <ArrowUpRight size={18} />
+                    </span>
+                    <div className="fb-tx-modal-info">
+                      <b>{t.title || t.category}</b>
+                      <small>{t.category} · {w ? walletName(w.name) : ""} · {t.date}</small>
+                    </div>
+                    <b className="fb-tx-modal-amount r-income">
+                      +{formatHomeMoney(t.amount, curr)}
+                    </b>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {modal === "flowExpenseDetails" && (
+        <div className="fb-flow-details-modal">
+          <div className="fb-tx-modal-summary-pill">
+            <span>Kỳ: <b>{selectedPeriodText}</b></span>
+            <b className="r-expense">−{formatHomeMoney(periodExpenseTotal, wallet.currency || "VND")}</b>
+          </div>
+          {expenseList.length === 0 ? (
+            <div className="fb-modal-empty-state">
+              <ReceiptText size={38} />
+              <h4>Chưa có khoản chi nào trong kỳ này</h4>
+              <p>Các giao dịch chi tiêu trong {selectedPeriodText} sẽ hiển thị tại đây.</p>
+              <button type="button" className="r-primary fb-modal-cta" onClick={addTransaction}>
+                <Plus size={16} />Thêm giao dịch chi
+              </button>
+            </div>
+          ) : (
+            <div className="fb-tx-modal-list">
+              {expenseList.map((t) => {
+                const w = state.wallets.find((item) => item.id === t.wallet);
+                const curr = w?.currency || wallet.currency || "VND";
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    className="fb-tx-modal-item"
+                    onClick={() => navigate("editTransaction?id=" + t.id)}
+                  >
+                    <span className="fb-tx-modal-icon r-expense">
+                      <ArrowDownRight size={18} />
+                    </span>
+                    <div className="fb-tx-modal-info">
+                      <b>{t.title || t.category}</b>
+                      <small>{t.category} · {w ? walletName(w.name) : ""} · {t.date}</small>
+                    </div>
+                    <b className="fb-tx-modal-amount r-expense">
+                      −{formatHomeMoney(t.amount, curr)}
+                    </b>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {modal === "flowComparisonChart" && (
+        <div className="fb-flow-chart-modal">
+          <div className="fb-donut-summary-bar">
+            <div>
+              <span>Tổng thu ({selectedPeriodText})</span>
+              <b className="r-income">+{formatHomeMoney(periodIncomeTotal, wallet.currency || "VND")}</b>
+            </div>
+            <div>
+              <span>Tổng chi ({selectedPeriodText})</span>
+              <b className="r-expense">−{formatHomeMoney(periodExpenseTotal, wallet.currency || "VND")}</b>
+            </div>
+            <div>
+              <span>Thay đổi ròng</span>
+              <b className={periodNetTotal >= 0 ? "r-income" : "r-expense"}>
+                {formatHomeMoney(periodNetTotal, wallet.currency || "VND", true)}
+              </b>
+            </div>
+          </div>
+
+          <div className="fb-donut-grid">
+            <SvgDonut
+              type="income"
+              items={incomeBreakdown.items}
+              total={periodIncomeTotal}
+              currency={wallet.currency || "VND"}
+            />
+            <SvgDonut
+              type="expense"
+              items={expenseBreakdown.items}
+              total={periodExpenseTotal}
+              currency={wallet.currency || "VND"}
+            />
+          </div>
+        </div>
+      )}
     </Modal>}
   </div>;
 }
