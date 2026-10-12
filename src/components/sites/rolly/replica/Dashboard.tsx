@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Ban, CalendarDays, ChevronDown, FolderTree, Info, Lock, Pencil, Plus, ReceiptText, RotateCcw, Search, Settings, SlidersHorizontal, Trash2, Wallet, X } from "lucide-react";
 import { EmptyState, Icon, Modal } from "./Ui";
@@ -849,7 +849,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   }, [period, month, year, day, from, to, incomeTotals.length, expenseTotals.length]);
 
   const list = transactionsTab ? records : records.filter((t) => t.type === type);
-  const close = () => setModal("");
+  const close = useCallback(() => setModal(""), []);
   const addTransaction = () => navigate(state.settings.manual ? "addTransaction" : "addTransactionChatMode");
   const walletName = (name: string) => name === "." ? "Ví chính" : name;
   const periodControls = (
