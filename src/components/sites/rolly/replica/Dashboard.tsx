@@ -7,6 +7,7 @@ import { EmptyState, Icon, Modal } from "./Ui";
 import { money, updateState, useAppState, type Transaction, type Wallet as WalletType } from "./store";
 import { categoryIcon, iconGroups } from "./Categories";
 import { calendarWeek, localDateKey, shiftCalendarWeek } from "./chartWeek";
+import { WalletSettingsDirectory } from "./SettingsOverview";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
 
 type DashboardSample = {
@@ -388,7 +389,7 @@ export function MonthCalendar({ month, year, transactions = [], onPick }: { mont
   })}</div></div>;
 }
 
-export function Dashboard({ transactionsTab = false, navigate }: { transactionsTab?: boolean; navigate: (screen: string) => void }) {
+export function Dashboard({ transactionsTab = false, walletSettingsMode = false, navigate }: { transactionsTab?: boolean; walletSettingsMode?: boolean; navigate: (screen: string) => void }) {
   const state = useAppState();
   const searchParams = useSearchParams();
   const lang = getLanguage(state.settings.language);
@@ -1024,8 +1025,8 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
 
   const focusedBucket = buckets.find((b) => b.key === focusedBucketKey);
 
-  return <div className={"r-dashboard " + (transactionsTab ? "r-transactions" : "r-home fb-home")}>
-    {transactionsTab ? <>
+  return <div className={walletSettingsMode ? "fb-wallet-management-host" : "r-dashboard " + (transactionsTab ? "r-transactions" : "r-home fb-home")}>
+    {walletSettingsMode ? <WalletSettingsDirectory state={state} navigate={navigate} onManage={openManageWalletModal} onAddWallet={openAddWalletModal} /> : transactionsTab ? <>
       <div className="r-transactions-heading"><h1>Giao dịch</h1><div><button type="button" className="r-icon-button" onClick={() => setModal("search")} aria-label="Tìm kiếm giao dịch"><Search size={22} /></button><button type="button" className="r-icon-button" onClick={() => navigate("calendar")} aria-label="Lịch giao dịch"><CalendarDays size={22} /></button></div></div>
       <button type="button" className="r-wallet-chip" onClick={() => setModal("wallet")}><Icon code="f555" />{wallet.name}<ChevronDown size={13} /></button>
       {periodControls}
