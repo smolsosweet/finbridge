@@ -374,11 +374,11 @@
 .fb-period-icon{color:var(--r-muted);flex-shrink:0}
 .fb-period-trigger-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fb-period-chevron{color:var(--r-muted);flex-shrink:0}
-.fb-period-mode-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--r-line)}
-.fb-period-mode-tab{border:1px solid var(--r-line);background:var(--r-bg);color:var(--r-muted);font-size:12px;font-weight:500;padding:8px 14px;border-radius:10px;cursor:pointer;transition:all .15s}
+.fb-period-mode-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--r-line)}
+.fb-period-mode-tab{min-height:42px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;border:1px solid var(--r-line);border-radius:10px;background:var(--r-bg);color:var(--r-muted);cursor:pointer;transition:all .15s;text-align:center}
 .fb-period-mode-tab:hover{color:var(--r-text);background:var(--r-surface)}
 .fb-period-mode-tab.active{background:var(--r-mint);border-color:rgba(20,125,120,.35);color:var(--r-teal);font-weight:600}
-.fb-period-detail-body{min-height:160px}
+.fb-period-detail-body{min-height:180px;display:flex;flex-direction:column;gap:16px;justify-content:center}
 .fb-all-time-hint{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:30px 20px;gap:12px;color:var(--r-muted);font-size:13px}
 .fb-all-time-hint svg{color:var(--r-teal)}
 .fb-history .fb-history-add{width:50px;height:50px;bottom:86px;right:22px;background:var(--r-teal);color:var(--r-surface);box-shadow:0 6px 18px #147d7820}
@@ -681,27 +681,40 @@
 .fb-donut-currency-switcher .r-type-pills{margin:0}
 
 /* Dedicated period date pickers */
-.fb-date-picker-modal{display:flex;flex-direction:column;gap:14px}
+.fb-date-picker-modal{display:flex;flex-direction:column;gap:18px}
 .fb-picker-subheading{font-size:12.5px;color:var(--r-muted);margin:-8px 0 4px;line-height:1.5}
-.fb-picker-field{display:flex;flex-direction:column;gap:6px}
-.fb-picker-label{font-size:12px;font-weight:600;color:var(--r-text)}
+.fb-picker-field-wrap{display:flex;flex-direction:column;gap:16px;width:100%}
+.fb-picker-field{display:flex;flex-direction:column;gap:8px;width:100%}
+.fb-picker-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--r-muted)}
+.fb-picker-field input[type="date"],.fb-history-range input[type="date"]{min-height:46px;border:1px solid var(--r-line);border-radius:10px;padding:10px 14px;font-size:13.5px;background:var(--r-bg);color:var(--r-text);width:100%;transition:border-color .15s,box-shadow .15s}
+.fb-picker-field input[type="date"]:focus,.fb-history-range input[type="date"]:focus{border-color:var(--r-teal);box-shadow:0 0 0 3px rgba(20,125,120,.12);background:var(--r-surface)}
 .fb-quick-date-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
-.fb-quick-date-btn{padding:7px 14px;font-size:12px;font-weight:500;border:1px solid var(--r-line);background:var(--r-surface);color:var(--r-text);border-radius:8px;cursor:pointer;transition:all .15s}
+.fb-quick-date-btn{align-self:flex-start;min-height:38px;padding:8px 16px;font-size:12.5px;font-weight:600;border:1px solid var(--r-line);background:var(--r-surface);color:var(--r-text);border-radius:8px;cursor:pointer;transition:all .15s}
 .fb-quick-date-btn:hover,.fb-quick-date-btn.active{background:var(--r-mint);border-color:var(--r-teal);color:var(--r-teal)}
 .fb-picker-selected-preview{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:#f8fafc;border:1px solid var(--r-line);border-radius:10px;font-size:12.5px}
 .fb-picker-selected-preview b{color:var(--r-teal);font-weight:600}
-.fb-week-stepper,.fb-month-year-header,.fb-year-stepper{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#f8fafc;border:1px solid var(--r-line);border-radius:12px}
+.fb-week-stepper,.fb-month-year-header,.fb-year-stepper{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#f8fafc;border:1px solid var(--r-line);border-radius:12px;margin-bottom:14px}
 .fb-stepper-btn{width:36px;height:36px;border-radius:8px;border:1px solid var(--r-line);background:var(--r-surface);color:var(--r-text);font-size:18px;font-weight:600;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s}
 .fb-stepper-btn:hover{background:var(--r-secondary)}
 .fb-week-stepper-display{display:flex;flex-direction:column;align-items:center;gap:2px;text-align:center}
 .fb-week-stepper-label{font-size:10px;color:var(--r-muted);text-transform:uppercase;letter-spacing:.05em}
 .fb-year-display,.fb-big-year{font-size:16px;font-weight:600;color:var(--r-text)}
-.fb-month-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.fb-month-cell,.fb-year-cell{padding:12px 8px;border:1px solid var(--r-line);background:var(--r-surface);border-radius:10px;font-size:12.5px;font-weight:500;cursor:pointer;text-align:center;transition:all .15s}
+.fb-month-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px}
+.fb-year-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:6px}
+.fb-month-cell,.fb-year-cell{min-height:48px;display:flex;align-items:center;justify-content:center;padding:10px 8px;border:1px solid var(--r-line);background:var(--r-surface);border-radius:10px;font-size:13px;font-weight:500;cursor:pointer;text-align:center;transition:all .15s}
 .fb-month-cell:hover,.fb-year-cell:hover{background:var(--r-secondary)}
 .fb-month-cell.active,.fb-year-cell.active{background:var(--r-teal);color:white;border-color:var(--r-teal);font-weight:600}
-.fb-year-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .fb-range-inputs{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fb-history-range{display:grid;grid-template-columns:1fr 1fr;gap:16px;width:100%;padding:4px 0}
+.fb-history-range label{display:flex;flex-direction:column;gap:8px}
+.fb-history-range label>span{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;color:var(--r-muted)}
+.fb-date-picker-modal .fb-modal-actions{display:flex;justify-content:flex-end;gap:12px;margin-top:24px;padding-top:18px;border-top:1px solid var(--r-line)}
+.fb-date-picker-modal .fb-modal-actions button{min-height:42px;padding:10px 22px;font-size:13px;font-weight:600;border-radius:10px}
+@media(max-width:480px){
+  .fb-period-mode-tabs{gap:6px}
+  .fb-period-mode-tab{font-size:11.5px;padding:8px 4px}
+  .fb-history-range{grid-template-columns:1fr;gap:12px}
+}
 
 /* Manage Wallet Modal & Category Management */
 .fb-manage-wallet-modal{display:flex;flex-direction:column;gap:16px}
