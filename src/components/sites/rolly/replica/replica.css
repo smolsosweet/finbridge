@@ -668,9 +668,9 @@
 .fb-cat-type-toggle{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .fb-cat-toggle-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;border:1px solid var(--r-line);background:white;color:var(--r-muted);border-radius:8px;font-size:12.5px;font-weight:500;cursor:pointer;transition:all .15s}
 .fb-cat-toggle-btn.active{background:var(--r-secondary);color:var(--r-text);border-color:var(--r-muted);font-weight:600}
-.fb-cat-add-form{display:flex;gap:8px}
-.fb-cat-add-form .fb-input{flex:1}
-.fb-cat-add-form button{padding:0 16px;white-space:nowrap;font-size:12.5px;display:inline-flex;align-items:center;gap:6px}
+.fb-cat-add-form{display:flex;align-items:center;gap:8px;width:100%}
+.fb-cat-add-form .fb-cat-add-input{flex:1 1 auto;min-width:0;width:100%!important;height:42px;min-height:42px;font-size:13px}
+.fb-cat-add-form .fb-cat-add-btn{flex:0 0 auto;width:auto!important;min-width:86px;height:42px;min-height:42px;padding:0 16px;white-space:nowrap;font-size:13px;border-radius:10px}
 .fb-cat-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto;padding-right:2px}
 .fb-cat-item{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid var(--r-line);border-radius:10px;background:white;transition:background .15s}
 .fb-cat-item:hover{background:#f8fafc}
