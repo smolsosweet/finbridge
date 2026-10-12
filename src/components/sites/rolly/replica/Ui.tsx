@@ -22,10 +22,16 @@ export function PageHeader({ title, subtitle, onBack, close = false, children }:
 }
 export function Modal({ title, children, onClose, sheet = false, wide = false }: { title?: string; children: ReactNode; onClose: () => void; sheet?: boolean; wide?: boolean }) {
   const panel = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const keydown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") onCloseRef.current();
       if (event.key !== "Tab") return;
       const elements = panel.current?.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href]');
       if (!elements?.length) return;
@@ -37,8 +43,12 @@ export function Modal({ title, children, onClose, sheet = false, wide = false }:
     panel.current?.focus();
     const old = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => { document.removeEventListener("keydown", keydown); document.body.style.overflow = old; previous?.focus(); };
-  }, [onClose]);
+    return () => {
+      document.removeEventListener("keydown", keydown);
+      document.body.style.overflow = old;
+      previous?.focus();
+    };
+  }, []);
   return <div className={"r-overlay " + (sheet ? "r-sheet-overlay" : "")} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title || "Tùy chọn"} className={"r-dialog " + (sheet ? "r-sheet " : "") + (wide ? "r-wide-dialog" : "")}><button type="button" className="r-modal-close" aria-label="Đóng hộp thoại" onClick={onClose}><X size={18} /></button>{sheet && <div className="r-handle" />}{title && <h2>{title}</h2>}{children}</div></div>;
 }
 export function Field({ label, children }: { label: string; children: ReactNode }) {
