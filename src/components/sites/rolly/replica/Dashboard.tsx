@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Ban, CalendarDays, ChevronDown, FolderTree, Info, Lock, Pencil, Plus, ReceiptText, RotateCcw, Search, Settings, SlidersHorizontal, Trash2, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Ban, CalendarDays, Check, ChevronDown, FolderTree, Info, Lock, Pencil, Plus, ReceiptText, RotateCcw, Search, Settings, SlidersHorizontal, Trash2, Wallet, X } from "lucide-react";
 import { EmptyState, Icon, Modal } from "./Ui";
 import { money, updateState, useAppState, type Transaction, type Wallet as WalletType } from "./store";
-import { categoryIcon } from "./Categories";
+import { categoryIcon, iconGroups } from "./Categories";
 import { calendarWeek, localDateKey, shiftCalendarWeek } from "./chartWeek";
 
 type DashboardSample = {
@@ -469,6 +469,12 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const [newActualBalance, setNewActualBalance] = useState("");
   const [catType, setCatType] = useState<"expense" | "income">("expense");
   const [newCatName, setNewCatName] = useState("");
+  const [newCatIcon, setNewCatIcon] = useState("🏷️");
+  const [isPickingIcon, setIsPickingIcon] = useState(false);
+  const [iconPickerTarget, setIconPickerTarget] = useState<"new" | "edit">("new");
+  const [editingCatName, setEditingCatName] = useState<string | null>(null);
+  const [editCatTitle, setEditCatTitle] = useState("");
+  const [editCatIcon, setEditCatIcon] = useState("");
 
   const openManageWalletModal = (targetWalletId: string) => {
     const target = state.wallets.find((w) => w.id === targetWalletId) || wallet;
@@ -482,6 +488,9 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
     setIsReconciling(false);
     setNewActualBalance("");
     setNewCatName("");
+    setNewCatIcon("🏷️");
+    setIsPickingIcon(false);
+    setEditingCatName(null);
     setModal("manageWallet");
   };
 
@@ -581,6 +590,17 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
     }
   };
 
+  const handleSwitchCatType = (type: "expense" | "income") => {
+    setCatType(type);
+    if (type === "income" && (newCatIcon === "🏷️" || newCatIcon === "🍔")) {
+      setNewCatIcon("💰");
+    } else if (type === "expense" && newCatIcon === "💰") {
+      setNewCatIcon("🏷️");
+    }
+    setIsPickingIcon(false);
+    setEditingCatName(null);
+  };
+
   const handleAddCategory = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newCatName.trim();
@@ -592,20 +612,126 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
         ...s.categoryMeta,
         [trimmed]: {
           type: catType,
-          icon: catType === "income" ? "💰" : "🏷️",
+          icon: newCatIcon || (catType === "income" ? "💰" : "🏷️"),
           children: [],
         },
       },
     }));
     setNewCatName("");
+    setIsPickingIcon(false);
+  };
+
+  const handleStartEditCat = (cat: string) => {
+    setEditingCatName(cat);
+    setEditCatTitle(cat);
+    setEditCatIcon(categoryIcon(cat, state.categoryMeta));
+    setIconPickerTarget("edit");
+    setIsPickingIcon(false);
+  };
+
+  const handleSaveEditCat = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCatName) return;
+    const oldName = editingCatName;
+    const newName = editCatTitle.trim();
+    if (!newName) return;
+    if (newName !== oldName && state.categories.includes(newName)) {
+      alert("Tên danh mục này đã tồn tại.");
+      return;
+    }
+    const currentMeta = state.categoryMeta[oldName] || { type: catType, icon: editCatIcon, children: [] };
+    updateState((s) => {
+      const nextMeta = { ...s.categoryMeta };
+      if (newName !== oldName) {
+        delete nextMeta[oldName];
+      }
+      nextMeta[newName] = {
+        ...currentMeta,
+        icon: editCatIcon,
+      };
+      return {
+        ...s,
+        categories: s.categories.map((c) => (c === oldName ? newName : c)),
+        categoryMeta: nextMeta,
+        transactions: newName !== oldName
+          ? s.transactions.map((t) => (t.category === oldName ? { ...t, category: newName } : t))
+          : s.transactions,
+      };
+    });
+    setEditingCatName(null);
+    setIsPickingIcon(false);
+  };
+
+  const handleCancelEditCat = () => {
+    setEditingCatName(null);
+    setIsPickingIcon(false);
   };
 
   const handleDeleteCategory = (cat: string) => {
-    if (confirm(`Bạn có chắc chắn muốn xóa danh mục "${cat}"?`)) {
-      updateState((s) => ({
-        ...s,
-        categories: s.categories.filter((c) => c !== cat),
-      }));
+    if (cat === "Chưa được phân loại") {
+      alert("Không thể xóa danh mục mặc định của hệ thống.");
+      return;
+    }
+
+    const txCount = state.transactions.filter((t) => t.category === cat).length;
+    const meta = state.categoryMeta[cat];
+
+    if (meta?.archived) {
+      if (confirm(`Bạn muốn kích hoạt lại danh mục "${cat}"?`)) {
+        updateState((s) => ({
+          ...s,
+          categoryMeta: {
+            ...s.categoryMeta,
+            [cat]: { ...meta, archived: false },
+          },
+        }));
+      }
+      return;
+    }
+
+    if (txCount === 0) {
+      if (confirm(`Danh mục "${cat}" chưa có giao dịch nào. Bạn có chắc chắn muốn xóa vĩnh viễn?`)) {
+        updateState((s) => {
+          const nextMeta = { ...s.categoryMeta };
+          delete nextMeta[cat];
+          return {
+            ...s,
+            categories: s.categories.filter((c) => c !== cat),
+            categoryMeta: nextMeta,
+          };
+        });
+      }
+    } else {
+      const choice = confirm(
+        `Danh mục "${cat}" đang được ghi nhận trong ${txCount} giao dịch.\n\n` +
+        `• Chọn [OK]: Ẩn danh mục (Xóa mềm - ẩn khỏi danh sách chọn khi tạo giao dịch mới nhưng bảo toàn 100% dữ liệu lịch sử).\n` +
+        `• Chọn [Cancel]: Giữ nguyên danh mục.`
+      );
+      if (choice) {
+        updateState((s) => ({
+          ...s,
+          categoryMeta: {
+            ...s.categoryMeta,
+            [cat]: { ...(meta || { type: catType, icon: "🏷️", children: [] }), archived: true },
+          },
+        }));
+      }
+    }
+  };
+
+  const handleReassignAndDelete = (cat: string) => {
+    const txCount = state.transactions.filter((t) => t.category === cat).length;
+    if (confirm(`Chuyển tất cả ${txCount} giao dịch của danh mục "${cat}" về danh mục "Chưa được phân loại" và xóa vĩnh viễn "${cat}" khỏi hệ thống?`)) {
+      updateState((s) => {
+        const nextMeta = { ...s.categoryMeta };
+        delete nextMeta[cat];
+        return {
+          ...s,
+          categories: s.categories.filter((c) => c !== cat),
+          categoryMeta: nextMeta,
+          transactions: s.transactions.map((t) => (t.category === cat ? { ...t, category: "Chưa được phân loại" } : t)),
+        };
+      });
     }
   };
 
@@ -2123,7 +2249,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                   <button
                     type="button"
                     className={`fb-cat-toggle-btn ${catType === "expense" ? "active" : ""}`}
-                    onClick={() => setCatType("expense")}
+                    onClick={() => handleSwitchCatType("expense")}
                   >
                     <ArrowDownRight size={14} />
                     <span>Danh mục Chi phí</span>
@@ -2131,7 +2257,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                   <button
                     type="button"
                     className={`fb-cat-toggle-btn ${catType === "income" ? "active" : ""}`}
-                    onClick={() => setCatType("income")}
+                    onClick={() => handleSwitchCatType("income")}
                   >
                     <ArrowUpRight size={14} />
                     <span>Danh mục Thu nhập</span>
@@ -2139,6 +2265,17 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                 </div>
 
                 <form className="fb-cat-add-form" onSubmit={handleAddCategory}>
+                  <button
+                    type="button"
+                    className="fb-cat-icon-select-btn"
+                    title="Bấm để chọn biểu tượng cho danh mục"
+                    onClick={() => {
+                      setIconPickerTarget("new");
+                      setIsPickingIcon(isPickingIcon && iconPickerTarget === "new" ? false : true);
+                    }}
+                  >
+                    <span>{newCatIcon}</span>
+                  </button>
                   <input
                     type="text"
                     required
@@ -2153,30 +2290,145 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                   </button>
                 </form>
 
+                {isPickingIcon && (
+                  <div className="fb-emoji-picker-box">
+                    <div className="fb-emoji-picker-header">
+                      <span>Chọn biểu tượng cho {iconPickerTarget === "new" ? (newCatName ? `"${newCatName}"` : "danh mục mới") : `"${editCatTitle || editingCatName}"`}</span>
+                      <button type="button" className="fb-emoji-close-btn" onClick={() => setIsPickingIcon(false)} aria-label="Đóng bảng icon">
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <div className="fb-emoji-groups-scroll">
+                      {iconGroups.map(([groupName, emojis]) => (
+                        <div key={groupName} className="fb-emoji-group">
+                          <span className="fb-emoji-group-title">{groupName}</span>
+                          <div className="fb-emoji-grid">
+                            {emojis.map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                className={`fb-emoji-btn ${((iconPickerTarget === "new" ? newCatIcon : editCatIcon) === emoji) ? "active" : ""}`}
+                                onClick={() => {
+                                  if (iconPickerTarget === "new") {
+                                    setNewCatIcon(emoji);
+                                  } else {
+                                    setEditCatIcon(emoji);
+                                  }
+                                  setIsPickingIcon(false);
+                                }}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="fb-cat-list">
                   {state.categories
                     .filter((c) => {
                       const meta = state.categoryMeta?.[c];
                       return !meta || meta.type === catType;
                     })
-                    .map((cat) => (
-                      <div key={cat} className="fb-cat-item">
-                        <div className="fb-cat-item-left">
-                          <span className="fb-cat-icon-badge">
-                            {categoryIcon(cat, state.categoryMeta)}
-                          </span>
-                          <span className="fb-cat-name">{cat}</span>
+                    .map((cat) => {
+                      const meta = state.categoryMeta?.[cat];
+                      const isArchived = meta?.archived;
+                      const isEditing = editingCatName === cat;
+                      const txCount = state.transactions.filter((t) => t.category === cat).length;
+
+                      if (isEditing) {
+                        return (
+                          <form key={cat} className="fb-cat-edit-inline-form" onSubmit={handleSaveEditCat}>
+                            <button
+                              type="button"
+                              className="fb-cat-icon-select-btn"
+                              title="Chọn biểu tượng"
+                              onClick={() => {
+                                setIconPickerTarget("edit");
+                                setIsPickingIcon(isPickingIcon && iconPickerTarget === "edit" ? false : true);
+                              }}
+                            >
+                              <span>{editCatIcon}</span>
+                            </button>
+                            <input
+                              type="text"
+                              required
+                              className="fb-input fb-cat-add-input"
+                              value={editCatTitle}
+                              onChange={(e) => setEditCatTitle(e.target.value)}
+                            />
+                            <button type="submit" className="fb-cat-action-btn fb-cat-save-btn" title="Lưu thay đổi">
+                              <Check size={15} />
+                            </button>
+                            <button type="button" className="fb-cat-action-btn fb-cat-cancel-btn" title="Hủy" onClick={handleCancelEditCat}>
+                              <X size={15} />
+                            </button>
+                          </form>
+                        );
+                      }
+
+                      return (
+                        <div key={cat} className={`fb-cat-item ${isArchived ? "is-archived" : ""}`}>
+                          <div className="fb-cat-item-left">
+                            <span className="fb-cat-icon-badge">
+                              {categoryIcon(cat, state.categoryMeta)}
+                            </span>
+                            <div className="fb-cat-name-wrap">
+                              <span className="fb-cat-name">{cat}</span>
+                              {txCount > 0 && <small className="fb-cat-tx-badge">{txCount} giao dịch</small>}
+                              {isArchived && <span className="fb-cat-archived-tag">Đã ẩn</span>}
+                            </div>
+                          </div>
+                          <div className="fb-cat-item-actions">
+                            {!isArchived ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="fb-cat-edit-btn"
+                                  title={`Sửa danh mục ${cat}`}
+                                  onClick={() => handleStartEditCat(cat)}
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                {cat !== "Chưa được phân loại" && (
+                                  <button
+                                    type="button"
+                                    className="fb-cat-delete-btn"
+                                    title={`Xóa hoặc ẩn danh mục ${cat}`}
+                                    onClick={() => handleDeleteCategory(cat)}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  className="fb-cat-restore-btn"
+                                  title={`Khôi phục danh mục ${cat}`}
+                                  onClick={() => handleDeleteCategory(cat)}
+                                >
+                                  <RotateCcw size={14} />
+                                  <span>Khôi phục</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  className="fb-cat-delete-btn"
+                                  title={`Chuyển ${txCount} giao dịch về "Chưa được phân loại" và xóa vĩnh viễn`}
+                                  onClick={() => handleReassignAndDelete(cat)}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          className="fb-cat-delete-btn"
-                          title={`Xóa danh mục ${cat}`}
-                          onClick={() => handleDeleteCategory(cat)}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
               </div>
             )}
