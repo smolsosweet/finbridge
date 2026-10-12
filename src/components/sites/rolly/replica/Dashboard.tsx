@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowDownRight, ArrowRight, ArrowUpRight, CalendarDays, ChevronDown, Info, Pencil, Plus, ReceiptText, RotateCcw, Search, Trophy, Wallet, X } from "lucide-react";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, CalendarDays, ChevronDown, Info, Pencil, Plus, ReceiptText, Search, Trophy, Wallet, X } from "lucide-react";
 import { EmptyState, Icon, Modal } from "./Ui";
 import { currencySymbol, money, useAppState, type Transaction } from "./store";
+import { calendarWeek, localDateKey, shiftCalendarWeek } from "./chartWeek";
 
 type DashboardSample = {
   id: string;
@@ -66,6 +67,10 @@ export const DASHBOARD_I18N = {
     cardSubtitle: "Theo dõi thu, chi và dòng tiền theo thời gian",
     viewTransactions: "Xem giao dịch",
     periodLabel: "Khoảng thời gian",
+    selectWeek: "Chọn ngày trong tuần",
+    previousWeek: "Tuần trước",
+    nextWeek: "Tuần sau",
+    currentWeek: "Tuần hiện tại",
     period7d: "7 ngày",
     period30d: "30 ngày",
     period90d: "90 ngày",
@@ -103,6 +108,10 @@ export const DASHBOARD_I18N = {
     cardSubtitle: "Track income, expenses, and cash flow over time",
     viewTransactions: "View transactions",
     periodLabel: "Time period",
+    selectWeek: "Choose a date in the week",
+    previousWeek: "Previous week",
+    nextWeek: "Next week",
+    currentWeek: "This week",
     period7d: "7 days",
     period30d: "30 days",
     period90d: "90 days",
@@ -140,6 +149,10 @@ export const DASHBOARD_I18N = {
     cardSubtitle: "追踪各时期的收入、支出与现金流",
     viewTransactions: "查看交易",
     periodLabel: "时间范围",
+    selectWeek: "选择周内日期",
+    previousWeek: "上一周",
+    nextWeek: "下一周",
+    currentWeek: "本周",
     period7d: "7天",
     period30d: "30天",
     period90d: "90天",
@@ -195,7 +208,7 @@ function getNiceScale(maxValue: number, tickCount = 4) {
   const niceMax = niceStep * tickCount >= maxValue ? niceStep * tickCount : niceStep * (tickCount + 1);
   const ticks: number[] = [];
   for (let t = 0; t <= niceMax + 1e-6; t += niceStep) {
-    ticks.push(Math.round(t));
+    ticks.push(Number(t.toPrecision(12)));
   }
   return { max: ticks[ticks.length - 1], step: niceStep, ticks };
 }
@@ -229,11 +242,6 @@ function formatCompactMoney(amount: number, currency: string, lang: "vi" | "en" 
   return `${sym}${amount.toLocaleString("en-US")}`;
 }
 
-const MONTH_NAMES = {
-  vi: ["Th1", "Th2", "Th3", "Th4", "Th5", "Th6", "Th7", "Th8", "Th9", "Th10", "Th11", "Th12"],
-  en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-  zh: ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
-};
 
 export function MonthCalendar({ month, year, transactions = [], onPick }: { month: number; year: number; transactions?: Transaction[]; onPick?: (date: string) => void }) {
   const start = (new Date(year, month, 1).getDay() + 6) % 7;
@@ -257,7 +265,6 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const queryFrom = searchParams.get("from");
   const queryTo = searchParams.get("to");
   const queryWallet = searchParams.get("wallet");
-  const queryCurrency = searchParams.get("currency");
   const querySource = searchParams.get("source");
 
   const [walletId, setWalletId] = useState(queryWallet || state.wallets[0].id);
@@ -274,59 +281,29 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const [dashboardSource] = useState<"sample" | "live">(querySource === "live" ? "live" : "sample");
   const [dashboardType, setDashboardType] = useState<"all" | "expense" | "income">((queryType as "all" | "expense" | "income") || "all");
   const [dashboardCategory, setDashboardCategory] = useState(queryCategory || "all");
-  const [dashboardCurrency, setDashboardCurrency] = useState(
-    queryCurrency || (dashboardSource === "sample" ? (DASHBOARD_SAMPLE[0]?.currency || "VND") : (wallet.currency || "VND"))
-  );
-  const [dashboardPeriod, setDashboardPeriod] = useState<"7d" | "30d" | "90d" | "all" | "custom">("90d");
-  const [dashboardFrom, setDashboardFrom] = useState(queryFrom || "2026-07-16");
-  const [dashboardTo, setDashboardTo] = useState(queryTo || "2026-10-12");
+  const dashboardCurrency = wallet.currency;
+  const [dashboardWeek, setDashboardWeek] = useState(() => calendarWeek(localDateKey(new Date())).start);
   const [focusedBucketKey, setFocusedBucketKey] = useState<string | null>(null);
 
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState("");
 
   const currencies = Array.from(new Set(state.wallets.map((item) => item.currency)));
-  const availableCurrencies = Array.from(new Set([
-    ...currencies,
-    ...DASHBOARD_SAMPLE.map((d) => d.currency),
-  ]));
-
-  // Resolve base data: sample or live user transactions
-  const dashboardWalletIds = new Set(state.wallets.filter((item) => item.currency === dashboardCurrency).map((item) => item.id));
+  // Sample rows without a wallet ID belong to the first wallet with their currency.
   const rawDashboardData = dashboardSource === "sample"
-    ? DASHBOARD_SAMPLE.filter((tx) => tx.currency === dashboardCurrency)
-    : state.transactions.filter((tx) => tx.type !== "transfer" && dashboardWalletIds.has(tx.wallet));
+    ? DASHBOARD_SAMPLE.filter((tx) => tx.type !== "transfer" && tx.currency === wallet.currency && (tx.wallet || state.wallets.find((item) => item.currency === tx.currency)?.id) === wallet.id)
+    : state.transactions.filter((tx) => tx.type !== "transfer" && tx.wallet === wallet.id);
 
-  // Determine active date boundaries
-  const allDates = rawDashboardData.map((d) => d.date).sort();
-  const latestDataDate = allDates.length > 0 ? allDates[allDates.length - 1] : "2026-10-12";
-  const earliestDataDate = allDates.length > 0 ? allDates[0] : "2025-11-01";
-
-  let chartStart = earliestDataDate;
-  let chartEnd = latestDataDate;
-
-  if (dashboardPeriod === "7d") {
-    const endObj = new Date(latestDataDate);
-    const startObj = new Date(endObj);
-    startObj.setDate(startObj.getDate() - 6);
-    chartStart = startObj.toISOString().slice(0, 10);
-    chartEnd = latestDataDate;
-  } else if (dashboardPeriod === "30d") {
-    const endObj = new Date(latestDataDate);
-    const startObj = new Date(endObj);
-    startObj.setDate(startObj.getDate() - 29);
-    chartStart = startObj.toISOString().slice(0, 10);
-    chartEnd = latestDataDate;
-  } else if (dashboardPeriod === "90d") {
-    const endObj = new Date(latestDataDate);
-    const startObj = new Date(endObj);
-    startObj.setDate(startObj.getDate() - 89);
-    chartStart = startObj.toISOString().slice(0, 10);
-    chartEnd = latestDataDate;
-  } else if (dashboardPeriod === "custom") {
-    chartStart = dashboardFrom;
-    chartEnd = dashboardTo;
-  }
+  const week = calendarWeek(dashboardWeek);
+  const chartStart = week.start;
+  const chartEnd = week.end;
+  const weekdayNames = {
+    vi: ["T2", "T3", "T4", "T5", "T6", "T7", "CN"],
+    en: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    zh: ["周一", "周二", "周三", "周四", "周五", "周六", "周日"],
+  };
+  const weekRangeLabel = new Intl.DateTimeFormat(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const formattedWeekRange = weekRangeLabel.format(new Date(chartStart + "T12:00:00")) + " – " + weekRangeLabel.format(new Date(chartEnd + "T12:00:00"));
 
   const dashboardCategories = Array.from(new Set(rawDashboardData.map((tx) => tx.category))).sort();
 
@@ -346,90 +323,17 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const totalNet = (totalIncomeMinor - totalExpenseMinor) / 100;
   const totalCount = dashboardRecords.length;
 
-  // Determine granularity based on day difference
-  const diffDays = Math.max(1, Math.ceil((new Date(chartEnd).getTime() - new Date(chartStart).getTime()) / (1000 * 3600 * 24)) + 1);
-  const granularity: "daily" | "weekly" | "monthly" = diffDays <= 31 ? "daily" : diffDays <= 125 ? "weekly" : "monthly";
-
-  interface Bucket {
-    key: string;
-    label: string;
-    fullDateLabel: string;
-    income: number;
-    expense: number;
-    count: number;
-  }
-
-  const buckets: Bucket[] = [];
-
-  if (granularity === "daily") {
-    const curr = new Date(chartStart);
-    const endD = new Date(chartEnd);
-    while (curr <= endD) {
-      const key = curr.toISOString().slice(0, 10);
-      const mIdx = curr.getMonth();
-      const dNum = curr.getDate();
-      const yNum = curr.getFullYear();
-      const crossYear = chartStart.slice(0, 4) !== chartEnd.slice(0, 4);
-      let label = "";
-      if (lang === "vi") label = `${dNum} ${MONTH_NAMES.vi[mIdx]}${crossYear ? "/" + String(yNum).slice(2) : ""}`;
-      else if (lang === "zh") label = `${mIdx + 1}月${dNum}日`;
-      else label = `${dNum} ${MONTH_NAMES.en[mIdx]}${crossYear ? " " + yNum : ""}`;
-
-      const txs = dashboardRecords.filter((tx) => tx.date === key);
-      const inc = txs.filter((tx) => tx.type === "income").reduce((a, t) => a + Math.round(t.amount * 100), 0) / 100;
-      const exp = txs.filter((tx) => tx.type === "expense").reduce((a, t) => a + Math.round(t.amount * 100), 0) / 100;
-      buckets.push({ key, label, fullDateLabel: key, income: inc, expense: exp, count: txs.length });
-      curr.setDate(curr.getDate() + 1);
-    }
-  } else if (granularity === "weekly") {
-    const curr = new Date(chartStart);
-    // Find Monday of the current week
-    const dayOfWeek = (curr.getDay() + 6) % 7;
-    curr.setDate(curr.getDate() - dayOfWeek);
-    const endD = new Date(chartEnd);
-    while (curr <= endD) {
-      const key = curr.toISOString().slice(0, 10);
-      const weekEnd = new Date(curr);
-      weekEnd.setDate(weekEnd.getDate() + 6);
-      const endKey = weekEnd.toISOString().slice(0, 10);
-
-      const mIdx = curr.getMonth();
-      const dNum = curr.getDate();
-      let label = "";
-      if (lang === "vi") label = `${dNum} ${MONTH_NAMES.vi[mIdx]}`;
-      else if (lang === "zh") label = `${mIdx + 1}月${dNum}日`;
-      else label = `${dNum} ${MONTH_NAMES.en[mIdx]}`;
-
-      const txs = dashboardRecords.filter((tx) => tx.date >= key && tx.date <= endKey);
-      const inc = txs.filter((tx) => tx.type === "income").reduce((a, t) => a + Math.round(t.amount * 100), 0) / 100;
-      const exp = txs.filter((tx) => tx.type === "expense").reduce((a, t) => a + Math.round(t.amount * 100), 0) / 100;
-      buckets.push({ key, label, fullDateLabel: `${key} – ${endKey}`, income: inc, expense: exp, count: txs.length });
-      curr.setDate(curr.getDate() + 7);
-    }
-  } else {
-    // Monthly buckets
-    const startY = Number(chartStart.slice(0, 4));
-    const startM = Number(chartStart.slice(5, 7)) - 1;
-    const endY = Number(chartEnd.slice(0, 4));
-    const endM = Number(chartEnd.slice(5, 7)) - 1;
-
-    let y = startY;
-    let m = startM;
-    while (y < endY || (y === endY && m <= endM)) {
-      const key = `${y}-${String(m + 1).padStart(2, "0")}`;
-      let label = "";
-      if (lang === "vi") label = `${MONTH_NAMES.vi[m]} ${y}`;
-      else if (lang === "zh") label = `${y}年${m + 1}月`;
-      else label = `${MONTH_NAMES.en[m]} ${y}`;
-
-      const txs = dashboardRecords.filter((tx) => tx.date.startsWith(key));
-      const inc = txs.filter((tx) => tx.type === "income").reduce((a, t) => a + Math.round(t.amount * 100), 0) / 100;
-      const exp = txs.filter((tx) => tx.type === "expense").reduce((a, t) => a + Math.round(t.amount * 100), 0) / 100;
-      buckets.push({ key, label, fullDateLabel: label, income: inc, expense: exp, count: txs.length });
-      m++;
-      if (m > 11) { m = 0; y++; }
-    }
-  }
+  const buckets = week.days.map((key, index) => {
+    const txs = dashboardRecords.filter((tx) => tx.date === key);
+    return {
+      key,
+      label: weekdayNames[lang][index],
+      fullDateLabel: key,
+      income: txs.filter((tx) => tx.type === "income").reduce((sum, tx) => sum + Math.round(tx.amount * 100), 0) / 100,
+      expense: txs.filter((tx) => tx.type === "expense").reduce((sum, tx) => sum + Math.round(tx.amount * 100), 0) / 100,
+      count: txs.length,
+    };
+  });
 
   // Calculate chart scale
   const maxBucketVal = Math.max(1, ...buckets.flatMap((b) => [b.income, b.expense]));
@@ -446,14 +350,6 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const plotWidth = chartWidth - marginLeft - marginRight;
   const plotHeight = baselineY - marginTop;
 
-  // Reset filters handler
-  const resetFilters = () => {
-    setDashboardPeriod("90d");
-    setDashboardType("all");
-    setDashboardCategory("all");
-    setFocusedBucketKey(null);
-  };
-
   // View transactions handler to open Transactions tab with identical filters
   const openTransactionsWithFilters = () => {
     const query = new URLSearchParams();
@@ -464,7 +360,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
     query.set("from", chartStart);
     query.set("to", chartEnd);
     query.set("currency", dashboardCurrency);
-    if (state.wallets.length > 1) query.set("wallet", wallet.id);
+    query.set("wallet", wallet.id);
     navigate("?" + query.toString());
   };
 
@@ -476,7 +372,10 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
 
   const records = rawTxList.filter((t) => {
     if (!transactionsTab && t.wallet !== wallet.id && t.targetWallet !== wallet.id) return false;
-    if (transactionsTab && queryWallet && t.wallet !== queryWallet && t.targetWallet !== queryWallet) return false;
+    if (transactionsTab && queryWallet) {
+      const sourceWallet = t.wallet || ("currency" in t ? state.wallets.find((item) => item.currency === t.currency)?.id : undefined);
+      if (sourceWallet !== queryWallet && t.targetWallet !== queryWallet) return false;
+    }
     if (isFilteredFromDashboard) {
       if (queryFrom && t.date < queryFrom) return false;
       if (queryTo && t.date > queryTo) return false;
@@ -570,32 +469,21 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
           </div>
 
           <div className="fb-chart-controls">
-            {/* Period selector */}
-            <label className="fb-chart-select">
-              <span className="sr-only">{t.periodLabel}</span>
-              <select aria-label={t.periodLabel} value={dashboardPeriod} onChange={(e) => setDashboardPeriod(e.target.value as "7d" | "30d" | "90d" | "all" | "custom")}>
-                <option value="90d">{t.period90d}</option>
-                <option value="30d">{t.period30d}</option>
-                <option value="7d">{t.period7d}</option>
-                <option value="all">{t.periodAll}</option>
-                <option value="custom">{t.periodCustom}</option>
-              </select>
-              <CalendarDays size={15} />
-            </label>
-
-            {/* Custom range date pickers */}
-            {dashboardPeriod === "custom" && (
-              <div className="fb-chart-range">
-                <label>
-                  {t.fromDate}
-                  <input aria-label={t.fromDate} type="date" value={dashboardFrom} max={dashboardTo} onChange={(e) => setDashboardFrom(e.target.value)} />
-                </label>
-                <label>
-                  {t.toDate}
-                  <input aria-label={t.toDate} type="date" value={dashboardTo} min={dashboardFrom} onChange={(e) => setDashboardTo(e.target.value)} />
-                </label>
-              </div>
-            )}
+            <div className="fb-chart-week-picker" aria-label={t.periodLabel}>
+              <button type="button" aria-label={t.previousWeek} onClick={() => { setDashboardWeek(shiftCalendarWeek(chartStart, -1)); setFocusedBucketKey(null); }}>‹</button>
+              <label>
+                <span>{formattedWeekRange}</span>
+                <span className="sr-only">{t.selectWeek}</span>
+                <input type="date" aria-label={t.selectWeek} value={dashboardWeek} onInput={(event) => {
+                  if (event.currentTarget.validity.valid && event.currentTarget.value) {
+                    setDashboardWeek(calendarWeek(event.currentTarget.value).start);
+                    setFocusedBucketKey(null);
+                  }
+                }} />
+              </label>
+              <button type="button" aria-label={t.nextWeek} onClick={() => { setDashboardWeek(shiftCalendarWeek(chartStart, 1)); setFocusedBucketKey(null); }}>›</button>
+              <button type="button" className="fb-chart-this-week" onClick={() => { setDashboardWeek(calendarWeek(localDateKey(new Date())).start); setFocusedBucketKey(null); }}>{t.currentWeek}</button>
+            </div>
 
             {/* Type filter */}
             <div className="r-type-pills" role="radiogroup" aria-label={t.typeFilter}>
@@ -614,41 +502,17 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
               <ChevronDown size={15} />
             </label>
 
-            {/* Account filter (only shown if more than one wallet exists) */}
-            {state.wallets.length > 1 && (
-              <label className="fb-chart-select">
-                <span className="sr-only">{t.accountFilter}</span>
-                <select aria-label={t.accountFilter} value={walletId} onChange={(e) => setWalletId(e.target.value)}>
-                  <option value="">{t.allAccounts}</option>
-                  {state.wallets.map((w) => <option key={w.id} value={w.id}>{walletName(w.name)}</option>)}
-                </select>
-                <ChevronDown size={15} />
-              </label>
-            )}
-
-            {/* Currency selector (shown if multiple currencies exist) */}
-            {availableCurrencies.length > 1 && (
-              <label className="fb-chart-select">
-                <span className="sr-only">{t.currencyFilter}</span>
-                <select aria-label={t.currencyFilter} value={dashboardCurrency} onChange={(e) => setDashboardCurrency(e.target.value)}>
-                  {availableCurrencies.map((curr) => <option key={curr} value={curr}>{curr}</option>)}
-                </select>
-                <ChevronDown size={15} />
-              </label>
-            )}
+            <label className="fb-chart-select">
+              <span className="sr-only">{t.accountFilter}</span>
+              <select aria-label={t.accountFilter} value={wallet.id} onChange={(event) => { setWalletId(event.target.value); setDashboardCategory("all"); setFocusedBucketKey(null); }}>
+                {state.wallets.map((item) => <option key={item.id} value={item.id}>{walletName(item.name)} · {item.currency}</option>)}
+              </select>
+              <ChevronDown size={15} />
+            </label>
           </div>
 
-          {/* Chart Display or Empty State */}
-          {dashboardRecords.length === 0 ? (
-            <div className="fb-chart-empty" role="status">
-              <ReceiptText size={26} />
-              <p>{t.emptyText}</p>
-              <button type="button" className="fb-reset-filter-btn" onClick={resetFilters}>
-                <RotateCcw size={15} />
-                {t.resetFilters}
-              </button>
-            </div>
-          ) : (
+          {dashboardRecords.length === 0 && <p className="fb-week-empty-note" role="status">{t.emptyText}</p>}
+          {(
             <>
               {/* Legend */}
               <div className="fb-chart-legend" aria-hidden="true">
@@ -745,6 +609,9 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                             {b.label}
                           </text>
                         )}
+                        <text x={centerX} y={baselineY + 29} textAnchor="middle" className="fb-chart-x-label">
+                          {b.key.slice(8)}/{b.key.slice(5, 7)}
+                        </text>
                       </g>
                     );
                   })}
@@ -787,12 +654,12 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                   <span aria-hidden="true">·</span>
                   <span>{totalCount} {t.summaryTransactions}</span>
                 </div>
-                <span className="fb-env-badge">{t.simulated}</span>
+                {dashboardSource === "sample" && <span className="fb-env-badge">{t.simulated}</span>}
               </div>
             </>
           )}
         </section>
-        <section className="fb-wallet-flow-card"><div className="fb-section-heading"><div><h2>Chi & thu theo ví</h2><p className="fb-section-note">Số liệu của từng ví đã tích hợp trong kỳ</p></div><button type="button" className="fb-view-transactions" onClick={() => navigate("createWallet1")}><Plus size={15} />Thêm ví</button></div><div className="fb-wallet-flow-list">{walletFlows.map((flow) => <button type="button" key={flow.wallet.id} className={flow.wallet.id === wallet.id ? "is-selected" : ""} onClick={() => { setWalletId(flow.wallet.id); setDashboardCurrency(flow.wallet.currency); }}><span><b>{walletName(flow.wallet.name)}</b><small>{flow.wallet.currency}</small></span><span className="fb-wallet-flow-numbers"><small className="r-expense">Chi {money(flow.expense, flow.wallet.currency)}</small><small className="r-income">Thu {money(flow.income, flow.wallet.currency)}</small></span><ArrowRight size={16} /></button>)}</div><button type="button" className="fb-manage-wallets" onClick={() => navigate("walletSettings?wallet=" + wallet.id)}>Quản lý ví<ArrowRight size={16} /></button></section>
+        <section className="fb-wallet-flow-card"><div className="fb-section-heading"><div><h2>Chi & thu theo ví</h2><p className="fb-section-note">Số liệu của từng ví đã tích hợp trong kỳ</p></div><button type="button" className="fb-view-transactions" onClick={() => navigate("createWallet1")}><Plus size={15} />Thêm ví</button></div><div className="fb-wallet-flow-list">{walletFlows.map((flow) => <button type="button" key={flow.wallet.id} className={flow.wallet.id === wallet.id ? "is-selected" : ""} onClick={() => { setWalletId(flow.wallet.id); setDashboardCategory("all"); setFocusedBucketKey(null); }}><span><b>{walletName(flow.wallet.name)}</b><small>{flow.wallet.currency}</small></span><span className="fb-wallet-flow-numbers"><small className="r-expense">Chi {money(flow.expense, flow.wallet.currency)}</small><small className="r-income">Thu {money(flow.income, flow.wallet.currency)}</small></span><ArrowRight size={16} /></button>)}</div><button type="button" className="fb-manage-wallets" onClick={() => navigate("walletSettings?wallet=" + wallet.id)}>Quản lý ví<ArrowRight size={16} /></button></section>
       </section>
       <div className="fb-workspace"><div className="fb-main-column">
         <section className="fb-overview"><div className="fb-section-heading"><h2>Dòng tiền trong kỳ</h2>{periodControls}</div>
