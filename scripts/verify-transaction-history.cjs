@@ -36,6 +36,7 @@ function compile(file, resolve) {
   return result.exports;
 }
 const weeks = compile(path.join(directory, "chartWeek.ts"), localRequire);
+const header = compile(path.join(directory, "FinBridgeHeader.tsx"), localRequire);
 const periods = compile(path.join(directory, "HistoryPeriodPicker.tsx"), (name) => {
   if (name === "./chartWeek") return weeks;
   if (name === "./Ui") return { Modal: () => null };
@@ -60,6 +61,7 @@ const state = () => ({ wallets, transactions: input, settings: { language } });
 const component = compile(componentFile, (name) => {
   if (name === "./Dashboard") return { DASHBOARD_SAMPLE: sample };
   if (name === "./CalendarLedgerModal") return { CalendarLedgerModal: () => null };
+  if (name === "./FinBridgeHeader") return header;
   if (name === "./store") return { useAppState: state };
   if (name === "./chartWeek") return weeks;
   if (name === "./HistoryPeriodPicker") return periods;
