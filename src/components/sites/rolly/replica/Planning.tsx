@@ -175,7 +175,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       </div>
     </FinBridgeHeader>
 
-    <div className="fb-home-intro fb-planning-header fb-planning-heading">
+    <div className="fb-home-intro fb-planning-header">
       <div>
         <p className="fb-eyebrow">{lang === "vi" ? "KẾ HOẠCH CHI TIÊU" : lang === "zh" ? "支出计划" : "SPENDING PLAN"}</p>
         <h1>{t.title}</h1>
@@ -185,11 +185,6 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
         <Plus size={18} />
         <span>{tab === "budget" ? t.addBudget : budgets.length ? t.addFixed : t.addBudget}</span>
       </button>
-    </div>
-
-    <div className="fb-planning-relationship">
-      <span><Wallet size={20} />{t.flow}</span>
-      <p>{t.flowHint}</p>
     </div>
 
     <div className="fb-planning-toolbar">
