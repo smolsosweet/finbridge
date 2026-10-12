@@ -1,18 +1,3 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { AuthCard } from "@/components/sites/rolly/AuthCard";
-
-export default function SignupPage() {
-  const router = useRouter();
-
-  return (
-    <main className="min-h-screen w-full bg-[#e8faf7]">
-      <AuthCard
-        initialMode="signup"
-        onSuccess={() => router.push("/app")}
-        onBack={() => router.push("/")}
-      />
-    </main>
-  );
-}
+import { redirect } from "next/navigation";
+// Google creates the account on first successful sign-in; no fake password signup.
+export default function SignupPage() { redirect("/login"); }

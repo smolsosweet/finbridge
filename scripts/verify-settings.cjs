@@ -23,6 +23,7 @@ let state = {
   settings: { name: ".", language: "English", theme: "light", personality: "", goal: "", less: "" },
 };
 let writes = 0, cursor = 0, slots = [], destination = "";
+let signOutCalls = 0, signOutFails = false, route = "", refreshes = 0;
 const testReact = { ...React, useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial; return [slots[index], (next) => { slots[index] = typeof next === "function" ? next(slots[index]) : next; }]; }, useEffect() {}, useRef: () => ({ current: null }), useCallback: (fn) => fn };
 const store = { useAppState: () => state, money: (value) => String(value), updateState(update) { writes++; state = update(state); }, setSetting(key, value) { writes++; state.settings[key] = value; } };
 const header = compile("FinBridgeHeader.tsx");
@@ -35,7 +36,8 @@ function resolve(name) {
   if (name === "./FinBridgeHeader") return header;
   if (name === "./SettingsOverview") return overview;
   if (name === "./Ui") return ui;
-  if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams() };
+  if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams(), useRouter: () => ({ replace: (next) => { route = next; }, refresh: () => { refreshes++; } }) };
+  if (name === "@/lib/sign-out") return { async signOutGoogle() { signOutCalls++; if (signOutFails) throw new Error("SIGN_OUT_FAILED"); } };
   if (name === "./chartWeek") return weeks;
   if (name === "./CalendarLedgerModal") return { CalendarLedgerModal: () => null };
   if (name === "./Categories") return { categoryIcon: () => "", iconGroups: [] };
@@ -83,3 +85,38 @@ assert.equal(state.settings.language, "中文"); assert.equal(writes, 1);
 assert.equal(JSON.stringify(state.wallets), JSON.stringify(JSON.parse(snapshot).wallets));
 assert.equal(JSON.stringify(state.transactions), JSON.stringify(JSON.parse(snapshot).transactions));
 process.stdout.write("PASS: settings groups, VI/EN/ZH overview, navigation, multi-wallet balances, same Home wallet manager open/close, language setting, zero financial writes.\n");
+
+async function verifyLogout() {
+  const financialBefore = JSON.stringify({ wallets: state.wallets, transactions: state.transactions });
+  const writesBefore = writes;
+  for (const [language, label] of [["English", "Sign out"], ["Tiếng Việt", "Đăng xuất"], ["中文", "退出登录"]]) {
+    state.settings.language = language;
+    slots = []; cursor = 0;
+    const props = { navigate };
+    const accountRender = () => { cursor = 0; return settings.AccountSettings(props); };
+    const logoutRow = find(accountRender(), (node) => node.type === "button" && node.props.className === "fb-account-opt-row " && node.props.children[1]?.props.children[0]?.props.children === label);
+    assert.ok(logoutRow, `Localized logout in account settings: ${language}`);
+    const callsBefore = signOutCalls;
+    logoutRow.props.onClick();
+    assert.equal(signOutCalls, callsBefore, "Opening confirmation must not revoke the session");
+    const confirm = () => find(accountRender(), (node) => node.type === "button" && node.props.className === "r-primary" && node.props.children === label);
+    assert.ok(confirm());
+    signOutFails = true; route = "";
+    confirm().props.onClick();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(route, "", "Failed sign-out must keep the current page");
+    assert.ok(find(accountRender(), (node) => node.props.role === "alert"));
+    signOutFails = false;
+    const refreshBefore = refreshes;
+    confirm().props.onClick();
+    assert.ok(find(accountRender(), (node) => node.type === "button" && node.props.className === "r-primary" && node.props.disabled));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(route, "/");
+    assert.equal(refreshes, refreshBefore + 1);
+    assert.equal(signOutCalls, callsBefore + 2);
+  }
+  assert.equal(writes, writesBefore);
+  assert.equal(JSON.stringify({ wallets: state.wallets, transactions: state.transactions }), financialBefore);
+  process.stdout.write("PASS: account logout confirmation, server sign-out call, welcome redirect, failure handling and VI/EN/ZH labels; zero financial writes.\n");
+}
+verifyLogout().catch((error) => { console.error(error); process.exitCode = 1; });

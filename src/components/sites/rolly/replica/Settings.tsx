@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { signOutGoogle } from "@/lib/sign-out";
 import {
   Bell,
   Calendar,
@@ -48,6 +50,12 @@ const COPY_ACCOUNT = {
     displayGroup: "Giao diện & Hiển thị",
     accountGroup: "Tài khoản & Thiết bị",
     langLabel: "Ngôn ngữ hiển thị",
+    logout: "Đăng xuất",
+    logoutHint: "Thoát khỏi phiên làm việc hiện tại",
+    logoutTitle: "Đăng xuất?",
+    logoutNote: "Bạn sẽ quay lại màn hình chào mừng.",
+    logoutBusy: "Đang đăng xuất…",
+    logoutError: "Không thể đăng xuất. Vui lòng thử lại.",
   },
   en: {
     eyebrow: "ACCOUNT SETTINGS",
@@ -61,6 +69,12 @@ const COPY_ACCOUNT = {
     displayGroup: "Interface & Display",
     accountGroup: "Account & Device",
     langLabel: "Display language",
+    logout: "Sign out",
+    logoutHint: "End your current session",
+    logoutTitle: "Sign out?",
+    logoutNote: "You will return to the welcome screen.",
+    logoutBusy: "Signing out…",
+    logoutError: "Could not sign out. Please try again.",
   },
   zh: {
     eyebrow: "账户设置",
@@ -74,6 +88,12 @@ const COPY_ACCOUNT = {
     displayGroup: "界面与显示",
     accountGroup: "账户与设备",
     langLabel: "显示语言",
+    logout: "退出登录",
+    logoutHint: "结束当前会话",
+    logoutTitle: "退出登录？",
+    logoutNote: "您将返回欢迎页面。",
+    logoutBusy: "正在退出登录…",
+    logoutError: "无法退出登录。请重试。",
   },
 };
 
@@ -87,6 +107,9 @@ export function AccountSettings({
   const state = useAppState();
   const lang = settingsLanguage(state.settings.language);
   const t = COPY_ACCOUNT[lang];
+  const router = useRouter();
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const [logoutError, setLogoutError] = useState(false);
 
   const [option, setOption] = useState(initialOption);
   const [selection, setSelection] = useState(String(state.settings.personality));
@@ -94,6 +117,20 @@ export function AccountSettings({
   const [extra, setExtra] = useState("");
 
   const close = () => setOption("");
+
+  async function logout() {
+    if (logoutBusy) return;
+    setLogoutBusy(true);
+    setLogoutError(false);
+    try {
+      await signOutGoogle();
+      router.replace("/");
+      router.refresh();
+    } catch {
+      setLogoutError(true);
+      setLogoutBusy(false);
+    }
+  }
 
   function open(name: string) {
     if (name === "homepageConfiguration") {
@@ -178,8 +215,8 @@ export function AccountSettings({
   const accountGroup = [
     {
       id: "logout",
-      name: "Đăng xuất",
-      sub: "Thoát khỏi phiên làm việc hiện tại",
+      name: t.logout,
+      sub: t.logoutHint,
       icon: <LogOut size={18} />,
       danger: false,
     },
@@ -504,10 +541,11 @@ export function AccountSettings({
 
           {option === "logout" && (
             <>
-              <h2>Đăng xuất?</h2>
-              <p className="r-dialog-note">Bạn sẽ quay lại màn hình chào mừng.</p>
-              <button className="r-primary" onClick={() => navigate("welcome")}>
-                Đăng xuất
+              <h2>{t.logoutTitle}</h2>
+              <p className="r-dialog-note">{t.logoutNote}</p>
+              {logoutError && <p role="alert">{t.logoutError}</p>}
+              <button type="button" className="r-primary" disabled={logoutBusy} onClick={() => void logout()}>
+                {logoutBusy ? t.logoutBusy : t.logout}
               </button>
             </>
           )}
