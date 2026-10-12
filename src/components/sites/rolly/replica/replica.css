@@ -155,7 +155,7 @@
 .r-sheet>h2{text-align:center;font-size:24px;margin-bottom:4px}
 .r-sheet>p{text-align:left;color:var(--r-muted);margin:10px 0 16px}
 .r-handle{height:4px;width:40px;background:var(--r-line);border-radius:10px;position:absolute;top:10px;left:calc(50% - 20px)}
-.r-wide-dialog{width:calc(100% - 10px)}
+.r-wide-dialog{width:760px;max-width:calc(100vw - 32px)}
 .r-period-options{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:24px}
 .r-period-options button{border:1px solid #e5e5e5;border-radius:15px;background:var(--r-surface);display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px;font-size:14px;min-height:82px}
 .r-period-options .is-selected{background:#edfcfc;border-color:#b7e9ed}
@@ -526,3 +526,67 @@
 .fb-manage-wallets{position:relative;display:flex;align-items:center;justify-content:space-between;width:100%;gap:10px;border:0;border-top:1px solid #ffffff20;padding:14px 0 0;margin-top:15px;background:transparent;color:#d5ebe9;font-size:12px}.fb-modal-note{display:block;color:var(--r-muted);font-size:11px;line-height:1.5;margin-top:12px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:800px){.fb-finance-dashboard{grid-template-columns:minmax(0,1fr) 230px;gap:16px}.fb-wallet-flow-card{padding:18px}.fb-wallet-flow-card .fb-section-heading{align-items:flex-start}.fb-wallet-flow-card .fb-view-transactions{font-size:0;padding:8px}.fb-wallet-flow-card .fb-view-transactions svg{width:16px;height:16px}.fb-wallet-flow-list>button{padding:10px}.fb-wallet-flow-list .fb-wallet-flow-numbers{display:none}}
 @media(max-width:640px){.fb-finance-dashboard{display:flex;flex-direction:column;gap:18px}.fb-finance-dashboard>section{width:100%}.fb-finance-dashboard .fb-section-heading{gap:12px}.fb-finance-dashboard .r-summary-top b{font-size:27px}.fb-spending-dashboard{min-height:0}.fb-chart-controls{flex-direction:column;align-items:stretch;margin-top:14px;gap:10px}.fb-chart-date-bar,.fb-chart-filter-bar{width:100%;justify-content:space-between}.fb-chart-range-pill{flex:1;justify-content:center}.fb-chart-nav-cluster{width:100%;justify-content:center}.fb-date-input-box{flex:1}.fb-date-input-box input{width:100%}.fb-chart-filter-bar .r-type-pills{width:100%;display:flex}.fb-chart-filter-bar .r-type-pills button{flex:1}.fb-chart-filter-bar .fb-chart-select{flex:1 1 calc(50% - 4px);min-width:0}.fb-chart{padding-left:8px;padding-right:8px}.fb-chart svg{height:180px}.fb-wallet-flow-card{padding:18px}.fb-wallet-flow-list .fb-wallet-flow-numbers{display:block}.fb-wallet-flow-list>button{padding:11px}.fb-wallet-flow-list b{font-size:12px}.fb-wallet-flow-list small{font-size:10px}.fb-currency-note{line-height:1.45}.fb-view-transactions{padding:8px;font-size:0}.fb-view-transactions svg{width:16px;height:16px}}
+
+/* Native in-page Add Wallet modal */
+.fb-modal-subheading{font-size:12.5px;color:var(--r-muted);margin:-8px 0 16px;line-height:1.5}
+.fb-add-wallet-form{display:flex;flex-direction:column;gap:15px}
+.fb-form-group{display:flex;flex-direction:column;gap:6px}
+.fb-form-label{font-size:12px;font-weight:600;color:var(--r-text)}
+.fb-input,.fb-select{width:100%;min-height:44px;border:1px solid var(--r-line);border-radius:12px;background:var(--r-surface);color:var(--r-text);padding:10px 14px;font-size:13px;outline:none;transition:border-color .15s,box-shadow .15s}
+.fb-input:focus,.fb-select:focus{border-color:var(--r-teal);box-shadow:0 0 0 2px #10bdc725}
+.fb-modal-actions{display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-top:10px}
+
+/* Flow Details Modal (Income / Expense breakdown list) */
+.fb-flow-details-modal{display:flex;flex-direction:column;gap:12px}
+.fb-tx-modal-summary-pill{display:flex;align-items:center;justify-content:space-between;background:#f8fafc;border:1px solid var(--r-line);border-radius:12px;padding:11px 15px;font-size:12.5px}
+.fb-tx-modal-summary-pill span{color:var(--r-muted)}
+.fb-tx-modal-summary-pill b{font-size:14px}
+.fb-tx-modal-list{display:flex;flex-direction:column;gap:8px;max-height:50dvh;overflow-y:auto;padding-right:2px}
+.fb-tx-modal-item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--r-surface);border:1px solid var(--r-line);border-radius:12px;text-align:left;cursor:pointer;transition:background-color .15s,border-color .15s;width:100%}
+.fb-tx-modal-item:hover{background:#f8fafc;border-color:#cbd5e1}
+.fb-tx-modal-icon{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fb-tx-modal-icon.r-income{background:#ecfdf5;color:#059669}
+.fb-tx-modal-icon.r-expense{background:#fff1f2;color:#e11d48}
+.fb-tx-modal-info{flex:1;min-width:0}
+.fb-tx-modal-info b{display:block;font-size:13px;color:var(--r-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fb-tx-modal-info small{display:block;font-size:11px;color:var(--r-muted);margin-top:2px}
+.fb-tx-modal-amount{font-size:13.5px;font-weight:600;white-space:nowrap}
+
+/* Modal empty state */
+.fb-modal-empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 16px;text-align:center;gap:10px}
+.fb-modal-empty-state svg{color:var(--r-muted);opacity:.5}
+.fb-modal-empty-state h4{font-size:14.5px;font-weight:600;color:var(--r-text);margin:0}
+.fb-modal-empty-state p{font-size:12px;color:var(--r-muted);margin:0;max-width:320px}
+.fb-modal-cta{margin-top:8px;padding:10px 18px;min-height:42px;font-size:13px}
+
+/* Cash flow comparison donut modal */
+.fb-flow-chart-modal{display:flex;flex-direction:column;gap:16px}
+.fb-donut-summary-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;background:#f8fafc;border:1px solid var(--r-line);border-radius:14px;padding:12px 14px;text-align:center}
+.fb-donut-summary-bar>div{display:flex;flex-direction:column;gap:3px}
+.fb-donut-summary-bar span{font-size:11px;color:var(--r-muted)}
+.fb-donut-summary-bar b{font-size:14px}
+.fb-donut-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.fb-donut-card{background:var(--r-surface);border:1px solid var(--r-line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.fb-donut-header{display:flex;align-items:center;justify-content:space-between}
+.fb-donut-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:20px}
+.fb-donut-badge.r-income{background:#ecfdf5;color:#059669}
+.fb-donut-badge.r-expense{background:#fff1f2;color:#e11d48}
+.fb-donut-visual-container{position:relative;display:flex;align-items:center;justify-content:center;padding:6px 0}
+.fb-donut-svg{width:145px;height:145px;display:block}
+.fb-donut-center-info{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center;padding:0 14px}
+.fb-donut-center-label{font-size:10px;color:var(--r-muted);text-transform:uppercase;letter-spacing:.04em}
+.fb-donut-center-value{font-size:12px;font-weight:700;margin-top:2px;word-break:break-word}
+.fb-donut-legend{display:flex;flex-direction:column;gap:7px;max-height:170px;overflow-y:auto;border-top:1px solid var(--r-line);padding-top:10px}
+.fb-donut-legend-item{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;padding:2px 0}
+.fb-donut-legend-left{display:flex;align-items:center;gap:7px;min-width:0}
+.fb-donut-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.fb-donut-cat-name{color:var(--r-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fb-donut-legend-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.fb-donut-pct{color:var(--r-muted);font-size:11px}
+.fb-donut-val{color:var(--r-text);font-weight:600}
+.fb-donut-empty-text{font-size:12px;color:var(--r-muted);text-align:center;padding:12px 0;margin:0}
+
+@media(max-width:680px){
+  .fb-donut-grid{grid-template-columns:1fr}
+  .fb-donut-summary-bar{grid-template-columns:1fr;gap:8px}
+}
