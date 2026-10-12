@@ -20,26 +20,44 @@ type DashboardSample = {
 };
 
 const DASHBOARD_SAMPLE: DashboardSample[] = [
-  { id: "sample-01", date: "2025-11-06", type: "income", amount: 2200, category: "Thu nhập", currency: "USD" },
-  { id: "sample-02", date: "2025-11-18", type: "expense", amount: 145, category: "Ăn uống", currency: "USD" },
-  { id: "sample-03", date: "2025-12-04", type: "expense", amount: 320, category: "Mua sắm", currency: "USD" },
-  { id: "sample-04", date: "2025-12-22", type: "income", amount: 180, category: "Quà tặng", currency: "USD" },
-  { id: "sample-05", date: "2026-01-11", type: "expense", amount: 410, category: "Nhà ở", currency: "USD" },
-  { id: "sample-06", date: "2026-01-28", type: "expense", amount: 96, category: "Di chuyển", currency: "USD" },
-  { id: "sample-07", date: "2026-02-14", type: "income", amount: 2400, category: "Thu nhập", currency: "USD" },
-  { id: "sample-08", date: "2026-02-26", type: "expense", amount: 210, category: "Ăn uống", currency: "USD" },
-  { id: "sample-09", date: "2026-03-10", type: "expense", amount: 278, category: "Mua sắm", currency: "USD" },
-  { id: "sample-10", date: "2026-03-29", type: "expense", amount: 158, category: "Giải trí", currency: "USD" },
-  { id: "sample-11", date: "2026-04-09", type: "income", amount: 2300, category: "Thu nhập", currency: "USD" },
-  { id: "sample-12", date: "2026-04-23", type: "expense", amount: 365, category: "Nhà ở", currency: "USD" },
-  { id: "sample-13", date: "2026-05-17", type: "expense", amount: 132, category: "Ăn uống", currency: "USD" },
-  { id: "sample-14", date: "2026-05-30", type: "expense", amount: 88, category: "Di chuyển", currency: "USD" },
-  { id: "sample-15", date: "2026-06-12", type: "income", amount: 2450, category: "Thu nhập", currency: "USD" },
-  { id: "sample-16", date: "2026-07-05", type: "expense", amount: 440, category: "Mua sắm", currency: "USD" },
-  { id: "sample-17", date: "2026-07-24", type: "expense", amount: 174, category: "Ăn uống", currency: "USD" },
-  { id: "sample-18", date: "2026-08-19", type: "expense", amount: 312, category: "Nhà ở", currency: "USD" },
-  { id: "sample-19", date: "2026-09-14", type: "income", amount: 2380, category: "Thu nhập", currency: "USD" },
-  { id: "sample-20", date: "2026-10-12", type: "expense", amount: 260, category: "Ăn uống", currency: "USD" },
+  // Tháng 7 (15/07 - 31/07)
+  { id: "sample-01", date: "2026-07-16", type: "expense", amount: 700000, category: "Hóa đơn & Tiện ích", currency: "VND", title: "Phí thường niên thẻ thanh toán" },
+  { id: "sample-02", date: "2026-07-18", type: "expense", amount: 920000, category: "Ăn uống", currency: "VND", title: "Siêu thị thực phẩm tuần" },
+  { id: "sample-03", date: "2026-07-24", type: "expense", amount: 165000, category: "Di chuyển", currency: "VND", title: "Grab Car di chuyển công tác" },
+  { id: "sample-04", date: "2026-07-28", type: "expense", amount: 450000, category: "Ăn uống", currency: "VND", title: "Ăn tối họp mặt bạn bè" },
+
+  // Tháng 8 (01/08 - 31/08)
+  { id: "sample-05", date: "2026-08-02", type: "expense", amount: 65000, category: "Ăn uống", currency: "VND", title: "Cà phê sáng Highlands" },
+  { id: "sample-06", date: "2026-08-05", type: "income", amount: 20000000, category: "Lương", currency: "VND", title: "Lương tháng 7 - Công ty FinBridge" },
+  { id: "sample-07", date: "2026-08-08", type: "expense", amount: 380000, category: "Di chuyển", currency: "VND", title: "Bảo dưỡng & thay dầu xe máy" },
+  { id: "sample-08", date: "2026-08-10", type: "expense", amount: 7500000, category: "Nhà ở", currency: "VND", title: "Tiền thuê căn hộ tháng 8" },
+  { id: "sample-09", date: "2026-08-15", type: "expense", amount: 1650000, category: "Hóa đơn & Tiện ích", currency: "VND", title: "Điện nước & Internet FPT T8" },
+  { id: "sample-10", date: "2026-08-18", type: "expense", amount: 780000, category: "Ăn uống", currency: "VND", title: "Ăn tối nhà hàng Pizza 4P's" },
+  { id: "sample-11", date: "2026-08-20", type: "income", amount: 2500000, category: "Thu nhập", currency: "VND", title: "Thưởng hoàn thành dự án Q2" },
+  { id: "sample-12", date: "2026-08-22", type: "expense", amount: 1450000, category: "Mua sắm", currency: "VND", title: "Giày chạy bộ rèn luyện sức khỏe" },
+  { id: "sample-13", date: "2026-08-25", type: "transfer", amount: 5000000, category: "Chuyển khoản nội bộ", currency: "VND", title: "Trích tiết kiệm tích lũy sang ví phụ" },
+  { id: "sample-14", date: "2026-08-28", type: "expense", amount: 960000, category: "Ăn uống", currency: "VND", title: "Siêu thị Co.opmart thực phẩm" },
+
+  // Tháng 9 (01/09 - 30/09)
+  { id: "sample-15", date: "2026-09-02", type: "expense", amount: 280000, category: "Giải trí", currency: "VND", title: "Vé xem phim CGV cuối tuần" },
+  { id: "sample-16", date: "2026-09-04", type: "expense", amount: 4500000, category: "Mua sắm", currency: "VND", title: "Khóa học phân tích dữ liệu nâng cao" },
+  { id: "sample-17", date: "2026-09-05", type: "income", amount: 20000000, category: "Lương", currency: "VND", title: "Lương tháng 8 - Công ty FinBridge" },
+  { id: "sample-18", date: "2026-09-08", type: "expense", amount: 120000, category: "Di chuyển", currency: "VND", title: "Đổ xăng xe máy Petrolimex" },
+  { id: "sample-19", date: "2026-09-10", type: "expense", amount: 7500000, category: "Nhà ở", currency: "VND", title: "Tiền thuê căn hộ tháng 9" },
+  { id: "sample-20", date: "2026-09-15", type: "expense", amount: 1720000, category: "Hóa đơn & Tiện ích", currency: "VND", title: "Điện nước & Internet FPT T9" },
+  { id: "sample-21", date: "2026-09-18", type: "expense", amount: 3200000, category: "Mua sắm", currency: "VND", title: "Bàn làm việc công thái học" },
+  { id: "sample-22", date: "2026-09-19", type: "expense", amount: 880000, category: "Ăn uống", currency: "VND", title: "Siêu thị WinMart thực phẩm tươi" },
+  { id: "sample-23", date: "2026-09-22", type: "expense", amount: 1850000, category: "Mua sắm", currency: "VND", title: "Nồi cơm điện tử cao cấp" },
+  { id: "sample-24", date: "2026-09-24", type: "expense", amount: -480000, category: "Mua sắm", currency: "VND", title: "Hoàn tiền đơn hàng Shopee bị hủy" },
+  { id: "sample-25", date: "2026-09-27", type: "expense", amount: 320000, category: "Mua sắm", currency: "VND", title: "Sách tài chính & đầu tư" },
+  { id: "sample-26", date: "2026-09-29", type: "expense", amount: 95000, category: "Ăn uống", currency: "VND", title: "Cơm trưa văn phòng" },
+
+  // Tháng 10 (01/10 - 12/10)
+  { id: "sample-27", date: "2026-10-02", type: "expense", amount: 145000, category: "Ăn uống", currency: "VND", title: "Cà phê trao đổi đối tác" },
+  { id: "sample-28", date: "2026-10-05", type: "income", amount: 20000000, category: "Lương", currency: "VND", title: "Lương tháng 9 - Công ty FinBridge" },
+  { id: "sample-29", date: "2026-10-08", type: "expense", amount: 1050000, category: "Ăn uống", currency: "VND", title: "Siêu thị Tops Market cuối tuần" },
+  { id: "sample-30", date: "2026-10-10", type: "expense", amount: 7500000, category: "Nhà ở", currency: "VND", title: "Tiền thuê căn hộ tháng 10" },
+  { id: "sample-31", date: "2026-10-11", type: "expense", amount: 250000, category: "Hóa đơn & Tiện ích", currency: "VND", title: "Gói cước di động 4G Viettel" },
 ];
 
 export const DASHBOARD_I18N = {
@@ -239,6 +257,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const queryFrom = searchParams.get("from");
   const queryTo = searchParams.get("to");
   const queryWallet = searchParams.get("wallet");
+  const queryCurrency = searchParams.get("currency");
   const querySource = searchParams.get("source");
 
   const [walletId, setWalletId] = useState(queryWallet || state.wallets[0].id);
@@ -252,12 +271,14 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const [type, setType] = useState<"expense" | "income">("expense");
 
   // Spending trend chart filter state
+  const [dashboardSource] = useState<"sample" | "live">(querySource === "live" ? "live" : "sample");
   const [dashboardType, setDashboardType] = useState<"all" | "expense" | "income">((queryType as "all" | "expense" | "income") || "all");
   const [dashboardCategory, setDashboardCategory] = useState(queryCategory || "all");
-  const [dashboardCurrency, setDashboardCurrency] = useState(wallet.currency || "USD");
-  const [dashboardSource] = useState<"sample" | "live">(querySource === "live" ? "live" : "sample");
-  const [dashboardPeriod, setDashboardPeriod] = useState<"7d" | "30d" | "90d" | "all" | "custom">("all");
-  const [dashboardFrom, setDashboardFrom] = useState(queryFrom || "2025-11-01");
+  const [dashboardCurrency, setDashboardCurrency] = useState(
+    queryCurrency || (dashboardSource === "sample" ? (DASHBOARD_SAMPLE[0]?.currency || "VND") : (wallet.currency || "VND"))
+  );
+  const [dashboardPeriod, setDashboardPeriod] = useState<"7d" | "30d" | "90d" | "all" | "custom">("90d");
+  const [dashboardFrom, setDashboardFrom] = useState(queryFrom || "2026-07-16");
   const [dashboardTo, setDashboardTo] = useState(queryTo || "2026-10-12");
   const [focusedBucketKey, setFocusedBucketKey] = useState<string | null>(null);
 
@@ -265,11 +286,15 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const [modal, setModal] = useState("");
 
   const currencies = Array.from(new Set(state.wallets.map((item) => item.currency)));
+  const availableCurrencies = Array.from(new Set([
+    ...currencies,
+    ...DASHBOARD_SAMPLE.map((d) => d.currency),
+  ]));
 
   // Resolve base data: sample or live user transactions
   const dashboardWalletIds = new Set(state.wallets.filter((item) => item.currency === dashboardCurrency).map((item) => item.id));
   const rawDashboardData = dashboardSource === "sample"
-    ? DASHBOARD_SAMPLE
+    ? DASHBOARD_SAMPLE.filter((tx) => tx.currency === dashboardCurrency)
     : state.transactions.filter((tx) => tx.type !== "transfer" && dashboardWalletIds.has(tx.wallet));
 
   // Determine active date boundaries
@@ -423,7 +448,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
 
   // Reset filters handler
   const resetFilters = () => {
-    setDashboardPeriod("all");
+    setDashboardPeriod("90d");
     setDashboardType("all");
     setDashboardCategory("all");
     setFocusedBucketKey(null);
@@ -602,11 +627,11 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
             )}
 
             {/* Currency selector (shown if multiple currencies exist) */}
-            {currencies.length > 1 && (
+            {availableCurrencies.length > 1 && (
               <label className="fb-chart-select">
                 <span className="sr-only">{t.currencyFilter}</span>
                 <select aria-label={t.currencyFilter} value={dashboardCurrency} onChange={(e) => setDashboardCurrency(e.target.value)}>
-                  {currencies.map((curr) => <option key={curr} value={curr}>{curr}</option>)}
+                  {availableCurrencies.map((curr) => <option key={curr} value={curr}>{curr}</option>)}
                 </select>
                 <ChevronDown size={15} />
               </label>
