@@ -350,7 +350,7 @@
 
 /* FinBridge home: scoped to the home tab; existing tool and transaction screens keep their layout. */
 .fb-home-shell{--r-bg:#f3f6f6;--r-surface:#fff;--r-text:#172f3c;--r-muted:#6c7e87;--r-line:#e0e8e9;--r-teal:#147d78;--r-mint:#edf8f5;--r-secondary:#eef2f3;--r-darkblue:#173e50}
-.fb-home{max-width:1160px;margin:0 auto;padding:28px 32px 108px}
+.fb-home{max-width:1380px;width:100%;margin:0 auto;padding:28px 32px 108px}
 .fb-home-header{display:flex;justify-content:space-between;align-items:center;padding-bottom:24px;border-bottom:1px solid var(--r-line);gap:16px}
 .fb-brand{display:flex;gap:12px;align-items:center;font-size:22px;font-weight:700;letter-spacing:-.7px}
 .fb-brand small{display:block;font-size:11px;font-weight:400;letter-spacing:.1px;margin-top:2px}
@@ -427,7 +427,7 @@
 .fb-habit-card h3{font-size:18px;line-height:1.4;font-weight:500;letter-spacing:-.4px;margin:7px 0 10px}
 .fb-habit-card>p:not(.fb-eyebrow){color:var(--r-muted);font-size:12px;line-height:1.7}
 .fb-habit-card>button{border:0;background:transparent;color:var(--r-teal);display:flex;align-items:center;gap:10px;padding:0;margin-top:18px;font-size:12px}
-.fb-home-shell .r-bottom-nav{height:68px;max-width:1160px;left:50%;transform:translateX(-50%);border:1px solid var(--r-line);border-bottom:0;border-radius:18px 18px 0 0;padding:4px 8px;background:var(--r-surface);box-shadow:0 -8px 30px #173e5005}
+.fb-home-shell .r-bottom-nav{height:68px;max-width:1380px;left:50%;transform:translateX(-50%);border:1px solid var(--r-line);border-bottom:0;border-radius:18px 18px 0 0;padding:4px 8px;background:var(--r-surface);box-shadow:0 -8px 30px #173e5005}
 .fb-home-shell .r-bottom-nav button{color:var(--r-muted);border-radius:12px;font-size:11px;gap:4px}
 .fb-home-shell .r-bottom-nav button.active{color:var(--r-teal);background:var(--r-mint)}
 .fb-home-shell .r-bottom-nav .r-icon{font-size:19px}
@@ -441,10 +441,10 @@
 .fb-home .fb-workspace{display:none}
 .fb-chart-range{display:flex;gap:10px;flex-wrap:wrap;width:100%}.fb-chart-range label{flex:1;min-width:130px;font-size:11px;color:var(--r-muted)}.fb-chart-range input{display:block;width:100%;min-height:44px;margin-top:5px;border:1px solid var(--r-line);border-radius:9px;background:var(--r-surface);color:var(--r-text);padding:9px;font:inherit}
 .fb-chart-scale{display:none}
-.fb-finance-dashboard{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,.75fr);grid-template-areas:"overview wallet" "chart wallet";align-items:start;gap:22px}
+.fb-finance-dashboard{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"overview wallet" "chart chart";align-items:start;gap:22px}
 .fb-finance-dashboard .fb-finance-overview{grid-area:overview}
-.fb-finance-dashboard .fb-spending-dashboard{grid-area:chart}
 .fb-finance-dashboard .fb-wallet-flow-card{grid-area:wallet}
+.fb-finance-dashboard .fb-spending-dashboard{grid-area:chart;width:100%}
 .fb-section-note{margin-top:5px;color:var(--r-muted);font-size:11px;font-weight:400;line-height:1.45}
 .fb-finance-dashboard .fb-section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
 .fb-finance-dashboard .r-summary-cards>div{position:relative;min-height:102px}
@@ -453,28 +453,35 @@
 .fb-spending-dashboard{min-height:365px}
 .fb-view-transactions{display:flex;align-items:center;gap:6px;flex-shrink:0;min-height:44px;border:1px solid var(--r-line);background:var(--r-surface);color:var(--r-teal);border-radius:9px;padding:10px 14px;font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer}
 .fb-view-transactions:hover{border-color:#83bcb2;background:var(--r-mint)}
-.fb-chart-controls{display:flex;align-items:center;gap:8px;margin:20px 0 13px;flex-wrap:wrap}
-.fb-chart-week-picker{display:flex;align-items:center;flex-wrap:wrap;gap:6px;width:100%;margin-bottom:6px}
-.fb-chart-week-picker>button{min-height:44px;min-width:44px;border:1px solid var(--r-line);border-radius:9px;background:var(--r-surface);color:var(--r-teal);font-size:22px;cursor:pointer}
-.fb-chart-week-picker>button.fb-chart-this-week{font-size:11px;padding:0 12px}
-.fb-chart-week-picker>label{display:flex;flex-direction:column;gap:5px;min-width:200px}
-.fb-chart-week-picker>label>span:first-child{color:var(--r-text);font-size:11px;font-weight:600}
-.fb-chart-week-picker input{min-height:44px;width:100%;padding:8px 12px;border:1px solid var(--r-line);border-radius:9px;background:var(--r-surface);color:var(--r-text);font:inherit;font-size:12px;color-scheme:light}
+
+/* Spending chart controls: clean, level, fully aligned */
+.fb-chart-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:20px 0 16px;flex-wrap:wrap}
+.fb-chart-date-bar{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap}
+.fb-chart-range-pill{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 14px;background:var(--r-mint);border:1px solid #83bcb2;border-radius:9px;font-size:12px;font-weight:600;color:var(--r-teal);white-space:nowrap}
+.fb-chart-range-pill svg{color:var(--r-teal);flex-shrink:0}
+.fb-chart-nav-cluster{display:inline-flex;align-items:center;gap:5px;flex-wrap:nowrap}
+.fb-nav-btn{width:38px;height:38px;border:1px solid var(--r-line);border-radius:8px;background:var(--r-surface);color:var(--r-teal);font-size:18px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;transition:background .15s,border-color .15s}
+.fb-nav-btn:hover{background:var(--r-mint);border-color:#83bcb2}
+.fb-date-input-box{position:relative;display:inline-flex;align-items:center}
+.fb-date-input-box input{height:38px;padding:0 10px;border:1px solid var(--r-line);border-radius:8px;background:var(--r-surface);color:var(--r-text);font:inherit;font-size:12px;cursor:pointer;outline:0;transition:border-color .15s}
+.fb-date-input-box input:focus-visible,.fb-nav-btn:focus-visible{outline:2px solid var(--r-teal);outline-offset:2px}
+.fb-chart-this-week-btn{height:38px;padding:0 14px;border:1px solid var(--r-line);border-radius:8px;background:var(--r-surface);color:var(--r-teal);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;transition:background .15s,border-color .15s}
+.fb-chart-this-week-btn:hover{background:var(--r-mint);border-color:#83bcb2}
 .fb-week-empty-note{font-size:12px;color:var(--r-muted);margin:12px 0}
-.fb-chart-week-picker input:focus-visible,.fb-chart-week-picker>button:focus-visible{outline:2px solid var(--r-teal);outline-offset:2px}
-@media(max-width:640px){.fb-chart-week-picker>label{min-width:0;flex:1}.fb-chart-week-picker>button.fb-chart-this-week{width:100%}}
-@media(max-width:640px){.fb-spending-dashboard .fb-chart-controls>.r-type-pills{width:100%;display:flex}.fb-spending-dashboard .fb-chart-controls>.r-type-pills button{flex:1}.fb-spending-dashboard .fb-chart-controls>.fb-chart-select{flex:1 1 calc(50% - 4px);min-width:0}}
-.fb-chart-controls .r-type-pills{margin:0;gap:3px;border:1px solid var(--r-line);padding:3px;border-radius:10px;background:var(--r-bg)}
-.fb-chart-controls .r-type-pills button{border-radius:7px;padding:8px 12px;min-height:40px;min-width:44px;font-size:11px;background:transparent;color:var(--r-muted);cursor:pointer}
-.fb-chart-controls .r-type-pills button.active{background:var(--r-surface);color:var(--r-teal);box-shadow:0 1px 3px #173e5012}
-.fb-chart-select{position:relative;display:inline-flex;align-items:center;min-width:130px;min-height:44px;border:1px solid var(--r-line);background:var(--r-surface);border-radius:9px;color:var(--r-muted)}
-.fb-chart-select select{appearance:none;width:100%;min-height:44px;border:0;background:transparent;color:inherit;padding:10px 32px 10px 12px;font:inherit;font-size:11px;outline:0;cursor:pointer;text-overflow:ellipsis;white-space:nowrap}
-.fb-chart-select svg{position:absolute;right:10px;pointer-events:none}
+
+.fb-chart-filter-bar{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fb-chart-filter-bar .r-type-pills{margin:0;gap:3px;border:1px solid var(--r-line);padding:3px;border-radius:9px;background:var(--r-bg);height:38px;display:inline-flex;align-items:center}
+.fb-chart-filter-bar .r-type-pills button{border-radius:6px;padding:0 12px;height:30px;min-height:30px;min-width:40px;font-size:11.5px;background:transparent;color:var(--r-muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.fb-chart-filter-bar .r-type-pills button.active{background:var(--r-surface);color:var(--r-teal);box-shadow:0 1px 3px #173e5012}
+.fb-chart-filter-bar .fb-chart-select{position:relative;display:inline-flex;align-items:center;min-width:130px;height:38px;min-height:38px;border:1px solid var(--r-line);background:var(--r-surface);border-radius:9px;color:var(--r-muted)}
+.fb-chart-filter-bar .fb-chart-select select{appearance:none;width:100%;height:38px;min-height:38px;border:0;background:transparent;color:inherit;padding:0 30px 0 12px;font:inherit;font-size:11.5px;outline:0;cursor:pointer;text-overflow:ellipsis;white-space:nowrap}
+.fb-chart-filter-bar .fb-chart-select svg{position:absolute;right:10px;pointer-events:none}
+
 .fb-chart-legend{display:flex;gap:14px;align-items:center;margin-bottom:9px;color:var(--r-muted);font-size:11px;flex-wrap:wrap}
 .fb-chart-legend .is-muted{opacity:.36}
 .fb-chart-dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:middle}.fb-chart-dot.expense{background:#e11d48}.fb-chart-dot.income{background:#0d9488;border:1px dashed #0f766e}
-.fb-chart{position:relative;border-radius:14px;background:linear-gradient(180deg,#f8fbfb 0%,var(--r-bg) 100%);padding:14px 14px 10px;overflow:hidden}
-.fb-chart svg{display:block;width:100%;height:220px;overflow:visible}
+.fb-chart{position:relative;border-radius:14px;background:linear-gradient(180deg,#f8fbfb 0%,var(--r-bg) 100%);padding:16px 20px 14px;overflow:hidden;width:100%}
+.fb-chart svg{display:block;width:100%;height:240px;overflow:visible}
 .fb-chart-gridline{stroke:var(--r-line);stroke-width:1}
 .fb-chart-tick{fill:var(--r-muted);font-size:9.5px;font-family:inherit;font-weight:500}
 .fb-chart-x-label{fill:var(--r-muted);font-size:9.5px;font-family:inherit;font-weight:400}
@@ -495,4 +502,4 @@
 .fb-wallet-flow-list{position:relative;display:flex;flex-direction:column;gap:8px;margin-top:20px}.fb-wallet-flow-list>button{display:flex;align-items:center;gap:10px;width:100%;padding:12px;border:1px solid #ffffff16;border-radius:12px;background:#ffffff08;color:#effafa;text-align:left}.fb-wallet-flow-list>button:hover,.fb-wallet-flow-list>button.is-selected{background:#ffffff14;border-color:#9ed9cd55}.fb-wallet-flow-list>button>span:first-child{min-width:0;flex:1}.fb-wallet-flow-list b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:600}.fb-wallet-flow-list small{display:block;color:#b7cfd2;font-size:10px;margin-top:3px}.fb-wallet-flow-list .fb-wallet-flow-numbers{text-align:right;flex-shrink:0}.fb-wallet-flow-list .fb-wallet-flow-numbers small{white-space:nowrap}.fb-wallet-flow-list .r-expense{color:#ffb5a9}.fb-wallet-flow-list .r-income{color:#a6e4d6}.fb-wallet-flow-list>button>svg{color:#b7cfd2;flex-shrink:0}
 .fb-manage-wallets{position:relative;display:flex;align-items:center;justify-content:space-between;width:100%;gap:10px;border:0;border-top:1px solid #ffffff20;padding:14px 0 0;margin-top:15px;background:transparent;color:#d5ebe9;font-size:12px}.fb-modal-note{display:block;color:var(--r-muted);font-size:11px;line-height:1.5;margin-top:12px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(max-width:800px){.fb-finance-dashboard{grid-template-columns:minmax(0,1fr) 230px;gap:16px}.fb-wallet-flow-card{padding:18px}.fb-wallet-flow-card .fb-section-heading{align-items:flex-start}.fb-wallet-flow-card .fb-view-transactions{font-size:0;padding:8px}.fb-wallet-flow-card .fb-view-transactions svg{width:16px;height:16px}.fb-wallet-flow-list>button{padding:10px}.fb-wallet-flow-list .fb-wallet-flow-numbers{display:none}}
-@media(max-width:640px){.fb-finance-dashboard{display:flex;flex-direction:column;gap:18px}.fb-finance-dashboard>section{width:100%}.fb-finance-dashboard .fb-section-heading{gap:12px}.fb-finance-dashboard .r-summary-top b{font-size:27px}.fb-spending-dashboard{min-height:0}.fb-chart-controls{margin-top:17px}.fb-chart-select{flex:1;min-width:0}.fb-chart{padding-left:8px;padding-right:8px}.fb-chart svg{height:175px}.fb-wallet-flow-card{padding:18px}.fb-wallet-flow-list .fb-wallet-flow-numbers{display:block}.fb-wallet-flow-list>button{padding:11px}.fb-wallet-flow-list b{font-size:12px}.fb-wallet-flow-list small{font-size:10px}.fb-currency-note{line-height:1.45}.fb-view-transactions{padding:8px;font-size:0}.fb-view-transactions svg{width:16px;height:16px}}
+@media(max-width:640px){.fb-finance-dashboard{display:flex;flex-direction:column;gap:18px}.fb-finance-dashboard>section{width:100%}.fb-finance-dashboard .fb-section-heading{gap:12px}.fb-finance-dashboard .r-summary-top b{font-size:27px}.fb-spending-dashboard{min-height:0}.fb-chart-controls{flex-direction:column;align-items:stretch;margin-top:14px;gap:10px}.fb-chart-date-bar,.fb-chart-filter-bar{width:100%;justify-content:space-between}.fb-chart-range-pill{flex:1;justify-content:center}.fb-chart-nav-cluster{width:100%;justify-content:center}.fb-date-input-box{flex:1}.fb-date-input-box input{width:100%}.fb-chart-filter-bar .r-type-pills{width:100%;display:flex}.fb-chart-filter-bar .r-type-pills button{flex:1}.fb-chart-filter-bar .fb-chart-select{flex:1 1 calc(50% - 4px);min-width:0}.fb-chart{padding-left:8px;padding-right:8px}.fb-chart svg{height:180px}.fb-wallet-flow-card{padding:18px}.fb-wallet-flow-list .fb-wallet-flow-numbers{display:block}.fb-wallet-flow-list>button{padding:11px}.fb-wallet-flow-list b{font-size:12px}.fb-wallet-flow-list small{font-size:10px}.fb-currency-note{line-height:1.45}.fb-view-transactions{padding:8px;font-size:0}.fb-view-transactions svg{width:16px;height:16px}}
