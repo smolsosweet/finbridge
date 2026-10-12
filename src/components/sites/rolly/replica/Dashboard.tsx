@@ -341,12 +341,12 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const niceMax = scale.max;
 
   // SVG Geometry
-  const chartWidth = 600;
-  const chartHeight = 220;
+  const chartWidth = 960;
+  const chartHeight = 240;
   const marginLeft = 65;
-  const marginRight = 15;
+  const marginRight = 20;
   const marginTop = 20;
-  const baselineY = 185;
+  const baselineY = 195;
   const plotWidth = chartWidth - marginLeft - marginRight;
   const plotHeight = baselineY - marginTop;
 
@@ -469,46 +469,77 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
           </div>
 
           <div className="fb-chart-controls">
-            <div className="fb-chart-week-picker" aria-label={t.periodLabel}>
-              <button type="button" aria-label={t.previousWeek} onClick={() => { setDashboardWeek(shiftCalendarWeek(chartStart, -1)); setFocusedBucketKey(null); }}>‹</button>
-              <label>
+            <div className="fb-chart-date-bar">
+              <div className="fb-chart-range-pill">
+                <CalendarDays size={15} />
                 <span>{formattedWeekRange}</span>
-                <span className="sr-only">{t.selectWeek}</span>
-                <input type="date" aria-label={t.selectWeek} value={dashboardWeek} onInput={(event) => {
-                  if (event.currentTarget.validity.valid && event.currentTarget.value) {
-                    setDashboardWeek(calendarWeek(event.currentTarget.value).start);
-                    setFocusedBucketKey(null);
-                  }
-                }} />
+              </div>
+              <div className="fb-chart-nav-cluster">
+                <button
+                  type="button"
+                  className="fb-nav-btn prev"
+                  aria-label={t.previousWeek}
+                  onClick={() => { setDashboardWeek(shiftCalendarWeek(chartStart, -1)); setFocusedBucketKey(null); }}
+                >
+                  ‹
+                </button>
+                <div className="fb-date-input-box">
+                  <input
+                    type="date"
+                    aria-label={t.selectWeek}
+                    value={dashboardWeek}
+                    onInput={(event) => {
+                      if (event.currentTarget.validity.valid && event.currentTarget.value) {
+                        setDashboardWeek(calendarWeek(event.currentTarget.value).start);
+                        setFocusedBucketKey(null);
+                      }
+                    }}
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="fb-nav-btn next"
+                  aria-label={t.nextWeek}
+                  onClick={() => { setDashboardWeek(shiftCalendarWeek(chartStart, 1)); setFocusedBucketKey(null); }}
+                >
+                  ›
+                </button>
+                <button
+                  type="button"
+                  className="fb-chart-this-week-btn"
+                  onClick={() => { setDashboardWeek(calendarWeek(localDateKey(new Date())).start); setFocusedBucketKey(null); }}
+                >
+                  {t.currentWeek}
+                </button>
+              </div>
+            </div>
+
+            <div className="fb-chart-filter-bar">
+              {/* Type filter */}
+              <div className="r-type-pills" role="radiogroup" aria-label={t.typeFilter}>
+                <button type="button" role="radio" aria-checked={dashboardType === "all"} className={dashboardType === "all" ? "active" : ""} onClick={() => setDashboardType("all")}>{t.typeAll}</button>
+                <button type="button" role="radio" aria-checked={dashboardType === "expense"} className={dashboardType === "expense" ? "active" : ""} onClick={() => setDashboardType("expense")}>{t.typeExpense}</button>
+                <button type="button" role="radio" aria-checked={dashboardType === "income"} className={dashboardType === "income" ? "active" : ""} onClick={() => setDashboardType("income")}>{t.typeIncome}</button>
+              </div>
+
+              {/* Category filter */}
+              <label className="fb-chart-select">
+                <span className="sr-only">{t.categoryFilter}</span>
+                <select aria-label={t.categoryFilter} value={dashboardCategory} onChange={(e) => setDashboardCategory(e.target.value)}>
+                  <option value="all">{t.allCategories}</option>
+                  {dashboardCategories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+                <ChevronDown size={15} />
               </label>
-              <button type="button" aria-label={t.nextWeek} onClick={() => { setDashboardWeek(shiftCalendarWeek(chartStart, 1)); setFocusedBucketKey(null); }}>›</button>
-              <button type="button" className="fb-chart-this-week" onClick={() => { setDashboardWeek(calendarWeek(localDateKey(new Date())).start); setFocusedBucketKey(null); }}>{t.currentWeek}</button>
+
+              <label className="fb-chart-select">
+                <span className="sr-only">{t.accountFilter}</span>
+                <select aria-label={t.accountFilter} value={wallet.id} onChange={(event) => { setWalletId(event.target.value); setDashboardCategory("all"); setFocusedBucketKey(null); }}>
+                  {state.wallets.map((item) => <option key={item.id} value={item.id}>{walletName(item.name)} · {item.currency}</option>)}
+                </select>
+                <ChevronDown size={15} />
+              </label>
             </div>
-
-            {/* Type filter */}
-            <div className="r-type-pills" role="radiogroup" aria-label={t.typeFilter}>
-              <button type="button" role="radio" aria-checked={dashboardType === "all"} className={dashboardType === "all" ? "active" : ""} onClick={() => setDashboardType("all")}>{t.typeAll}</button>
-              <button type="button" role="radio" aria-checked={dashboardType === "expense"} className={dashboardType === "expense" ? "active" : ""} onClick={() => setDashboardType("expense")}>{t.typeExpense}</button>
-              <button type="button" role="radio" aria-checked={dashboardType === "income"} className={dashboardType === "income" ? "active" : ""} onClick={() => setDashboardType("income")}>{t.typeIncome}</button>
-            </div>
-
-            {/* Category filter */}
-            <label className="fb-chart-select">
-              <span className="sr-only">{t.categoryFilter}</span>
-              <select aria-label={t.categoryFilter} value={dashboardCategory} onChange={(e) => setDashboardCategory(e.target.value)}>
-                <option value="all">{t.allCategories}</option>
-                {dashboardCategories.map((cat) => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
-              <ChevronDown size={15} />
-            </label>
-
-            <label className="fb-chart-select">
-              <span className="sr-only">{t.accountFilter}</span>
-              <select aria-label={t.accountFilter} value={wallet.id} onChange={(event) => { setWalletId(event.target.value); setDashboardCategory("all"); setFocusedBucketKey(null); }}>
-                {state.wallets.map((item) => <option key={item.id} value={item.id}>{walletName(item.name)} · {item.currency}</option>)}
-              </select>
-              <ChevronDown size={15} />
-            </label>
           </div>
 
           {dashboardRecords.length === 0 && <p className="fb-week-empty-note" role="status">{t.emptyText}</p>}
@@ -536,7 +567,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                   </div>
                 )}
 
-                <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="xMidYMid meet">
+                <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none">
                   <defs>
                     <pattern id="fb-income-stripes" width="6" height="6" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
                       <line x1="0" y1="0" x2="0" y2="6" stroke="#0d9488" strokeWidth="2.5" />
@@ -567,8 +598,8 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                     const centerX = marginLeft + (i + 0.5) * bW;
 
                     const both = dashboardType === "all";
-                    const maxBarW = both ? Math.min(Math.max(3, (bW * 0.7 - 3) / 2), 20) : Math.min(Math.max(4, bW * 0.65), 32);
-                    const gap = Math.min(3, maxBarW * 0.3);
+                    const maxBarW = both ? Math.min(Math.max(6, (bW * 0.65 - 6) / 2), 34) : Math.min(Math.max(10, bW * 0.55), 54);
+                    const gap = Math.min(6, maxBarW * 0.25);
 
                     const incH = b.income > 0 ? Math.max(3, (b.income / niceMax) * plotHeight) : 0;
                     const expH = b.expense > 0 ? Math.max(3, (b.expense / niceMax) * plotHeight) : 0;
