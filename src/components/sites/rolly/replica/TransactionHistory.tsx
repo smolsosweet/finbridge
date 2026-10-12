@@ -155,18 +155,6 @@ export function TransactionHistory({ navigate }: { navigate: (screen: string) =>
             )}
           </div>
         </label>
-        <div className="fb-history-pills" role="radiogroup" aria-label={text.kind}>
-          {(["all", "expense", "income", "transfer"] as const).map((k) => (
-            <button
-              key={k}
-              type="button"
-              className={`fb-pill-btn ${kind === k ? "active" : ""}`}
-              onClick={() => { setKind(k); setPage(1); }}
-            >
-              {k === "all" ? text.all : k === "expense" ? text.expense : k === "income" ? text.income : text.transfer}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="fb-history-controls-bottom">

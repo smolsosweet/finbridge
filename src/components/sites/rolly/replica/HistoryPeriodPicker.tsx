@@ -34,32 +34,185 @@ const COPY = {
 };
 
 export function HistoryPeriodPicker({ value, onChange, lang }: { value: HistoryPeriod; onChange: (value: HistoryPeriod) => void; lang: "vi" | "en" | "zh" }) {
-  const [panel, setPanel] = useState<"period" | "dates" | "">("");
+  const [open, setOpen] = useState(false);
   const t = COPY[lang];
   const locale = lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-GB";
   const formatDay = (key: string) => key ? new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(key + "T12:00:00")) : "—";
   const week = calendarWeek(value.day);
-  const periodLabel = value.kind === "month" ? new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(new Date(value.year, value.month, 1))
-    : value.kind === "year" ? String(value.year) : value.kind === "day" ? formatDay(value.day)
-      : value.kind === "week" ? formatDay(week.start) + " – " + formatDay(week.end)
-        : formatDay(value.from) + " – " + formatDay(value.to);
+  const periodLabel = value.kind === "month"
+    ? (lang === "vi" ? `Tháng ${value.month + 1}/${value.year}` : new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" }).format(new Date(value.year, value.month, 1)))
+    : value.kind === "year"
+      ? (lang === "vi" ? `Năm ${value.year}` : String(value.year))
+      : value.kind === "day"
+        ? formatDay(value.day)
+        : value.kind === "week"
+          ? formatDay(week.start) + " – " + formatDay(week.end)
+          : value.kind === "all"
+            ? t.all
+            : formatDay(value.from) + " – " + formatDay(value.to);
   const update = (change: Partial<HistoryPeriod>) => onChange({ ...value, ...change });
+
   return <>
-    <div className="r-period-controls fb-history-period">
-      <button type="button" className="r-period" onClick={() => setPanel("period")}>{t[value.kind]}<CalendarDays size={17} /><ChevronDown size={15} /></button>
-      {value.kind !== "all" && <button type="button" className="r-period-date" aria-label={t.detail} onClick={() => setPanel("dates")}>{periodLabel}<ChevronDown size={15} /></button>}
-    </div>
-    {panel && <Modal title={panel === "period" ? t.choose : t.detail} sheet={panel === "period"} onClose={() => setPanel("")}>
-      {panel === "period" ? <div className="r-period-options">{(["day", "week", "month", "year", "all", "custom"] as const).map((kind) => <button type="button" key={kind} className={value.kind === kind ? "is-selected" : ""} onClick={() => { update({ kind }); setPanel(kind === "all" ? "" : "dates"); }}><CalendarDays size={20} />{t[kind]}</button>)}</div> : <div className="fb-date-picker-modal">
-        {(value.kind === "month" || value.kind === "year") && <>
-          <div className="fb-month-year-header"><button type="button" className="fb-stepper-btn" aria-label={t.previousYear} onClick={() => update({ year: value.year - 1 })}><ChevronLeft size={18} /></button><span className="fb-year-display">{value.year}</span><button type="button" className="fb-stepper-btn" aria-label={t.nextYear} onClick={() => update({ year: value.year + 1 })}><ChevronRight size={18} /></button></div>
-          {value.kind === "month" ? <div className="fb-month-grid">{Array.from({ length: 12 }, (_, month) => <button type="button" key={month} className={"fb-month-cell " + (value.month === month ? "active" : "")} onClick={() => update({ month })}>{new Intl.DateTimeFormat(locale, { month: "short" }).format(new Date(value.year, month, 1))}</button>)}</div> : <div className="fb-year-grid">{Array.from({ length: 6 }, (_, offset) => value.year - 2 + offset).map((year) => <button type="button" key={year} className={"fb-year-cell " + (value.year === year ? "active" : "")} onClick={() => update({ year })}>{year}</button>)}</div>}
-        </>}
-        {value.kind === "day" && <><label className="fb-picker-field"><span className="fb-picker-label">{t.day}</span><input type="date" value={value.day} onInput={(event) => { if (event.currentTarget.validity.valid && event.currentTarget.value) update({ day: event.currentTarget.value }); }} /></label><button type="button" className="fb-quick-date-btn" onClick={() => update({ day: localDateKey(new Date()) })}>{t.today}</button></>}
-        {value.kind === "week" && <><div className="fb-week-stepper"><button type="button" className="fb-stepper-btn" aria-label={t.previousWeek} onClick={() => update({ day: shiftCalendarWeek(week.start, -1) })}><ChevronLeft size={18} /></button><b>{periodLabel}</b><button type="button" className="fb-stepper-btn" aria-label={t.nextWeek} onClick={() => update({ day: shiftCalendarWeek(week.start, 1) })}><ChevronRight size={18} /></button></div><label className="fb-picker-field"><span className="fb-picker-label">{t.selectWeek}</span><input type="date" value={value.day} onInput={(event) => { if (event.currentTarget.validity.valid && event.currentTarget.value) update({ day: event.currentTarget.value }); }} /></label><button type="button" className="fb-quick-date-btn" onClick={() => update({ day: localDateKey(new Date()) })}>{t.thisWeek}</button></>}
-        {value.kind === "custom" && <div className="fb-history-range"><label><span>{t.from}</span><input type="date" value={value.from} max={value.to || undefined} onInput={(event) => update({ from: event.currentTarget.value })} /></label><label><span>{t.to}</span><input type="date" value={value.to} min={value.from || undefined} onInput={(event) => update({ to: event.currentTarget.value })} /></label></div>}
-        <div className="fb-modal-actions"><button type="button" className="r-secondary" onClick={() => setPanel("")}>{t.close}</button><button type="button" className="r-primary" onClick={() => setPanel("")} disabled={value.kind === "custom" && !!value.from && !!value.to && value.from > value.to}>{t.confirm}</button></div>
-      </div>}
+    <button
+      type="button"
+      className="fb-period-trigger-btn"
+      onClick={() => setOpen(true)}
+      aria-label={t.choose}
+    >
+      <CalendarDays size={16} className="fb-period-icon" aria-hidden="true" />
+      <span className="fb-period-trigger-text">{periodLabel}</span>
+      <ChevronDown size={14} className="fb-period-chevron" aria-hidden="true" />
+    </button>
+
+    {open && <Modal title={t.choose} sheet={false} onClose={() => setOpen(false)}>
+      <div className="fb-date-picker-modal">
+        <div className="fb-period-mode-tabs" role="tablist">
+          {(["day", "week", "month", "year", "all", "custom"] as const).map((kind) => (
+            <button
+              type="button"
+              key={kind}
+              className={`fb-period-mode-tab ${value.kind === kind ? "active" : ""}`}
+              onClick={() => update({ kind })}
+            >
+              {t[kind]}
+            </button>
+          ))}
+        </div>
+
+        <div className="fb-period-detail-body">
+          {(value.kind === "month" || value.kind === "year") && <>
+            <div className="fb-month-year-header">
+              <button type="button" className="fb-stepper-btn" aria-label={t.previousYear} onClick={() => update({ year: value.year - 1 })}>
+                <ChevronLeft size={18} />
+              </button>
+              <span className="fb-year-display">{value.year}</span>
+              <button type="button" className="fb-stepper-btn" aria-label={t.nextYear} onClick={() => update({ year: value.year + 1 })}>
+                <ChevronRight size={18} />
+              </button>
+            </div>
+            {value.kind === "month" ? (
+              <div className="fb-month-grid">
+                {Array.from({ length: 12 }, (_, month) => (
+                  <button
+                    type="button"
+                    key={month}
+                    className={"fb-month-cell " + (value.month === month ? "active" : "")}
+                    onClick={() => update({ month })}
+                  >
+                    {new Intl.DateTimeFormat(locale, { month: "short" }).format(new Date(value.year, month, 1))}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="fb-year-grid">
+                {Array.from({ length: 6 }, (_, offset) => value.year - 2 + offset).map((year) => (
+                  <button
+                    type="button"
+                    key={year}
+                    className={"fb-year-cell " + (value.year === year ? "active" : "")}
+                    onClick={() => update({ year })}
+                  >
+                    {year}
+                  </button>
+                ))}
+              </div>
+            )}
+          </>}
+
+          {value.kind === "day" && (
+            <div className="fb-picker-field-wrap">
+              <label className="fb-picker-field">
+                <span className="fb-picker-label">{t.day}</span>
+                <input
+                  type="date"
+                  value={value.day}
+                  onInput={(event) => {
+                    if (event.currentTarget.validity.valid && event.currentTarget.value) {
+                      update({ day: event.currentTarget.value });
+                    }
+                  }}
+                />
+              </label>
+              <button type="button" className="fb-quick-date-btn" onClick={() => update({ day: localDateKey(new Date()) })}>
+                {t.today}
+              </button>
+            </div>
+          )}
+
+          {value.kind === "week" && (
+            <div className="fb-picker-field-wrap">
+              <div className="fb-week-stepper">
+                <button type="button" className="fb-stepper-btn" aria-label={t.previousWeek} onClick={() => update({ day: shiftCalendarWeek(week.start, -1) })}>
+                  <ChevronLeft size={18} />
+                </button>
+                <b>{formatDay(week.start)} – {formatDay(week.end)}</b>
+                <button type="button" className="fb-stepper-btn" aria-label={t.nextWeek} onClick={() => update({ day: shiftCalendarWeek(week.start, 1) })}>
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+              <label className="fb-picker-field">
+                <span className="fb-picker-label">{t.selectWeek}</span>
+                <input
+                  type="date"
+                  value={value.day}
+                  onInput={(event) => {
+                    if (event.currentTarget.validity.valid && event.currentTarget.value) {
+                      update({ day: event.currentTarget.value });
+                    }
+                  }}
+                />
+              </label>
+              <button type="button" className="fb-quick-date-btn" onClick={() => update({ day: localDateKey(new Date()) })}>
+                {t.thisWeek}
+              </button>
+            </div>
+          )}
+
+          {value.kind === "custom" && (
+            <div className="fb-history-range">
+              <label>
+                <span>{t.from}</span>
+                <input
+                  type="date"
+                  value={value.from}
+                  max={value.to || undefined}
+                  onInput={(event) => update({ from: event.currentTarget.value })}
+                />
+              </label>
+              <label>
+                <span>{t.to}</span>
+                <input
+                  type="date"
+                  value={value.to}
+                  min={value.from || undefined}
+                  onInput={(event) => update({ to: event.currentTarget.value })}
+                />
+              </label>
+            </div>
+          )}
+
+          {value.kind === "all" && (
+            <div className="fb-all-time-hint">
+              <CalendarDays size={28} />
+              <p>{lang === "vi" ? "Đang hiển thị toàn bộ lịch sử giao dịch (mọi thời gian)." : lang === "zh" ? "显示全部时间范围内的交易数据。" : "Showing transactions from all recorded dates."}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="fb-modal-actions">
+          <button type="button" className="r-secondary" onClick={() => setOpen(false)}>
+            {t.close}
+          </button>
+          <button
+            type="button"
+            className="r-primary"
+            onClick={() => setOpen(false)}
+            disabled={value.kind === "custom" && !!value.from && !!value.to && value.from > value.to}
+          >
+            {t.confirm}
+          </button>
+        </div>
+      </div>
     </Modal>}
   </>;
 }
