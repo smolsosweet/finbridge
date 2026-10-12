@@ -680,4 +680,40 @@
 .fb-cat-delete-btn{border:none;background:transparent;color:#94a3b8;cursor:pointer;padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:all .15s}
 .fb-cat-delete-btn:hover{color:#e11d48;background:#fee2e2}
 
+/* Category icon select button & Emoji picker */
+.fb-cat-icon-select-btn{width:42px;height:42px;min-width:42px;border:1px solid var(--r-line);background:#f8fafc;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;cursor:pointer;flex-shrink:0;transition:all .15s}
+.fb-cat-icon-select-btn:hover{background:#f1f5f9;border-color:var(--r-teal)}
+.fb-emoji-picker-box{background:white;border:1px solid var(--r-line);border-radius:12px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:10px}
+.fb-emoji-picker-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.fb-emoji-picker-header span{font-size:12px;font-weight:600;color:var(--r-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fb-emoji-close-btn{border:none;background:transparent;color:var(--r-muted);cursor:pointer;padding:4px;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.fb-emoji-close-btn:hover{color:var(--r-text);background:#f1f5f9}
+.fb-emoji-groups-scroll{display:flex;flex-direction:column;gap:10px;max-height:190px;overflow-y:auto;padding-right:4px}
+.fb-emoji-group{display:flex;flex-direction:column;gap:5px}
+.fb-emoji-group-title{font-size:10.5px;font-weight:600;color:var(--r-muted);text-transform:uppercase;letter-spacing:.04em}
+.fb-emoji-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(32px,1fr));gap:4px}
+.fb-emoji-btn{height:32px;border:1px solid transparent;background:transparent;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.fb-emoji-btn:hover{background:#f1f5f9}
+.fb-emoji-btn.active{background:var(--r-mint);border-color:var(--r-teal)}
+
+/* Category inline edit form */
+.fb-cat-edit-inline-form{display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--r-teal);border-radius:10px;background:#f0fdfa}
+.fb-cat-action-btn{width:36px;height:36px;min-width:36px;border:none;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .15s}
+.fb-cat-save-btn{background:var(--r-teal);color:white}
+.fb-cat-save-btn:hover{filter:brightness(1.05)}
+.fb-cat-cancel-btn{background:#e2e8f0;color:#64748b}
+.fb-cat-cancel-btn:hover{background:#cbd5e1;color:#334155}
+
+/* Category item enhancements */
+.fb-cat-name-wrap{display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0}
+.fb-cat-tx-badge{font-size:11px;color:#64748b;background:#f1f5f9;padding:1px 6px;border-radius:10px;white-space:nowrap}
+.fb-cat-archived-tag{font-size:10.5px;font-weight:600;color:#e11d48;background:#fff1f2;border:1px solid #fecdd3;padding:1px 6px;border-radius:10px;white-space:nowrap}
+.fb-cat-item.is-archived{opacity:.8;background:#fafafa}
+.fb-cat-item-actions{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.fb-cat-edit-btn{border:none;background:transparent;color:#64748b;cursor:pointer;padding:6px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.fb-cat-edit-btn:hover{color:var(--r-teal);background:#f0fdfa}
+.fb-cat-restore-btn{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:#0d9488;background:#ccfbf1;border:1px solid #99f6e4;padding:4px 8px;border-radius:6px;cursor:pointer;transition:all .15s}
+.fb-cat-restore-btn:hover{background:#99f6e4}
+
+
 

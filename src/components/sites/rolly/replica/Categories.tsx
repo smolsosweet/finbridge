@@ -5,7 +5,7 @@ import { ChevronRight, MoreVertical, Plus, Pencil, Trash2, Check } from "lucide-
 import { EmptyState, Modal, PageHeader } from "./Ui";
 import { updateState, useAppState } from "./store";
 
-const iconGroups: [string, string[]][] = [
+export const iconGroups: [string, string[]][] = [
   ["Nhà & Hóa đơn", ["🧊", "🧾", "🧴", "💡", "🛋️", "🏠", "🔌", "🧹", "🚿", "🧺", "🔑"]],
   ["Đồ ăn & Đồ uống", ["🍔", "☕", "🍕", "🍜", "🍣", "🍺", "🥤", "🍰", "🥐", "🍎", "🥗"]],
   ["Giao thông vận tải & Du lịch", ["🚗", "⛽", "🚕", "🚌", "🚆", "✈️", "🏨", "🧳", "🛵", "🚲", "🚢", "🌍"]],
