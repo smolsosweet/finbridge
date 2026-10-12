@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowDownRight, ArrowRight, ArrowUpRight, CalendarDays, ChevronDown, Info, Pencil, Plus, ReceiptText, Search, Wallet, X } from "lucide-react";
 import { EmptyState, Icon, Modal } from "./Ui";
@@ -454,6 +454,10 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
     setModal("");
   };
 
+  const overviewCardRef = useRef<HTMLDivElement>(null);
+  const [overviewHeight, setOverviewHeight] = useState<number | undefined>(undefined);
+  const [selectedDonutCurrency, setSelectedDonutCurrency] = useState(wallet.currency || "VND");
+
   const currencies = Array.from(new Set(state.wallets.map((item) => item.currency)));
   // Sample rows without a wallet ID belong to the first wallet with their currency.
   const rawDashboardData = dashboardSource === "sample"
@@ -570,19 +574,6 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const overviewRecords = state.transactions.filter((transaction) => isInSelectedPeriod(transaction.date));
   const incomeList = overviewRecords.filter((t) => t.type === "income");
   const expenseList = overviewRecords.filter((t) => t.type === "expense");
-  const incomeBreakdown = getCategoryBreakdown(incomeList, wallet.currency || "VND", INCOME_COLORS);
-  const expenseBreakdown = getCategoryBreakdown(expenseList, wallet.currency || "VND", EXPENSE_COLORS);
-  const periodIncomeTotal = incomeList.reduce((sum, t) => sum + t.amount, 0);
-  const periodExpenseTotal = expenseList.reduce((sum, t) => sum + t.amount, 0);
-  const periodNetTotal = periodIncomeTotal - periodExpenseTotal;
-
-  const selectedPeriodText = period === "Tháng"
-    ? `tháng ${month + 1} năm ${year}`
-    : period === "Năm"
-      ? `năm ${year}`
-      : period === "Ngày"
-        ? day
-        : `${from} – ${to}`;
 
   const walletFlows = state.wallets.map((item) => {
     const walletRecords = overviewRecords.filter((transaction) => transaction.wallet === item.id);
@@ -610,11 +601,122 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const incomeTotals = totalsByCurrency("income");
   const expenseTotals = totalsByCurrency("expense");
 
+  const activeDonutCurrency = currencies.includes(selectedDonutCurrency) ? selectedDonutCurrency : (currencies[0] || wallet.currency || "VND");
+  const currencyIncomeList = incomeList.filter((t) => (state.wallets.find((w) => w.id === t.wallet)?.currency || wallet.currency) === activeDonutCurrency);
+  const currencyExpenseList = expenseList.filter((t) => (state.wallets.find((w) => w.id === t.wallet)?.currency || wallet.currency) === activeDonutCurrency);
+  const donutIncomeBreakdown = getCategoryBreakdown(currencyIncomeList, activeDonutCurrency, INCOME_COLORS);
+  const donutExpenseBreakdown = getCategoryBreakdown(currencyExpenseList, activeDonutCurrency, EXPENSE_COLORS);
+  const donutIncomeTotal = currencyIncomeList.reduce((sum, t) => sum + t.amount, 0);
+  const donutExpenseTotal = currencyExpenseList.reduce((sum, t) => sum + t.amount, 0);
+
+  const formatVnDate = (isoDate: string) => {
+    if (!isoDate || !isoDate.includes("-")) return isoDate;
+    const parts = isoDate.split("-");
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  };
+
+  const selectedPeriodText = period === "Tháng"
+    ? `tháng ${month + 1} năm ${year}`
+    : period === "Năm"
+      ? `năm ${year}`
+      : period === "Ngày"
+        ? `ngày ${formatVnDate(day)}`
+        : period === "Tuần"
+          ? `tuần ${formatVnDate(from)} – ${formatVnDate(to)}`
+          : period === "Mọi thời gian"
+            ? "toàn thời gian"
+            : `${formatVnDate(from)} – ${formatVnDate(to)}`;
+
+  const periodDateLabel = period === "Tháng"
+    ? `tháng ${month + 1} năm ${year}`
+    : period === "Năm"
+      ? `Năm ${year}`
+      : period === "Ngày"
+        ? formatVnDate(day)
+        : period === "Tuần"
+          ? `${formatVnDate(from)} – ${formatVnDate(to)}`
+          : period === "Phạm vi tùy chỉnh"
+            ? `${formatVnDate(from)} – ${formatVnDate(to)}`
+            : "";
+
+  const setWeekFromDate = (dateStr: string) => {
+    try {
+      const { start, end } = calendarWeek(dateStr);
+      setFrom(start);
+      setTo(end);
+    } catch {
+      const d = new Date(dateStr + "T12:00:00");
+      if (!isNaN(d.getTime())) {
+        d.setDate(d.getDate() - (d.getDay() + 6) % 7);
+        const s = localDateKey(d);
+        d.setDate(d.getDate() + 6);
+        const e = localDateKey(d);
+        setFrom(s);
+        setTo(e);
+      }
+    }
+  };
+
+  const shiftWeek = (delta: number) => {
+    try {
+      const newStart = shiftCalendarWeek(from, delta);
+      const { start, end } = calendarWeek(newStart);
+      setFrom(start);
+      setTo(end);
+    } catch {}
+  };
+
+  const openPeriodDateModal = () => {
+    if (period === "Tháng") setModal("pickMonth");
+    else if (period === "Năm") setModal("pickYear");
+    else if (period === "Ngày") setModal("pickDay");
+    else if (period === "Tuần") setModal("pickWeek");
+    else if (period === "Phạm vi tùy chỉnh") setModal("pickCustomRange");
+  };
+
+  useEffect(() => {
+    if (!overviewCardRef.current) return;
+    const updateH = () => {
+      if (overviewCardRef.current && window.innerWidth > 640) {
+        setOverviewHeight(Math.round(overviewCardRef.current.offsetHeight));
+      } else {
+        setOverviewHeight(undefined);
+      }
+    };
+    updateH();
+    const ro = new ResizeObserver(() => updateH());
+    ro.observe(overviewCardRef.current);
+    window.addEventListener("resize", updateH);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", updateH);
+    };
+  }, [period, month, year, day, from, to, incomeTotals.length, expenseTotals.length]);
+
   const list = transactionsTab ? records : records.filter((t) => t.type === type);
   const close = () => setModal("");
   const addTransaction = () => navigate(state.settings.manual ? "addTransaction" : "addTransactionChatMode");
   const walletName = (name: string) => name === "." ? "Ví chính" : name;
-  const periodControls = <div className="r-period-controls"><button type="button" onClick={() => setModal("period")} className="r-period">{period}<CalendarDays size={17} /><ChevronDown size={17} /></button>{period !== "Mọi thời gian" && <button type="button" onClick={() => setModal(period === "Tháng" ? "month" : "range")} className="r-period-date">{period === "Tháng" ? "tháng " + (month + 1) + " năm " + year : period === "Năm" ? year : period === "Ngày" ? day : from + " – " + to}<ChevronDown size={15} /></button>}</div>;
+  const periodControls = (
+    <div className="r-period-controls">
+      <button type="button" onClick={() => setModal("period")} className="r-period">
+        {period}
+        <CalendarDays size={17} />
+        <ChevronDown size={17} />
+      </button>
+      {period !== "Mọi thời gian" && (
+        <button
+          type="button"
+          onClick={openPeriodDateModal}
+          className="r-period-date"
+          aria-label="Chọn thời gian chi tiết"
+        >
+          {periodDateLabel}
+          <ChevronDown size={15} />
+        </button>
+      )}
+    </div>
+  );
   const transactionRows = <div className="r-record-list">{list.map((t) => <button key={t.id} type="button" className="r-record" onClick={() => navigate("editTransaction?id=" + t.id)}><span className="r-category-symbol">{transactionsTab ? (t.category === "Thức ăn & Đồ uống" ? "🍔" : t.type === "income" ? "💰" : "🛍️") : t.type === "income" ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}</span><span><b>{t.category}</b><small>{t.title} · {t.date}</small></span><b className={t.type === "income" ? "r-income" : "r-expense"}>{t.type === "income" ? "+" : "−"}{money(t.amount, wallet.currency)}</b></button>)}</div>;
 
   const focusedBucket = buckets.find((b) => b.key === focusedBucketKey);
@@ -636,7 +738,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
         <div className="r-wallets">{state.wallets.map((w) => <div key={w.id} className={"r-wallet-card " + (w.id === wallet.id ? "is-selected" : "")}><button type="button" onClick={() => setWalletId(w.id)} className="r-wallet-content" aria-label={"Chọn ví " + w.name} aria-pressed={w.id === wallet.id}><Wallet size={19} /><span>{walletName(w.name)}</span><b>{formatHomeMoney(w.initial + state.transactions.reduce((a, t) => a + (t.wallet === w.id ? (t.type === "income" ? t.amount : -t.amount) : t.targetWallet === w.id ? t.amount : 0), 0), w.currency)}</b></button><button type="button" className="r-wallet-edit" aria-label={"Sửa ví " + w.name} onClick={() => navigate("walletSettings?wallet=" + w.id)}><Pencil size={14} /></button></div>)}<button type="button" className="r-new-wallet" onClick={openAddWalletModal}><Plus size={20} /><span>Thêm ví</span></button></div>
       </section>
       <section className="fb-finance-dashboard" aria-label="Dashboard dòng tiền">
-        <section className="fb-overview fb-finance-overview"><div className="fb-section-heading"><div><h2>Dòng tiền trong kỳ</h2><p className="fb-section-note">Tổng hợp từ tất cả ví đã tích hợp</p></div>{periodControls}</div>
+        <section ref={overviewCardRef} className="fb-overview fb-finance-overview"><div className="fb-section-heading"><div><h2>Dòng tiền trong kỳ</h2><p className="fb-section-note">Tổng hợp từ tất cả ví đã tích hợp</p></div>{periodControls}</div>
           <div className="r-summary fb-flow-summary-container">
             <div className="fb-flow-vertical-stack">
               <div className="fb-flow-row r-income" onClick={() => setModal("flowIncomeDetails")} role="button" tabIndex={0}>
@@ -945,7 +1047,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
             </>
           )}
         </section>
-        <section className="fb-wallet-flow-card"><div className="fb-section-heading"><div><h2>Chi & thu theo ví</h2><p className="fb-section-note">Số liệu của từng ví đã tích hợp trong kỳ</p></div><button type="button" className="fb-view-transactions" onClick={openAddWalletModal}><Plus size={15} />Thêm ví</button></div><div className="fb-wallet-flow-list">{walletFlows.map((flow) => <button type="button" key={flow.wallet.id} className={flow.wallet.id === wallet.id ? "is-selected" : ""} onClick={() => { setWalletId(flow.wallet.id); setDashboardCategory("all"); setFocusedBucketKey(null); }}><span><b>{walletName(flow.wallet.name)}</b><small>{flow.wallet.currency}</small></span><span className="fb-wallet-flow-numbers"><small className="r-expense">Chi {formatHomeMoney(flow.expense, flow.wallet.currency)}</small><small className="r-income">Thu {formatHomeMoney(flow.income, flow.wallet.currency)}</small></span><ArrowRight size={16} /></button>)}</div><button type="button" className="fb-manage-wallets" onClick={() => navigate("walletSettings?wallet=" + wallet.id)}>Quản lý ví<ArrowRight size={16} /></button></section>
+        <section className="fb-wallet-flow-card" style={overviewHeight ? { height: `${overviewHeight}px`, maxHeight: `${overviewHeight}px` } : undefined}><div className="fb-section-heading"><div><h2>Chi & thu theo ví</h2><p className="fb-section-note">Số liệu của từng ví đã tích hợp trong kỳ</p></div><button type="button" className="fb-view-transactions" onClick={openAddWalletModal}><Plus size={15} />Thêm ví</button></div><div className="fb-wallet-flow-list">{walletFlows.map((flow) => <button type="button" key={flow.wallet.id} className={flow.wallet.id === wallet.id ? "is-selected" : ""} onClick={() => { setWalletId(flow.wallet.id); setDashboardCategory("all"); setFocusedBucketKey(null); }}><span><b>{walletName(flow.wallet.name)}</b><small>{flow.wallet.currency}</small></span><span className="fb-wallet-flow-numbers"><small className="r-expense">Chi {formatHomeMoney(flow.expense, flow.wallet.currency)}</small><small className="r-income">Thu {formatHomeMoney(flow.income, flow.wallet.currency)}</small></span><ArrowRight size={16} /></button>)}</div><button type="button" className="fb-manage-wallets" onClick={() => navigate("walletSettings?wallet=" + wallet.id)}>Quản lý ví<ArrowRight size={16} /></button></section>
       </section>
       <div className="fb-workspace"><div className="fb-main-column">
         <section className="fb-overview"><div className="fb-section-heading"><h2>Dòng tiền trong kỳ</h2>{periodControls}</div>
@@ -968,14 +1070,303 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
         : modal === "flowIncomeDetails" ? "Chi tiết các khoản thu"
         : modal === "flowExpenseDetails" ? "Chi tiết các khoản chi"
         : modal === "flowComparisonChart" ? "Phân tích Thu & Chi trong kỳ"
+        : modal === "pickDay" ? "Chọn ngày"
+        : modal === "pickWeek" ? "Chọn tuần"
+        : modal === "pickMonth" ? "Chọn tháng"
+        : modal === "pickYear" ? "Chọn năm"
+        : modal === "pickCustomRange" ? "Chọn khoảng thời gian"
         : undefined}
       onClose={close}
       sheet={["period", "search", "wallet"].includes(modal)}
       wide={modal === "flowComparisonChart"}
     >
-      {modal === "period" && <div className="r-period-options">{["Ngày", "Tuần", "Tháng", "Năm", "Mọi thời gian", "Phạm vi tùy chỉnh"].map((p) => <button key={p} type="button" className={p === period ? "is-selected" : ""} onClick={() => { setPeriod(p); if (p === "Tuần") { const date = new Date(day + "T12:00:00"); date.setDate(date.getDate() - (date.getDay() + 6) % 7); const start = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-"); date.setDate(date.getDate() + 6); setFrom(start); setTo([date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-")); } setModal(p === "Phạm vi tùy chỉnh" ? "range" : ""); }}><CalendarDays size={22} />{p}</button>)}</div>}
-      {modal === "month" && <div className="r-month-picker"><aside><span>Thg {month + 1} {year}</span><button type="button" onClick={() => setYear(year - 1)}>⌃</button><b>{year}</b><button type="button" onClick={() => setYear(year + 1)}>⌄</button></aside><div><div className="r-month-grid">{Array.from({ length: 12 }, (_, i) => <button key={i} type="button" className={i === month ? "active" : ""} onClick={() => setMonth(i)}>Thg {i + 1}</button>)}</div><footer><button type="button" onClick={close}>Huỷ</button><button type="button" onClick={close}>OK</button></footer></div></div>}
-      {modal === "range" && <div className="r-form"><label>Ngày<input aria-label="Ngày" type="date" value={day} onChange={(e) => setDay(e.target.value)} /></label><label>Từ ngày<input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label><label>Đến ngày<input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label><input aria-label="Năm" type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} /><button type="button" className="r-primary" onClick={close}>Xác nhận</button></div>}
+      {modal === "period" && (
+        <div className="r-period-options">
+          {["Ngày", "Tuần", "Tháng", "Năm", "Mọi thời gian", "Phạm vi tùy chỉnh"].map((p) => (
+            <button
+              key={p}
+              type="button"
+              className={p === period ? "is-selected" : ""}
+              onClick={() => {
+                setPeriod(p);
+                if (p === "Tuần") {
+                  setWeekFromDate(day);
+                }
+                if (p === "Phạm vi tùy chỉnh") setModal("pickCustomRange");
+                else if (p === "Ngày") setModal("pickDay");
+                else if (p === "Tuần") setModal("pickWeek");
+                else if (p === "Tháng") setModal("pickMonth");
+                else if (p === "Năm") setModal("pickYear");
+                else setModal("");
+              }}
+            >
+              <CalendarDays size={22} />
+              {p}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {modal === "pickDay" && (
+        <div className="fb-date-picker-modal">
+          <p className="fb-picker-subheading">Chọn ngày để theo dõi thu chi trong ngày cụ thể.</p>
+          <div className="fb-picker-field">
+            <label className="fb-picker-label" htmlFor="pick-day-input">Chọn ngày</label>
+            <input
+              id="pick-day-input"
+              type="date"
+              className="fb-input"
+              value={day}
+              onChange={(e) => setDay(e.target.value)}
+            />
+          </div>
+          <div className="fb-quick-date-row">
+            <button
+              type="button"
+              className={"fb-quick-date-btn " + (day === "2026-10-12" ? "active" : "")}
+              onClick={() => setDay("2026-10-12")}
+            >
+              Hôm nay
+            </button>
+            <button
+              type="button"
+              className={"fb-quick-date-btn " + (day === "2026-10-11" ? "active" : "")}
+              onClick={() => setDay("2026-10-11")}
+            >
+              Hôm qua
+            </button>
+          </div>
+          <div className="fb-picker-selected-preview">
+            <span>Ngày được chọn:</span>
+            <b>{formatVnDate(day)}</b>
+          </div>
+          <div className="fb-modal-actions">
+            <button type="button" className="r-secondary" onClick={close}>Đóng</button>
+            <button type="button" className="r-primary" onClick={close}>Xác nhận</button>
+          </div>
+        </div>
+      )}
+
+      {modal === "pickWeek" && (
+        <div className="fb-date-picker-modal">
+          <p className="fb-picker-subheading">Chọn tuần để theo dõi dòng tiền trong chu kỳ 7 ngày (Thứ 2 – Chủ nhật).</p>
+          <div className="fb-week-stepper">
+            <button
+              type="button"
+              className="fb-stepper-btn"
+              onClick={() => shiftWeek(-1)}
+              aria-label="Tuần trước"
+            >
+              ‹
+            </button>
+            <div className="fb-week-stepper-display">
+              <span className="fb-week-stepper-label">Tuần hiện tại</span>
+              <b>{formatVnDate(from)} – {formatVnDate(to)}</b>
+            </div>
+            <button
+              type="button"
+              className="fb-stepper-btn"
+              onClick={() => shiftWeek(1)}
+              aria-label="Tuần sau"
+            >
+              ›
+            </button>
+          </div>
+          <div className="fb-picker-field">
+            <label className="fb-picker-label" htmlFor="pick-week-date">Hoặc chọn một ngày bất kỳ trong tuần</label>
+            <input
+              id="pick-week-date"
+              type="date"
+              className="fb-input"
+              value={day}
+              onChange={(e) => {
+                setDay(e.target.value);
+                setWeekFromDate(e.target.value);
+              }}
+            />
+          </div>
+          <div className="fb-quick-date-row">
+            <button
+              type="button"
+              className="fb-quick-date-btn"
+              onClick={() => {
+                setDay("2026-10-12");
+                setWeekFromDate("2026-10-12");
+              }}
+            >
+              Tuần này
+            </button>
+            <button
+              type="button"
+              className="fb-quick-date-btn"
+              onClick={() => {
+                setDay("2026-10-05");
+                setWeekFromDate("2026-10-05");
+              }}
+            >
+              Tuần trước
+            </button>
+          </div>
+          <div className="fb-modal-actions">
+            <button type="button" className="r-secondary" onClick={close}>Đóng</button>
+            <button type="button" className="r-primary" onClick={close}>Xác nhận</button>
+          </div>
+        </div>
+      )}
+
+      {modal === "pickMonth" && (
+        <div className="fb-date-picker-modal">
+          <div className="fb-month-year-header">
+            <button
+              type="button"
+              className="fb-stepper-btn"
+              onClick={() => setYear(year - 1)}
+              aria-label="Năm trước"
+            >
+              ‹
+            </button>
+            <span className="fb-year-display">Năm {year}</span>
+            <button
+              type="button"
+              className="fb-stepper-btn"
+              onClick={() => setYear(year + 1)}
+              aria-label="Năm sau"
+            >
+              ›
+            </button>
+          </div>
+          <div className="fb-month-grid">
+            {Array.from({ length: 12 }, (_, i) => (
+              <button
+                key={i}
+                type="button"
+                className={"fb-month-cell " + (i === month ? "active" : "")}
+                onClick={() => setMonth(i)}
+              >
+                Tháng {i + 1}
+              </button>
+            ))}
+          </div>
+          <div className="fb-picker-selected-preview">
+            <span>Tháng đã chọn:</span>
+            <b>Tháng {month + 1} năm {year}</b>
+          </div>
+          <div className="fb-modal-actions">
+            <button type="button" className="r-secondary" onClick={close}>Đóng</button>
+            <button type="button" className="r-primary" onClick={close}>Xác nhận</button>
+          </div>
+        </div>
+      )}
+
+      {modal === "pickYear" && (
+        <div className="fb-date-picker-modal">
+          <p className="fb-picker-subheading">Chọn năm để xem tổng kết tài chính cả năm.</p>
+          <div className="fb-year-stepper">
+            <button
+              type="button"
+              className="fb-stepper-btn"
+              onClick={() => setYear(year - 1)}
+              aria-label="Năm trước"
+            >
+              ‹
+            </button>
+            <span className="fb-big-year">{year}</span>
+            <button
+              type="button"
+              className="fb-stepper-btn"
+              onClick={() => setYear(year + 1)}
+              aria-label="Năm sau"
+            >
+              ›
+            </button>
+          </div>
+          <div className="fb-year-grid">
+            {[2023, 2024, 2025, 2026, 2027, 2028].map((y) => (
+              <button
+                key={y}
+                type="button"
+                className={"fb-year-cell " + (y === year ? "active" : "")}
+                onClick={() => setYear(y)}
+              >
+                {y}
+              </button>
+            ))}
+          </div>
+          <div className="fb-modal-actions">
+            <button type="button" className="r-secondary" onClick={close}>Đóng</button>
+            <button type="button" className="r-primary" onClick={close}>Xác nhận</button>
+          </div>
+        </div>
+      )}
+
+      {modal === "pickCustomRange" && (
+        <div className="fb-date-picker-modal">
+          <p className="fb-picker-subheading">Tùy chọn khoảng thời gian từ ngày đến ngày.</p>
+          <div className="fb-range-inputs">
+            <div className="fb-picker-field">
+              <label className="fb-picker-label" htmlFor="custom-from-date">Từ ngày</label>
+              <input
+                id="custom-from-date"
+                type="date"
+                className="fb-input"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+              />
+            </div>
+            <div className="fb-picker-field">
+              <label className="fb-picker-label" htmlFor="custom-to-date">Đến ngày</label>
+              <input
+                id="custom-to-date"
+                type="date"
+                className="fb-input"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="fb-quick-date-row">
+            <button
+              type="button"
+              className="fb-quick-date-btn"
+              onClick={() => {
+                setFrom("2026-10-05");
+                setTo("2026-10-12");
+              }}
+            >
+              7 ngày qua
+            </button>
+            <button
+              type="button"
+              className="fb-quick-date-btn"
+              onClick={() => {
+                setFrom("2026-09-12");
+                setTo("2026-10-12");
+              }}
+            >
+              30 ngày qua
+            </button>
+            <button
+              type="button"
+              className="fb-quick-date-btn"
+              onClick={() => {
+                setFrom("2026-10-01");
+                setTo("2026-10-31");
+              }}
+            >
+              Tháng này
+            </button>
+          </div>
+          <div className="fb-picker-selected-preview">
+            <span>Khoảng thời gian:</span>
+            <b>{formatVnDate(from)} – {formatVnDate(to)}</b>
+          </div>
+          <div className="fb-modal-actions">
+            <button type="button" className="r-secondary" onClick={close}>Hủy</button>
+            <button type="button" className="r-primary" onClick={close}>Áp dụng</button>
+          </div>
+        </div>
+      )}
+
       {modal === "search" && <div className="r-form"><input aria-label="Tìm kiếm giao dịch" placeholder="Tìm kiếm giao dịch..." value={search} onChange={(e) => setSearch(e.target.value)} /><button type="button" className="r-primary" onClick={close}>Tìm kiếm</button>{search && <button type="button" className="r-secondary" onClick={() => { setSearch(""); close(); }}><X size={16} />Xóa tìm kiếm</button>}</div>}
       {modal === "wallet" && <div className="r-wallet-options">{state.wallets.map((w) => <button key={w.id} type="button" onClick={() => { setWalletId(w.id); close(); }} className={w.id === wallet.id ? "active" : ""}><Icon code="f555" />{w.name}<span>{formatHomeMoney(w.initial, w.currency)}</span></button>)}</div>}
       {modal === "homeTotals" && <div className="r-breakdown"><p><span>Tổng số dư tất cả ví</span>{walletBalanceTotals}</p><p className="r-expense"><span>Tổng chi từ các ví</span>{formatTotals("expense")}</p><p className="r-income"><span>Tổng thu từ các ví</span>{formatTotals("income")}</p><p className="r-breakdown-total"><span>Thay đổi ròng</span>{formatTotals("net")}</p><small className="fb-modal-note">Các tiền tệ được tách riêng, không quy đổi tỷ giá.</small></div>}
@@ -1080,7 +1471,17 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
         <div className="fb-flow-details-modal">
           <div className="fb-tx-modal-summary-pill">
             <span>Kỳ: <b>{selectedPeriodText}</b></span>
-            <b className="r-income">+{formatHomeMoney(periodIncomeTotal, wallet.currency || "VND")}</b>
+            <div className="fb-tx-modal-totals">
+              {incomeTotals.length === 0 ? (
+                <b className="r-income">+0 {wallet.currency || "VND"}</b>
+              ) : (
+                incomeTotals.map((item) => (
+                  <b key={item.currency} className="r-income">
+                    +{formatHomeMoney(item.amount, item.currency)}
+                  </b>
+                ))
+              )}
+            </div>
           </div>
           {incomeList.length === 0 ? (
             <div className="fb-modal-empty-state">
@@ -1125,7 +1526,17 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
         <div className="fb-flow-details-modal">
           <div className="fb-tx-modal-summary-pill">
             <span>Kỳ: <b>{selectedPeriodText}</b></span>
-            <b className="r-expense">−{formatHomeMoney(periodExpenseTotal, wallet.currency || "VND")}</b>
+            <div className="fb-tx-modal-totals">
+              {expenseTotals.length === 0 ? (
+                <b className="r-expense">−0 {wallet.currency || "VND"}</b>
+              ) : (
+                expenseTotals.map((item) => (
+                  <b key={item.currency} className="r-expense">
+                    −{formatHomeMoney(item.amount, item.currency)}
+                  </b>
+                ))
+              )}
+            </div>
           </div>
           {expenseList.length === 0 ? (
             <div className="fb-modal-empty-state">
@@ -1171,32 +1582,60 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
           <div className="fb-donut-summary-bar">
             <div>
               <span>Tổng thu ({selectedPeriodText})</span>
-              <b className="r-income">+{formatHomeMoney(periodIncomeTotal, wallet.currency || "VND")}</b>
+              <div className="fb-flow-amounts-wrap">
+                {incomeTotals.length === 0 ? (
+                  <b className="r-income">+0 {wallet.currency || "VND"}</b>
+                ) : (
+                  incomeTotals.map((it) => (
+                    <b key={it.currency} className="r-income">+{formatHomeMoney(it.amount, it.currency)}</b>
+                  ))
+                )}
+              </div>
             </div>
             <div>
               <span>Tổng chi ({selectedPeriodText})</span>
-              <b className="r-expense">−{formatHomeMoney(periodExpenseTotal, wallet.currency || "VND")}</b>
-            </div>
-            <div>
-              <span>Thay đổi ròng</span>
-              <b className={periodNetTotal >= 0 ? "r-income" : "r-expense"}>
-                {formatHomeMoney(periodNetTotal, wallet.currency || "VND", true)}
-              </b>
+              <div className="fb-flow-amounts-wrap">
+                {expenseTotals.length === 0 ? (
+                  <b className="r-expense">−0 {wallet.currency || "VND"}</b>
+                ) : (
+                  expenseTotals.map((et) => (
+                    <b key={et.currency} className="r-expense">−{formatHomeMoney(et.amount, et.currency)}</b>
+                  ))
+                )}
+              </div>
             </div>
           </div>
+
+          {currencies.length > 1 && (
+            <div className="fb-donut-currency-switcher">
+              <span>Đơn vị tiền tệ hiển thị biểu đồ:</span>
+              <div className="r-type-pills">
+                {currencies.map((curr) => (
+                  <button
+                    key={curr}
+                    type="button"
+                    className={activeDonutCurrency === curr ? "active" : ""}
+                    onClick={() => setSelectedDonutCurrency(curr)}
+                  >
+                    {curr}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="fb-donut-grid">
             <SvgDonut
               type="income"
-              items={incomeBreakdown.items}
-              total={periodIncomeTotal}
-              currency={wallet.currency || "VND"}
+              items={donutIncomeBreakdown.items}
+              total={donutIncomeTotal}
+              currency={activeDonutCurrency}
             />
             <SvgDonut
               type="expense"
-              items={expenseBreakdown.items}
-              total={periodExpenseTotal}
-              currency={wallet.currency || "VND"}
+              items={donutExpenseBreakdown.items}
+              total={donutExpenseTotal}
+              currency={activeDonutCurrency}
             />
           </div>
         </div>
