@@ -20,7 +20,6 @@ const COPY = {
     today: "Hôm nay",
     prevMonth: "Tháng trước",
     nextMonth: "Tháng sau",
-    allCurrencies: "Tất cả tiền tệ",
     currency: "Tiền tệ",
     totalMonth: "Tổng tháng",
     income: "Thu",
@@ -28,6 +27,8 @@ const COPY = {
     net: "Chênh lệch",
     transactions: "giao dịch",
     noTransactions: "Không có giao dịch nào trong ngày này.",
+    noTransactionsInCurrency: "Không có giao dịch nào bằng tiền tệ này trong ngày.",
+    otherCurrencyNotice: "Ngày này có thêm giao dịch:",
     addForDay: "Thêm giao dịch ngày này",
     weekDays: ["T2", "T3", "T4", "T5", "T6", "T7", "CN"],
     close: "Đóng",
@@ -38,7 +39,6 @@ const COPY = {
     today: "Today",
     prevMonth: "Previous month",
     nextMonth: "Next month",
-    allCurrencies: "All currencies",
     currency: "Currency",
     totalMonth: "Month totals",
     income: "Income",
@@ -46,6 +46,8 @@ const COPY = {
     net: "Net",
     transactions: "transactions",
     noTransactions: "No transactions on this day.",
+    noTransactionsInCurrency: "No transactions in this currency on this day.",
+    otherCurrencyNotice: "This date also has records in:",
     addForDay: "Add transaction for this date",
     weekDays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     close: "Close",
@@ -56,7 +58,6 @@ const COPY = {
     today: "今天",
     prevMonth: "上个月",
     nextMonth: "下个月",
-    allCurrencies: "全部货币",
     currency: "货币",
     totalMonth: "月度汇总",
     income: "收入",
@@ -64,6 +65,8 @@ const COPY = {
     net: "结余",
     transactions: "笔交易",
     noTransactions: "当日暂无交易记录。",
+    noTransactionsInCurrency: "当日暂无此币种的交易记录。",
+    otherCurrencyNotice: "当日还有其他币种流水：",
     addForDay: "为此日期添加交易",
     weekDays: ["一", "二", "三", "四", "五", "六", "日"],
     close: "关闭",
@@ -108,7 +111,7 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
 
   // Wallets map & records pool
   const walletMap = useMemo(() => new Map(state.wallets.map((w) => [w.id, w])), [state.wallets]);
-  const primaryCurrency = state.wallets[0]?.currency || "VND";
+  const primaryCurrency = (state.wallets[0]?.currency || "VND").toUpperCase();
 
   type AnyRecord = {
     id: string;
@@ -146,7 +149,14 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
     return Array.from(set).sort();
   }, [state.wallets, allRecords, walletMap]);
 
-  const [selectedCurrency, setSelectedCurrency] = useState<string>("all");
+  const [selectedCurrency, setSelectedCurrency] = useState<string>(() => {
+    return availableCurrencies.includes(primaryCurrency) ? primaryCurrency : (availableCurrencies[0] || "VND");
+  });
+
+  const activeCurrency = useMemo(() => {
+    if (availableCurrencies.includes(selectedCurrency)) return selectedCurrency;
+    return availableCurrencies[0] || primaryCurrency;
+  }, [availableCurrencies, selectedCurrency, primaryCurrency]);
 
   const currencyOf = useCallback(
     (r: AnyRecord) => (r.currency || (r.wallet ? walletMap.get(r.wallet)?.currency : undefined) || primaryCurrency).toUpperCase(),
@@ -181,17 +191,16 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
   }, [allRecords, monthKeyPrefix]);
 
   const monthTotals = useMemo(() => {
-    const targetCurrency = selectedCurrency === "all" ? primaryCurrency : selectedCurrency;
     let income = 0;
     let expense = 0;
     monthRecords.forEach((r) => {
-      if (currencyOf(r) === targetCurrency) {
+      if (currencyOf(r) === activeCurrency) {
         if (r.type === "income") income += r.amount;
         else if (r.type === "expense") expense += r.amount;
       }
     });
-    return { income, expense, net: income - expense, currency: targetCurrency };
-  }, [monthRecords, selectedCurrency, primaryCurrency, currencyOf]);
+    return { income, expense, net: income - expense, currency: activeCurrency };
+  }, [monthRecords, activeCurrency, currencyOf]);
 
   // Calendar cells matrix: Monday to Sunday
   const calendarCells = useMemo(() => {
@@ -208,14 +217,13 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
 
       const dayTxs = allRecords.filter((r) => r.date === cellDateStr);
 
-      const displayCurrency = selectedCurrency === "all" ? primaryCurrency : selectedCurrency;
       let dayIncome = 0;
       let dayExpense = 0;
       let hasOtherCurrency = false;
 
       dayTxs.forEach((r) => {
         const c = currencyOf(r);
-        if (c === displayCurrency) {
+        if (c === activeCurrency) {
           if (r.type === "income") dayIncome += r.amount;
           else if (r.type === "expense") dayExpense += r.amount;
         } else {
@@ -233,31 +241,39 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
         expense: dayExpense,
         hasOtherCurrency,
         txCount: dayTxs.length,
-        displayCurrency,
+        displayCurrency: activeCurrency,
       };
     });
-  }, [year, month, todayStr, selectedDate, allRecords, selectedCurrency, primaryCurrency, currencyOf]);
+  }, [year, month, todayStr, selectedDate, allRecords, activeCurrency, currencyOf]);
 
   // Selected Day records
-  const selectedDayRecords = useMemo(() => {
+  const selectedDayAllRecords = useMemo(() => {
     return allRecords.filter((r) => r.date === selectedDate);
   }, [allRecords, selectedDate]);
 
-  // Selected Day Totals by currency
-  const selectedDayCurrencyTotals = useMemo(() => {
-    const totalsMap = new Map<string, { income: number; expense: number }>();
-    selectedDayRecords.forEach((r) => {
+  const selectedDayRecords = useMemo(() => {
+    return selectedDayAllRecords.filter((r) => currencyOf(r) === activeCurrency);
+  }, [selectedDayAllRecords, activeCurrency, currencyOf]);
+
+  const otherCurrenciesOnDate = useMemo(() => {
+    const set = new Set<string>();
+    selectedDayAllRecords.forEach((r) => {
       const c = currencyOf(r);
-      const current = totalsMap.get(c) || { income: 0, expense: 0 };
-      if (r.type === "income") current.income += r.amount;
-      else if (r.type === "expense") current.expense += r.amount;
-      totalsMap.set(c, current);
+      if (c !== activeCurrency) set.add(c);
     });
-    return Array.from(totalsMap.entries()).map(([curr, data]) => ({
-      currency: curr,
-      ...data,
-    }));
-  }, [selectedDayRecords, currencyOf]);
+    return Array.from(set).sort();
+  }, [selectedDayAllRecords, activeCurrency, currencyOf]);
+
+  // Selected Day Totals for active currency
+  const selectedDayTotals = useMemo(() => {
+    let income = 0;
+    let expense = 0;
+    selectedDayRecords.forEach((r) => {
+      if (r.type === "income") income += r.amount;
+      else if (r.type === "expense") expense += r.amount;
+    });
+    return { income, expense };
+  }, [selectedDayRecords]);
 
   // Format full date header: e.g. "Thứ Tư, 08/10/2026"
   const formattedSelectedDateHeader = useMemo(() => {
@@ -281,7 +297,7 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
   return (
     <Modal title={t.title} wide onClose={onClose}>
       <div className="fb-calendar-ledger-modal">
-        {/* Month Stepper & Quick Tools */}
+        {/* Month Stepper & Currency Selector */}
         <div className="fb-cal-controls-row">
           <div className="fb-cal-month-stepper">
             <button
@@ -312,25 +328,29 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
             </button>
           </div>
 
-          {availableCurrencies.length > 1 && (
-            <div className="fb-cal-currency-switcher" role="tablist" aria-label={t.currency}>
-              <button
-                type="button"
-                className={`fb-cal-curr-btn ${selectedCurrency === "all" ? "active" : ""}`}
-                onClick={() => setSelectedCurrency("all")}
+          {availableCurrencies.length > 1 ? (
+            <div className="fb-cal-currency-selector-box">
+              <label htmlFor="fb-cal-currency-dropdown" className="fb-cal-curr-label">
+                {t.currency}:
+              </label>
+              <select
+                id="fb-cal-currency-dropdown"
+                className="fb-cal-currency-select"
+                value={activeCurrency}
+                onChange={(e) => setSelectedCurrency(e.target.value)}
+                aria-label={t.currency}
               >
-                {t.allCurrencies} ({primaryCurrency})
-              </button>
-              {availableCurrencies.map((c) => (
-                <button
-                  type="button"
-                  key={c}
-                  className={`fb-cal-curr-btn ${selectedCurrency === c ? "active" : ""}`}
-                  onClick={() => setSelectedCurrency(c)}
-                >
-                  {c}
-                </button>
-              ))}
+                {availableCurrencies.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="fb-cal-currency-single-badge" title={t.currency}>
+              <span className="fb-cal-curr-label">{t.currency}:</span>
+              <b className="fb-cal-curr-val">{activeCurrency}</b>
             </div>
           )}
         </div>
@@ -395,7 +415,7 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
                     )}
                   </div>
                   {cell.hasOtherCurrency && (
-                    <span className="fb-cal-multi-dot" title="Có giao dịch ngoại tệ">•</span>
+                    <span className="fb-cal-multi-dot" title="Có giao dịch ngoại tệ khác">•</span>
                   )}
                 </button>
               );
@@ -409,36 +429,55 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
             <div>
               <h3 className="fb-cal-selected-title">{formattedSelectedDateHeader}</h3>
               <p className="fb-cal-selected-meta">
-                {selectedDayRecords.length} {t.transactions}
+                {selectedDayRecords.length} {t.transactions} ({activeCurrency})
               </p>
             </div>
-            {selectedDayCurrencyTotals.length > 0 && (
+            {(selectedDayTotals.income > 0 || selectedDayTotals.expense > 0) && (
               <div className="fb-cal-selected-totals">
-                {selectedDayCurrencyTotals.map((tot) => (
-                  <div key={tot.currency} className="fb-cal-selected-tot-row">
-                    {tot.income > 0 && (
-                      <span className="r-income">+{formatHomeMoney(tot.income, tot.currency)}</span>
-                    )}
-                    {tot.expense > 0 && (
-                      <span className="r-expense">−{formatHomeMoney(tot.expense, tot.currency)}</span>
-                    )}
-                  </div>
-                ))}
+                <div className="fb-cal-selected-tot-row">
+                  {selectedDayTotals.income > 0 && (
+                    <span className="r-income">+{formatHomeMoney(selectedDayTotals.income, activeCurrency)}</span>
+                  )}
+                  {selectedDayTotals.expense > 0 && (
+                    <span className="r-expense">−{formatHomeMoney(selectedDayTotals.expense, activeCurrency)}</span>
+                  )}
+                </div>
               </div>
             )}
           </div>
 
+          {otherCurrenciesOnDate.length > 0 && (
+            <div className="fb-cal-other-currs-banner">
+              <span>{t.otherCurrencyNotice}</span>
+              <div className="fb-cal-other-currs-actions">
+                {otherCurrenciesOnDate.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    className="fb-cal-switch-curr-btn"
+                    onClick={() => setSelectedCurrency(c)}
+                  >
+                    {c} ➔
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {selectedDayRecords.length === 0 ? (
             <div className="fb-cal-empty-card">
               <CalendarDays size={26} />
-              <p>{t.noTransactions}</p>
+              <p>
+                {selectedDayAllRecords.length > 0
+                  ? `${t.noTransactionsInCurrency} (${activeCurrency})`
+                  : t.noTransactions}
+              </p>
             </div>
           ) : (
             <div className="fb-cal-tx-list">
               {selectedDayRecords.map((record) => {
                 const w = record.wallet ? walletMap.get(record.wallet) : undefined;
                 const wName = w ? (w.name === "." ? (lang === "vi" ? "Ví chính" : lang === "zh" ? "主钱包" : "Main wallet") : w.name) : (record.wallet || "");
-                const recCurrency = currencyOf(record);
                 const isInc = record.type === "income";
                 const isExp = record.type === "expense";
                 const sign = isInc ? "+" : isExp ? "−" : "";
@@ -458,7 +497,7 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
                       </small>
                     </div>
                     <b className={`fb-cal-tx-amount ${isInc ? "r-income" : isExp ? "r-expense" : ""}`}>
-                      {sign}{formatHomeMoney(record.amount, recCurrency)}
+                      {sign}{formatHomeMoney(record.amount, activeCurrency)}
                     </b>
                   </div>
                 );

@@ -817,7 +817,7 @@
 .fb-header-calendar-btn svg{color:var(--r-teal);flex-shrink:0}
 
 /* Calendar Ledger Modal */
-.fb-calendar-ledger-modal{display:flex;flex-direction:column;gap:18px;max-height:82vh;overflow-y:auto;padding-right:2px}
+.fb-calendar-ledger-modal{display:flex;flex-direction:column;gap:18px}
 .fb-cal-controls-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
 .fb-cal-month-stepper{display:flex;align-items:center;gap:8px}
 .fb-cal-nav-btn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid var(--r-line);background:var(--r-surface);color:var(--r-text);cursor:pointer;transition:all .15s}
@@ -825,10 +825,14 @@
 .fb-cal-month-heading{font-size:16px;font-weight:700;color:var(--r-text);min-width:130px;text-align:center;text-transform:capitalize}
 .fb-cal-today-pill{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:8px;border:1px solid var(--r-line);background:var(--r-bg);color:var(--r-muted);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
 .fb-cal-today-pill:hover{color:var(--r-teal);background:var(--r-mint);border-color:rgba(20,125,120,.25)}
-.fb-cal-currency-switcher{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.fb-cal-curr-btn{padding:5px 11px;border-radius:8px;border:1px solid var(--r-line);background:var(--r-bg);color:var(--r-muted);font-size:11.5px;font-weight:500;cursor:pointer;transition:all .15s}
-.fb-cal-curr-btn:hover{color:var(--r-text);background:var(--r-surface)}
-.fb-cal-curr-btn.active{background:var(--r-mint);border-color:rgba(20,125,120,.35);color:var(--r-teal);font-weight:600}
+
+/* Currency Dropdown & Single Badge */
+.fb-cal-currency-selector-box{display:inline-flex;align-items:center;gap:8px;background:#f8fafc;border:1px solid var(--r-line);border-radius:10px;padding:4px 10px}
+.fb-cal-curr-label{font-size:12px;font-weight:600;color:var(--r-muted);white-space:nowrap}
+.fb-cal-currency-select{appearance:none;background:white;border:1px solid var(--r-line);border-radius:7px;padding:4px 24px 4px 10px;font-size:12.5px;font-weight:700;color:var(--r-teal);cursor:pointer;outline:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%230f766e' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 7px center;transition:all .15s}
+.fb-cal-currency-select:hover,.fb-cal-currency-select:focus{border-color:var(--r-teal);box-shadow:0 0 0 2px rgba(20,125,120,.15)}
+.fb-cal-currency-single-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:9px;background:var(--r-mint);border:1px solid rgba(20,125,120,.25);font-size:12px}
+.fb-cal-curr-val{font-weight:700;color:var(--r-teal)}
 
 /* Month Summary Bar */
 .fb-cal-month-summary-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;background:#f8fafc;border:1px solid var(--r-line);border-radius:12px;padding:12px 14px;text-align:center}
@@ -864,10 +868,14 @@
 .fb-cal-selected-meta{font-size:12px;color:var(--r-muted);margin:2px 0 0}
 .fb-cal-selected-totals{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
 .fb-cal-selected-tot-row{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600}
+.fb-cal-other-currs-banner{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-radius:10px;background:#f8fafc;border:1px dashed var(--r-line);font-size:12px;color:var(--r-muted)}
+.fb-cal-other-currs-actions{display:flex;align-items:center;gap:6px}
+.fb-cal-switch-curr-btn{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;border:1px solid rgba(20,125,120,.3);background:white;color:var(--r-teal);font-size:11.5px;font-weight:600;cursor:pointer;transition:all .15s}
+.fb-cal-switch-curr-btn:hover{background:var(--r-mint);border-color:var(--r-teal)}
 .fb-cal-empty-card{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:22px;background:#f8fafc;border:1px dashed var(--r-line);border-radius:12px;text-align:center;color:var(--r-muted);font-size:12.5px}
 .fb-cal-empty-card svg{color:var(--r-teal);opacity:.6}
 .fb-cal-empty-card p{margin:0}
-.fb-cal-tx-list{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;padding-right:2px}
+.fb-cal-tx-list{display:flex;flex-direction:column;gap:8px}
 .fb-cal-tx-card{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--r-line);border-radius:12px;background:var(--r-surface);transition:background .15s}
 .fb-cal-tx-card:hover{background:#f8fafc}
 .fb-cal-tx-icon{width:36px;height:36px;border-radius:9px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
