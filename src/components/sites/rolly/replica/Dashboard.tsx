@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ArrowDownRight, ArrowRight, ArrowUpRight, CalendarDays, ChevronDown, Info, Pencil, Plus, ReceiptText, Search, Trophy, Wallet, X } from "lucide-react";
 import { EmptyState, Icon, Modal } from "./Ui";
@@ -284,6 +284,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
   const dashboardCurrency = wallet.currency;
   const [dashboardWeek, setDashboardWeek] = useState(() => calendarWeek(localDateKey(new Date())).start);
   const [focusedBucketKey, setFocusedBucketKey] = useState<string | null>(null);
+  const dateInputRef = useRef<HTMLInputElement>(null);
 
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState("");
@@ -470,10 +471,6 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
 
           <div className="fb-chart-controls">
             <div className="fb-chart-date-bar">
-              <div className="fb-chart-range-pill">
-                <CalendarDays size={15} />
-                <span>{formattedWeekRange}</span>
-              </div>
               <div className="fb-chart-nav-cluster">
                 <button
                   type="button"
@@ -483,12 +480,43 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                 >
                   ‹
                 </button>
-                <div className="fb-date-input-box">
+                <div
+                  className="fb-chart-range-pill"
+                  role="button"
+                  tabIndex={0}
+                  title={t.selectWeek}
+                  onClick={() => {
+                    const input = dateInputRef.current;
+                    if (input) {
+                      if ("showPicker" in input && typeof input.showPicker === "function") {
+                        try { input.showPicker(); return; } catch {}
+                      }
+                      input.focus();
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      const input = dateInputRef.current;
+                      if (input) {
+                        if ("showPicker" in input && typeof input.showPicker === "function") {
+                          try { input.showPicker(); return; } catch {}
+                        }
+                        input.focus();
+                      }
+                    }
+                  }}
+                >
+                  <CalendarDays size={15} />
+                  <span>{formattedWeekRange}</span>
                   <input
+                    ref={dateInputRef}
                     type="date"
                     aria-label={t.selectWeek}
                     value={dashboardWeek}
-                    onInput={(event) => {
+                    tabIndex={-1}
+                    className="fb-hidden-date-input"
+                    onChange={(event) => {
                       if (event.currentTarget.validity.valid && event.currentTarget.value) {
                         setDashboardWeek(calendarWeek(event.currentTarget.value).start);
                         setFocusedBucketKey(null);

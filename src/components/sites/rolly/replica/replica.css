@@ -457,14 +457,14 @@
 /* Spending chart controls: clean, level, fully aligned */
 .fb-chart-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:20px 0 16px;flex-wrap:wrap}
 .fb-chart-date-bar{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap}
-.fb-chart-range-pill{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 14px;background:var(--r-mint);border:1px solid #83bcb2;border-radius:9px;font-size:12px;font-weight:600;color:var(--r-teal);white-space:nowrap}
+.fb-chart-nav-cluster{display:inline-flex;align-items:center;gap:6px;flex-wrap:nowrap}
+.fb-chart-range-pill{position:relative;display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 13px;background:var(--r-surface);border:1px solid var(--r-line);border-radius:8px;font-size:12px;font-weight:600;color:var(--r-text);white-space:nowrap;cursor:pointer;user-select:none;transition:background .15s,border-color .15s}
+.fb-chart-range-pill:hover{background:var(--r-mint);border-color:#83bcb2;color:var(--r-teal)}
+.fb-chart-range-pill:focus-visible,.fb-nav-btn:focus-visible,.fb-chart-this-week-btn:focus-visible{outline:2px solid var(--r-teal);outline-offset:2px}
 .fb-chart-range-pill svg{color:var(--r-teal);flex-shrink:0}
-.fb-chart-nav-cluster{display:inline-flex;align-items:center;gap:5px;flex-wrap:nowrap}
+.fb-hidden-date-input{position:absolute;inset:0;width:100%;height:100%;opacity:0;pointer-events:none}
 .fb-nav-btn{width:38px;height:38px;border:1px solid var(--r-line);border-radius:8px;background:var(--r-surface);color:var(--r-teal);font-size:18px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;line-height:1;transition:background .15s,border-color .15s}
 .fb-nav-btn:hover{background:var(--r-mint);border-color:#83bcb2}
-.fb-date-input-box{position:relative;display:inline-flex;align-items:center}
-.fb-date-input-box input{height:38px;padding:0 10px;border:1px solid var(--r-line);border-radius:8px;background:var(--r-surface);color:var(--r-text);font:inherit;font-size:12px;cursor:pointer;outline:0;transition:border-color .15s}
-.fb-date-input-box input:focus-visible,.fb-nav-btn:focus-visible{outline:2px solid var(--r-teal);outline-offset:2px}
 .fb-chart-this-week-btn{height:38px;padding:0 14px;border:1px solid var(--r-line);border-radius:8px;background:var(--r-surface);color:var(--r-teal);font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;justify-content:center;transition:background .15s,border-color .15s}
 .fb-chart-this-week-btn:hover{background:var(--r-mint);border-color:#83bcb2}
 .fb-week-empty-note{font-size:12px;color:var(--r-muted);margin:12px 0}
