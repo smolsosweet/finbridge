@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowDownLeft, ArrowDownRight, ArrowRightLeft, ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Plus, ReceiptText, RotateCcw, Search, X } from "lucide-react";
+import { ArrowDownLeft, ArrowDownRight, ArrowRightLeft, ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Plus, ReceiptText, RotateCcw, Search, X } from "lucide-react";
 import { DASHBOARD_SAMPLE } from "./Dashboard";
 import { localDateKey } from "./chartWeek";
 import { HistoryPeriodPicker, matchesHistoryPeriod, type HistoryPeriod } from "./HistoryPeriodPicker";
+import { CalendarLedgerModal } from "./CalendarLedgerModal";
 import { useAppState } from "./store";
 
 const PAGE_SIZE = 5;
@@ -55,6 +56,7 @@ export function TransactionHistory({ navigate }: { navigate: (screen: string) =>
   });
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [calendarLedgerOpen, setCalendarLedgerOpen] = useState(false);
   const nameOfWallet = (id?: string) => {
     const item = state.wallets.find((wallet) => wallet.id === id);
     return item ? item.name === "." ? (lang === "vi" ? "Ví chính" : lang === "zh" ? "主钱包" : "Main wallet") : item.name : text.missingWallet;
@@ -131,6 +133,18 @@ export function TransactionHistory({ navigate }: { navigate: (screen: string) =>
           </svg>
         </span>
         <span>FinBridge<small>{lang === "vi" ? "Không gian tài chính của bạn" : lang === "zh" ? "您的财务空间" : "Your financial workspace"}</small></span>
+      </div>
+      <div className="fb-header-actions">
+        <button
+          type="button"
+          className="fb-header-calendar-btn"
+          onClick={() => setCalendarLedgerOpen(true)}
+          aria-label={lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar ledger"}
+          title={lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar ledger"}
+        >
+          <CalendarDays size={18} />
+          <span className="fb-header-btn-text">{lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar"}</span>
+        </button>
       </div>
     </header>
 
@@ -352,5 +366,12 @@ export function TransactionHistory({ navigate }: { navigate: (screen: string) =>
     >
       <Plus size={28} />
     </button>
+
+    {calendarLedgerOpen && (
+      <CalendarLedgerModal
+        onClose={() => setCalendarLedgerOpen(false)}
+        navigate={navigate}
+      />
+    )}
   </main>;
 }

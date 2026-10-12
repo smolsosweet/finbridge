@@ -7,6 +7,7 @@ import { EmptyState, Icon, Modal } from "./Ui";
 import { money, updateState, useAppState, type Transaction, type Wallet as WalletType } from "./store";
 import { categoryIcon, iconGroups } from "./Categories";
 import { calendarWeek, localDateKey, shiftCalendarWeek } from "./chartWeek";
+import { CalendarLedgerModal } from "./CalendarLedgerModal";
 
 type DashboardSample = {
   id: string;
@@ -423,6 +424,7 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
 
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState("");
+  const [calendarLedgerOpen, setCalendarLedgerOpen] = useState(false);
 
   // Add wallet modal state
   const [newWalletName, setNewWalletName] = useState("");
@@ -1033,6 +1035,18 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
     </> : <>
       <header className="fb-home-header">
         <div className="fb-brand"><span className="fb-brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 24V13M27 24V13M5 17C11 5 21 5 27 17M5 20H27M11 20V24M16 20V24M21 20V24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg></span><span>FinBridge<small>Không gian tài chính của bạn</small></span></div>
+        <div className="fb-header-actions">
+          <button
+            type="button"
+            className="fb-header-calendar-btn"
+            onClick={() => setCalendarLedgerOpen(true)}
+            aria-label={lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar ledger"}
+            title={lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar ledger"}
+          >
+            <CalendarDays size={18} />
+            <span className="fb-header-btn-text">{lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar"}</span>
+          </button>
+        </div>
       </header>
       <div className="fb-home-intro"><div><p className="fb-eyebrow">TỔNG QUAN</p><h1>{state.settings.name && state.settings.name !== "." ? `Chào ${state.settings.name}` : "Tiền của bạn, trong tầm tay."}</h1><p>Theo dõi dòng tiền. Chủ động cho những kế hoạch tiếp theo.</p></div><button type="button" className="fb-add-button" onClick={addTransaction}><Plus size={18} />Thêm giao dịch</button></div>
       <section className="fb-wallet-section" aria-label="Ví của bạn">
@@ -2436,5 +2450,11 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
         );
       })()}
     </Modal>}
+    {calendarLedgerOpen && (
+      <CalendarLedgerModal
+        onClose={() => setCalendarLedgerOpen(false)}
+        navigate={navigate}
+      />
+    )}
   </div>;
 }
