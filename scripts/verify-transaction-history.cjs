@@ -59,6 +59,7 @@ const testReact = {
 const state = () => ({ wallets, transactions: input, settings: { language } });
 const component = compile(componentFile, (name) => {
   if (name === "./Dashboard") return { DASHBOARD_SAMPLE: sample };
+  if (name === "./CalendarLedgerModal") return { CalendarLedgerModal: () => null };
   if (name === "./store") return { useAppState: state };
   if (name === "./chartWeek") return weeks;
   if (name === "./HistoryPeriodPicker") return periods;
