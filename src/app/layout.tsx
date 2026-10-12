@@ -13,11 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rolly — AI Budget & Expense Tracker",
-  description: "Track expenses effortlessly with AI. Just tell Rolly what you spent — it tracks, categorises, and gives you insights automatically. Available on iOS, Android & Web.",
-  icons: {
-    icon: "/sites/rolly/images/favicon.png",
-  },
+  title: "FinBridge · Your financial workspace",
+  description: "Your money, your decisions. Track your everyday finances with FinBridge.",
+  icons: { icon: "/finbridge-icon.svg" },
 };
 
 export default function RootLayout({

@@ -45,7 +45,7 @@ export function AuthCard({ initialMode = "login", onSuccess, onBack }: AuthCardP
       <div className="relative w-24 h-24 mb-2 z-10 animate-in fade-in zoom-in-95 duration-200">
         <Image
           src="/sites/rolly/images/Welcome_Icon.png"
-          alt="Rolly Mascot"
+          alt="FinBridge assistant"
           width={96}
           height={96}
           priority
