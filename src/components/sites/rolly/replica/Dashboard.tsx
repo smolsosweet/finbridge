@@ -21,7 +21,7 @@ type DashboardSample = {
   note?: string;
 };
 
-const DASHBOARD_SAMPLE: DashboardSample[] = [
+export const DASHBOARD_SAMPLE: DashboardSample[] = [
   // Tháng 7 (15/07 - 31/07)
   { id: "sample-01", date: "2026-07-16", type: "expense", amount: 700000, category: "Hóa đơn & Tiện ích", currency: "VND", title: "Phí thường niên thẻ thanh toán" },
   { id: "sample-02", date: "2026-07-18", type: "expense", amount: 920000, category: "Ăn uống", currency: "VND", title: "Siêu thị thực phẩm tuần" },

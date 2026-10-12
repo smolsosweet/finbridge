@@ -2,6 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Dashboard } from "./Dashboard";
+import { TransactionHistory } from "./TransactionHistory";
 import { BudgetAI, GoalDetails, GoalForm, ToolMenu, ToolPage, tools } from "./Tools";
 import { AccountSettings, HomepageConfiguration, SettingsMenu, WalletScreen } from "./Settings";
 import { ChatPage, RecurringPage, TransactionForm } from "./Transactions";
@@ -25,7 +26,7 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
   };
   const theme = state.settings.theme === "system" ? "r-system-theme" : state.settings.theme === "dark" ? "r-dark" : "";
   let content;
-  if (!screen) content = tab === "tools" ? <ToolMenu navigate={navigate} /> : tab === "settings" ? <SettingsMenu navigate={navigate} /> : <Dashboard key={tab} transactionsTab={tab === "transactions"} navigate={navigate} />;
+  if (!screen) content = tab === "tools" ? <ToolMenu navigate={navigate} /> : tab === "settings" ? <SettingsMenu navigate={navigate} /> : tab === "transactions" ? <TransactionHistory navigate={navigate} /> : <Dashboard key={tab} navigate={navigate} />;
   else if (tools.some((t) => t.path === screen)) content = <ToolPage key={screen} screen={screen} navigate={navigate} />;
   else if (tools.some((t) => t.create === screen)) content = <GoalForm key={screen} screen={screen} navigate={navigate} initialType={params.get("initialType") || undefined} />;
   else if (screen === "goalDetails") content = <GoalDetails id={params.get("id") || ""} navigate={navigate} />;
@@ -43,5 +44,5 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
   else if (screen === "budgetAI" || screen === "budgetwithAIEntry") content = <BudgetAI navigate={navigate} />;
   else if (screen === "welcome") content = <WelcomeScreen onGetStarted={() => router.push("/onboarding")} onLogIn={() => router.push("/login")} />;
   else content = <div><PageHeader title="FinBridge" onBack={() => navigate("")} /><p>Không tìm thấy màn hình này.</p></div>;
-  return <div className={"r-app " + theme + (!screen && tab === "home" ? " fb-home-shell" : "")}>{content}{!screen && <nav className="r-bottom-nav" aria-label="Điều hướng chính">{[["home", "Trang chủ", "f015"], ["transactions", "Giao dịch", "f555"], ["tools", "Công cụ tiền tệ", "f51e"], ["settings", "Cài đặt", "f013"]].map(([id, name, code]) => <button key={id} type="button" className={tab === id ? "active" : ""} aria-current={tab === id ? "page" : undefined} onClick={() => navigate(id === "home" ? "" : "?tab=" + id)}><Icon code={code} /><span>{name}</span></button>)}</nav>}</div>;
+  return <div className={"r-app " + theme + (!screen && (tab === "home" || tab === "transactions") ? " fb-home-shell" : "")}>{content}{!screen && <nav className="r-bottom-nav" aria-label="Điều hướng chính">{[["home", "Trang chủ", "f015"], ["transactions", "Giao dịch", "f555"], ["tools", "Công cụ tiền tệ", "f51e"], ["settings", "Cài đặt", "f013"]].map(([id, name, code]) => <button key={id} type="button" className={tab === id ? "active" : ""} aria-current={tab === id ? "page" : undefined} onClick={() => navigate(id === "home" ? "" : "?tab=" + id)}><Icon code={code} /><span>{name}</span></button>)}</nav>}</div>;
 }
