@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowDownLeft, ArrowDownRight, ArrowRightLeft, ArrowUpRight, ChevronLeft, ChevronRight, Plus, ReceiptText, Search } from "lucide-react";
+import { ArrowDownLeft, ArrowDownRight, ArrowRightLeft, ArrowUpRight, ChevronDown, ChevronLeft, ChevronRight, Plus, ReceiptText, RotateCcw, Search, X } from "lucide-react";
 import { DASHBOARD_SAMPLE } from "./Dashboard";
 import { localDateKey } from "./chartWeek";
 import { HistoryPeriodPicker, matchesHistoryPeriod, type HistoryPeriod } from "./HistoryPeriodPicker";
@@ -100,35 +100,250 @@ export function TransactionHistory({ navigate }: { navigate: (screen: string) =>
     return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric", ...(raw.length > 10 ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } as const : {}) }).format(value);
   };
 
-  return <main className="fb-history">
-    <header className="fb-home-header"><div className="fb-brand"><span className="fb-brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 24V13M27 24V13M5 17C11 5 21 5 27 17M5 20H27M11 20V24M16 20V24M21 20V24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg></span><span>FinBridge<small>{lang === "vi" ? "Không gian tài chính của bạn" : lang === "zh" ? "您的财务空间" : "Your financial workspace"}</small></span></div></header>
-    <div className="fb-history-header"><div><h1>{text.title}</h1><p>{text.subtitle}</p></div></div>
+  const addActionLabel = lang === "vi" ? "Thêm giao dịch" : lang === "zh" ? "添加交易" : "Add transaction";
+
+  return <main className="r-dashboard fb-home fb-history">
+    <header className="fb-home-header">
+      <div className="fb-brand">
+        <span className="fb-brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none">
+            <path d="M5 24V13M27 24V13M5 17C11 5 21 5 27 17M5 20H27M11 20V24M16 20V24M21 20V24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+        </span>
+        <span>FinBridge<small>{lang === "vi" ? "Không gian tài chính của bạn" : lang === "zh" ? "您的财务空间" : "Your financial workspace"}</small></span>
+      </div>
+    </header>
+
+    <div className="fb-home-intro fb-history-header">
+      <div>
+        <p className="fb-eyebrow">{lang === "vi" ? "LỊCH SỬ GIAO DỊCH" : lang === "zh" ? "交易记录" : "TRANSACTION HISTORY"}</p>
+        <h1>{text.title}</h1>
+        <p>{text.subtitle}</p>
+      </div>
+      <button
+        type="button"
+        className="fb-add-button"
+        aria-label={addActionLabel}
+        onClick={() => navigate("addTransactionChatMode")}
+      >
+        <Plus size={18} />
+        <span>{addActionLabel}</span>
+      </button>
+    </div>
+
     <section className="fb-history-controls" aria-label={text.search}>
-      <label className="fb-history-search"><span>{text.search}</span><div><Search size={17} /><input type="search" placeholder={text.placeholder} value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} /></div></label>
-      <label><span>{text.wallet}</span><select value={walletId} onChange={(event) => { setWalletId(event.target.value); setCategory("all"); setPage(1); }}><option value="all">{text.allWallets}</option>{state.wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{nameOfWallet(wallet.id)} · {wallet.currency}{wallet.archived ? " · " + text.archived : ""}</option>)}</select></label>
-      <label><span>{text.kind}</span><select value={kind} onChange={(event) => { setKind(event.target.value as Kind); setPage(1); }}><option value="all">{text.all}</option><option value="expense">{text.expense}</option><option value="income">{text.income}</option><option value="transfer">{text.transfer}</option></select></label>
-      <label><span>{categoryLabel}</span><select value={category} onChange={(event) => { setCategory(event.target.value); setPage(1); }}><option value="all">{allCategoriesLabel}</option>{availableCategories.map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-      <div className="fb-history-period-field"><span>{text.period}</span><HistoryPeriodPicker value={period} onChange={(value) => { setPeriod(value); setPage(1); }} lang={lang} /></div>
-      <button type="button" className="fb-history-clear" onClick={reset}>{text.clear}</button>
+      <div className="fb-history-controls-top">
+        <label className="fb-history-search">
+          <span>{text.search}</span>
+          <div className="fb-search-wrap">
+            <Search size={16} className="fb-search-icon" aria-hidden="true" />
+            <input
+              type="search"
+              placeholder={text.placeholder}
+              value={search}
+              onChange={(event) => { setSearch(event.target.value); setPage(1); }}
+            />
+            {search && (
+              <button
+                type="button"
+                className="fb-search-clear-btn"
+                aria-label="Clear search"
+                onClick={() => { setSearch(""); setPage(1); }}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </label>
+        <div className="fb-history-pills" role="radiogroup" aria-label={text.kind}>
+          {(["all", "expense", "income", "transfer"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              className={`fb-pill-btn ${kind === k ? "active" : ""}`}
+              onClick={() => { setKind(k); setPage(1); }}
+            >
+              {k === "all" ? text.all : k === "expense" ? text.expense : k === "income" ? text.income : text.transfer}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="fb-history-controls-bottom">
+        <label className="fb-history-field fb-field-wallet">
+          <span>{text.wallet}</span>
+          <div className="fb-select-wrap">
+            <select
+              value={walletId}
+              onChange={(event) => { setWalletId(event.target.value); setCategory("all"); setPage(1); }}
+            >
+              <option value="all">{text.allWallets}</option>
+              {state.wallets.map((wallet) => (
+                <option key={wallet.id} value={wallet.id}>
+                  {nameOfWallet(wallet.id)} · {wallet.currency}{wallet.archived ? " · " + text.archived : ""}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="fb-select-chevron" aria-hidden="true" />
+          </div>
+        </label>
+
+        <label className="fb-history-field fb-field-kind">
+          <span>{text.kind}</span>
+          <div className="fb-select-wrap">
+            <select
+              value={kind}
+              onChange={(event) => { setKind(event.target.value as Kind); setPage(1); }}
+            >
+              <option value="all">{text.all}</option>
+              <option value="expense">{text.expense}</option>
+              <option value="income">{text.income}</option>
+              <option value="transfer">{text.transfer}</option>
+            </select>
+            <ChevronDown size={14} className="fb-select-chevron" aria-hidden="true" />
+          </div>
+        </label>
+
+        <label className="fb-history-field fb-field-category">
+          <span>{categoryLabel}</span>
+          <div className="fb-select-wrap">
+            <select
+              value={category}
+              onChange={(event) => { setCategory(event.target.value); setPage(1); }}
+            >
+              <option value="all">{allCategoriesLabel}</option>
+              {availableCategories.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="fb-select-chevron" aria-hidden="true" />
+          </div>
+        </label>
+
+        <div className="fb-history-period-field">
+          <span>{text.period}</span>
+          <HistoryPeriodPicker
+            value={period}
+            onChange={(value) => { setPeriod(value); setPage(1); }}
+            lang={lang}
+          />
+        </div>
+
+        <div className="fb-history-action-field">
+          <button
+            type="button"
+            className="fb-history-clear"
+            onClick={reset}
+          >
+            <RotateCcw size={14} />
+            <span>{text.clear}</span>
+          </button>
+        </div>
+      </div>
+
       {invalidRange && <p className="fb-history-range-error" role="alert">{text.ranges}</p>}
     </section>
-    <div className="fb-history-summary">{(["income", "expense"] as const).map((type) => <div key={type} className={"fb-history-flow " + type}><div><span>{type === "income" ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}{type === "income" ? text.totalIncome : text.totalExpense}</span><small>{walletId === "all" ? (lang === "vi" ? "Từ mọi ví trong kỳ" : lang === "zh" ? "所选期间的全部钱包" : "All wallets in the selected period") : nameOfWallet(walletId)}</small></div><div className="fb-history-flow-values">{totals(type).map((total) => <b key={total.currency}>{total.label}</b>)}</div></div>)}</div>
+
+    <div className="fb-history-summary">
+      {(["income", "expense"] as const).map((type) => (
+        <div key={type} className={"fb-history-flow " + type}>
+          <div>
+            <span>
+              {type === "income" ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
+              {type === "income" ? text.totalIncome : text.totalExpense}
+            </span>
+            <small>
+              {walletId === "all"
+                ? (lang === "vi" ? "Từ mọi ví trong kỳ" : lang === "zh" ? "所选期间的全部钱包" : "All wallets in the selected period")
+                : nameOfWallet(walletId)}
+            </small>
+          </div>
+          <div className="fb-history-flow-values">
+            {totals(type).map((total) => (
+              <b key={total.currency}>{total.label}</b>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+
     <section className="fb-history-list" aria-label={text.title}>
-      <div className="fb-history-list-heading"><h2>{text.title}</h2><span>{records.length} {text.count} · {sample ? text.sample : text.saved}</span></div>
-      {visible.length === 0 ? <div className="fb-history-empty"><ReceiptText size={30} /><h3>{text.empty}</h3><p>{text.emptyHint}</p><button type="button" className="fb-history-clear" onClick={reset}>{text.clear}</button></div> : visible.map((record) => {
-        const label = record.type === "income" ? text.income : record.type === "transfer" ? text.transfer : text.expense;
-        const IconComponent = record.type === "income" ? ArrowDownLeft : record.type === "transfer" ? ArrowRightLeft : ArrowUpRight;
-        const signed = record.type === "income" ? record.amount : record.type === "expense" ? -record.amount : record.amount;
-        const sign = record.type === "transfer" ? "" : signed >= 0 ? "+" : "−";
-        return <article key={record.id} className={"fb-history-record " + record.type}>
-          <div className="fb-history-record-heading"><span className="fb-history-record-icon"><IconComponent size={20} /></span><div><h3>{record.title || record.category || text.noCategory}</h3><p><time dateTime={record.occurredAt || record.date}>{dateLabel(record)}</time> · {record.sourceLabel || (sample ? "Synthetic Data" : text.saved)}</p></div><b className="fb-history-amount">{sign}{amount(Math.abs(record.amount), currencyOf(record))}</b></div>
-          <p className="fb-history-source">{text.source} · <b>{nameOfWallet(record.wallet)}</b>{record.type === "transfer" && record.targetWallet ? <span> → {nameOfWallet(record.targetWallet)}</span> : null}</p>
-          <div className="fb-history-tags"><span className="fb-history-kind">{label}</span><span>{record.category || text.noCategory}{record.subcategory ? " / " + record.subcategory : ""}</span>{record.classification?.method && <span>{record.classification.method === "automatic" ? text.auto : text.manual}</span>}{typeof record.classification?.confidence === "number" && record.classification.confidence >= 0 && record.classification.confidence <= 1 && <span>{Math.round(record.classification.confidence * 100)}%</span>}<span className="fb-history-recorded">{text.recorded}</span></div>
-          <div className="fb-history-details"><details><summary>{text.why}</summary><p>{record.classification?.reason || text.reason + " “" + (record.category || text.noCategory) + "”."}</p></details><details><summary>{text.detail}</summary><dl><div><dt>{text.reference}</dt><dd>{record.id}</dd></div><div><dt>{text.source}</dt><dd>{nameOfWallet(record.wallet)}</dd></div>{record.targetWallet && <div><dt>{text.target}</dt><dd>{nameOfWallet(record.targetWallet)}</dd></div>}{record.note && <div><dt>{text.note}</dt><dd>{record.note}</dd></div>}</dl></details></div>
-        </article>;
-      })}
-      <footer className="fb-history-pagination"><span>{text.showing} {records.length ? (activePage - 1) * PAGE_SIZE + 1 : 0}–{Math.min(activePage * PAGE_SIZE, records.length)} / {records.length}</span><div><button type="button" aria-label={text.previous} disabled={activePage <= 1} onClick={() => setPage(activePage - 1)}><ChevronLeft size={18} /></button><span>{text.page} {activePage} {text.of} {pages}</span><button type="button" aria-label={text.next} disabled={activePage >= pages} onClick={() => setPage(activePage + 1)}><ChevronRight size={18} /></button></div></footer>
+      <div className="fb-history-list-heading">
+        <h2>{text.title}</h2>
+        <span>{records.length} {text.count} · {sample ? text.sample : text.saved}</span>
+      </div>
+      {visible.length === 0 ? (
+        <div className="fb-history-empty">
+          <ReceiptText size={30} />
+          <h3>{text.empty}</h3>
+          <p>{text.emptyHint}</p>
+          <button type="button" className="fb-history-clear" onClick={reset}>
+            <RotateCcw size={14} />
+            <span>{text.clear}</span>
+          </button>
+        </div>
+      ) : (
+        visible.map((record) => {
+          const label = record.type === "income" ? text.income : record.type === "transfer" ? text.transfer : text.expense;
+          const IconComponent = record.type === "income" ? ArrowDownLeft : record.type === "transfer" ? ArrowRightLeft : ArrowUpRight;
+          const signed = record.type === "income" ? record.amount : record.type === "expense" ? -record.amount : record.amount;
+          const sign = record.type === "transfer" ? "" : signed >= 0 ? "+" : "−";
+          return (
+            <article key={record.id} className={"fb-history-record " + record.type}>
+              <div className="fb-history-record-heading">
+                <span className="fb-history-record-icon"><IconComponent size={20} /></span>
+                <div>
+                  <h3>{record.title || record.category || text.noCategory}</h3>
+                  <p><time dateTime={record.occurredAt || record.date}>{dateLabel(record)}</time> · {record.sourceLabel || (sample ? "Synthetic Data" : text.saved)}</p>
+                </div>
+                <b className="fb-history-amount">{sign}{amount(Math.abs(record.amount), currencyOf(record))}</b>
+              </div>
+              <p className="fb-history-source">
+                {text.source} · <b>{nameOfWallet(record.wallet)}</b>{record.type === "transfer" && record.targetWallet ? <span> → {nameOfWallet(record.targetWallet)}</span> : null}
+              </p>
+              <div className="fb-history-tags">
+                <span className="fb-history-kind">{label}</span>
+                <span>{record.category || text.noCategory}{record.subcategory ? " / " + record.subcategory : ""}</span>
+                {record.classification?.method && <span>{record.classification.method === "automatic" ? text.auto : text.manual}</span>}
+                {typeof record.classification?.confidence === "number" && record.classification.confidence >= 0 && record.classification.confidence <= 1 && <span>{Math.round(record.classification.confidence * 100)}%</span>}
+                <span className="fb-history-recorded">{text.recorded}</span>
+              </div>
+              <div className="fb-history-details">
+                <details>
+                  <summary>{text.why}</summary>
+                  <p>{record.classification?.reason || text.reason + " “" + (record.category || text.noCategory) + "”."}</p>
+                </details>
+                <details>
+                  <summary>{text.detail}</summary>
+                  <dl>
+                    <div><dt>{text.reference}</dt><dd>{record.id}</dd></div>
+                    <div><dt>{text.source}</dt><dd>{nameOfWallet(record.wallet)}</dd></div>
+                    {record.targetWallet && <div><dt>{text.target}</dt><dd>{nameOfWallet(record.targetWallet)}</dd></div>}
+                    {record.note && <div><dt>{text.note}</dt><dd>{record.note}</dd></div>}
+                  </dl>
+                </details>
+              </div>
+            </article>
+          );
+        })
+      )}
+      <footer className="fb-history-pagination">
+        <span>{text.showing} {records.length ? (activePage - 1) * PAGE_SIZE + 1 : 0}–{Math.min(activePage * PAGE_SIZE, records.length)} / {records.length}</span>
+        <div>
+          <button type="button" aria-label={text.previous} disabled={activePage <= 1} onClick={() => setPage(activePage - 1)}><ChevronLeft size={18} /></button>
+          <span>{text.page} {activePage} {text.of} {pages}</span>
+          <button type="button" aria-label={text.next} disabled={activePage >= pages} onClick={() => setPage(activePage + 1)}><ChevronRight size={18} /></button>
+        </div>
+      </footer>
     </section>
-    <button type="button" className="r-fab fb-history-add" aria-label={lang === "vi" ? "Thêm giao dịch" : lang === "zh" ? "添加交易" : "Add transaction"} onClick={() => navigate("addTransactionChatMode")}><Plus size={28} /></button>
+
+    <button
+      type="button"
+      className="r-fab fb-history-add"
+      aria-label={addActionLabel}
+      onClick={() => navigate("addTransactionChatMode")}
+    >
+      <Plus size={28} />
+    </button>
   </main>;
 }
