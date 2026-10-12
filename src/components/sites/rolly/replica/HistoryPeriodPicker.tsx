@@ -28,9 +28,9 @@ export function matchesHistoryPeriod(date: string, period: HistoryPeriod): boole
 }
 
 const COPY = {
-  vi: { day: "Ngày", week: "Tuần", month: "Tháng", year: "Năm", all: "Mọi thời gian", custom: "Phạm vi tùy chỉnh", choose: "Chọn khoảng thời gian", detail: "Chọn thời gian chi tiết", close: "Đóng", confirm: "Xác nhận", today: "Hôm nay", from: "Từ ngày", to: "Đến ngày", previousYear: "Năm trước", nextYear: "Năm sau", previousWeek: "Tuần trước", nextWeek: "Tuần sau", thisWeek: "Tuần này", selectWeek: "Chọn một ngày trong tuần" },
-  en: { day: "Day", week: "Week", month: "Month", year: "Year", all: "All time", custom: "Custom range", choose: "Choose time period", detail: "Choose dates", close: "Close", confirm: "Apply", today: "Today", from: "From", to: "To", previousYear: "Previous year", nextYear: "Next year", previousWeek: "Previous week", nextWeek: "Next week", thisWeek: "This week", selectWeek: "Choose a date in the week" },
-  zh: { day: "日", week: "周", month: "月", year: "年", all: "全部时间", custom: "自定义范围", choose: "选择时间范围", detail: "选择日期", close: "关闭", confirm: "确认", today: "今天", from: "开始日期", to: "结束日期", previousYear: "上一年", nextYear: "下一年", previousWeek: "上一周", nextWeek: "下一周", thisWeek: "本周", selectWeek: "选择周内日期" },
+  vi: { day: "Ngày", week: "Tuần", month: "Tháng", year: "Năm", all: "Mọi thời gian", custom: "Tùy chỉnh", choose: "Chọn khoảng thời gian", detail: "Chọn thời gian chi tiết", close: "Đóng", confirm: "Xác nhận", today: "Hôm nay", from: "Từ ngày", to: "Đến ngày", previousYear: "Năm trước", nextYear: "Năm sau", previousWeek: "Tuần trước", nextWeek: "Tuần sau", thisWeek: "Tuần này", selectWeek: "Chọn một ngày trong tuần" },
+  en: { day: "Day", week: "Week", month: "Month", year: "Year", all: "All time", custom: "Custom", choose: "Choose time period", detail: "Choose dates", close: "Close", confirm: "Apply", today: "Today", from: "From", to: "To", previousYear: "Previous year", nextYear: "Next year", previousWeek: "Previous week", nextWeek: "Next week", thisWeek: "This week", selectWeek: "Choose a date in the week" },
+  zh: { day: "日", week: "周", month: "月", year: "年", all: "全部时间", custom: "自定义", choose: "选择时间范围", detail: "选择日期", close: "关闭", confirm: "确认", today: "今天", from: "开始日期", to: "结束日期", previousYear: "上一年", nextYear: "下一年", previousWeek: "上一周", nextWeek: "下一周", thisWeek: "本周", selectWeek: "选择周内日期" },
 };
 
 export function HistoryPeriodPicker({ value, onChange, lang }: { value: HistoryPeriod; onChange: (value: HistoryPeriod) => void; lang: "vi" | "en" | "zh" }) {

@@ -63,7 +63,20 @@ export function TransactionHistory({ navigate }: { navigate: (screen: string) =>
   const walletRecords = base.filter((record) => walletId === "all" || record.wallet === walletId || record.targetWallet === walletId);
   const categoryKey = (name: string) => name.trim().normalize("NFC").toLocaleLowerCase(locale);
   const categoryNames = new Map<string, string>();
-  walletRecords.forEach((record) => { if (record.category.trim() && !categoryNames.has(categoryKey(record.category))) categoryNames.set(categoryKey(record.category), record.category.trim()); });
+  walletRecords.forEach((record) => {
+    if (record.category && record.category.trim() && !categoryNames.has(categoryKey(record.category))) {
+      categoryNames.set(categoryKey(record.category), record.category.trim());
+    }
+  });
+  if (Array.isArray(state.categories)) {
+    state.categories.forEach((cat) => {
+      const trimmed = cat.trim();
+      const meta = state.categoryMeta?.[trimmed];
+      if (trimmed && !meta?.archived && !categoryNames.has(categoryKey(trimmed))) {
+        categoryNames.set(categoryKey(trimmed), trimmed);
+      }
+    });
+  }
   const availableCategories = Array.from(categoryNames.values()).sort((a, b) => a.localeCompare(b, locale));
   const invalidRange = period.kind === "custom" && !!period.from && !!period.to && period.from > period.to;
   const records = base.filter((record) => {
