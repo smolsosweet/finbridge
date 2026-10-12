@@ -399,15 +399,8 @@
 .fb-home .r-summary-cards .r-income svg{color:#147d78}
 
 /* Vertical cash flow stack (Dòng tiền trong kỳ - Lựa chọn 2) */
-.fb-flow-summary-container{display:flex;flex-direction:column;gap:16px;cursor:default}
-.fb-summary-top-vertical{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:4px 0 6px;cursor:pointer;border-radius:12px;transition:background .15s}
-.fb-total-balance-block{display:flex;flex-direction:column;gap:4px;text-align:left}
-.fb-total-balance-block>small{font-size:12px;color:var(--r-muted)}
-.fb-total-balance-list{display:flex;flex-direction:column;gap:5px;margin:5px 0 3px}
-.fb-balance-currency-row{display:flex;align-items:baseline;gap:8px}
-.fb-balance-val{font-size:28px;line-height:1.2;letter-spacing:-.8px;font-weight:600;color:var(--r-text);overflow-wrap:anywhere}
+.fb-flow-summary-container{display:flex;flex-direction:column;gap:12px;cursor:default;flex:1;justify-content:space-between}
 .fb-currency-tag{font-size:10px;font-weight:600;padding:2px 7px;border-radius:5px;background:var(--r-line);color:var(--r-muted);letter-spacing:.3px;text-transform:uppercase}
-.fb-total-balance-sub{font-size:11px;color:var(--r-muted);margin-top:2px}
 .fb-flow-vertical-stack{display:flex;flex-direction:column;gap:10px;width:100%}
 .fb-flow-row{display:flex;align-items:center;justify-content:space-between;gap:16px;background:var(--r-bg);border:1px solid var(--r-line);border-radius:12px;padding:14px 16px;cursor:pointer;transition:background .15s,border-color .15s,box-shadow .15s}
 .fb-flow-row:hover{background:var(--r-secondary);border-color:#83bcb2}
@@ -423,6 +416,10 @@
 .fb-flow-amount-line b{font-size:18px;font-weight:600;letter-spacing:-.3px}
 .fb-flow-row.r-income .fb-flow-amount-line b{color:#147d78}
 .fb-flow-row.r-expense .fb-flow-amount-line b{color:#b86151}
+.fb-flow-footer-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px}
+.fb-flow-footer-row .fb-currency-note{margin-top:0}
+.fb-flow-detail-link{display:inline-flex;align-items:center;gap:4px;border:0;background:transparent;color:var(--r-teal);font-size:11px;font-weight:500;cursor:pointer;padding:2px 4px;border-radius:4px;flex-shrink:0;transition:opacity .15s}
+.fb-flow-detail-link:hover{opacity:.8;text-decoration:underline}
 .fb-home .r-type-pills{margin:0;gap:3px;border:1px solid var(--r-line);padding:3px;border-radius:10px;background:var(--r-bg)}
 .fb-home .r-type-pills button{border-radius:7px;padding:6px 9px;font-size:11px;background:transparent;color:var(--r-muted)}
 .fb-home .r-type-pills button.active{background:var(--r-surface);color:var(--r-teal);box-shadow:0 1px 3px #173e5012}
@@ -467,9 +464,9 @@
 .fb-home .fb-workspace{display:none}
 .fb-chart-range{display:flex;gap:10px;flex-wrap:wrap;width:100%}.fb-chart-range label{flex:1;min-width:130px;font-size:11px;color:var(--r-muted)}.fb-chart-range input{display:block;width:100%;min-height:44px;margin-top:5px;border:1px solid var(--r-line);border-radius:9px;background:var(--r-surface);color:var(--r-text);padding:9px;font:inherit}
 .fb-chart-scale{display:none}
-.fb-finance-dashboard{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"overview wallet" "chart chart";align-items:start;gap:22px}
-.fb-finance-dashboard .fb-finance-overview{grid-area:overview}
-.fb-finance-dashboard .fb-wallet-flow-card{grid-area:wallet}
+.fb-finance-dashboard{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"overview wallet" "chart chart";align-items:stretch;gap:22px}
+.fb-finance-dashboard .fb-finance-overview{grid-area:overview;display:flex;flex-direction:column}
+.fb-finance-dashboard .fb-wallet-flow-card{grid-area:wallet;display:flex;flex-direction:column}
 .fb-finance-dashboard .fb-spending-dashboard{grid-area:chart;width:100%}
 .fb-section-note{margin-top:5px;color:var(--r-muted);font-size:11px;font-weight:400;line-height:1.45}
 .fb-finance-dashboard .fb-section-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
