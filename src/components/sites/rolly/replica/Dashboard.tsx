@@ -2142,12 +2142,12 @@ export function Dashboard({ transactionsTab = false, navigate }: { transactionsT
                   <input
                     type="text"
                     required
-                    placeholder={`Thêm danh mục ${catType === "income" ? "thu" : "chi"} mới...`}
-                    className="fb-input"
+                    placeholder={`Nhập tên danh mục ${catType === "income" ? "thu nhập" : "chi tiêu"} mới...`}
+                    className="fb-input fb-cat-add-input"
                     value={newCatName}
                     onChange={(e) => setNewCatName(e.target.value)}
                   />
-                  <button type="submit" className="r-primary">
+                  <button type="submit" className="r-primary fb-cat-add-btn">
                     <Plus size={15} />
                     <span>Thêm</span>
                   </button>
