@@ -21,9 +21,10 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
   const state = useAppState();
   const tab = params.get("tab") || "home";
   const navigate = (path: string) => {
-    if (path === "support") { window.open("https://rollyapp.ai/vi/lien-he", "_blank", "noopener"); return; }
-    if (path === "terms") { window.open("https://rollyapp.ai/terms-and-conditions", "_blank", "noopener"); return; }
-    if (path === "privacy") { window.open("https://rollyapp.ai/privacy-policy", "_blank", "noopener"); return; }
+    if (path === "support" || path === "terms" || path === "privacy") {
+      router.push("/app?tab=settings");
+      return;
+    }
     router.push("/app" + (path ? (path.startsWith("?") ? "" : "/") + path : ""));
   };
   const theme = state.settings.theme === "system" ? "r-system-theme" : state.settings.theme === "dark" ? "r-dark" : "";
@@ -48,5 +49,5 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
   else if (screen === "budgetAI" || screen === "budgetwithAIEntry") content = <BudgetAI navigate={navigate} />;
   else if (screen === "welcome") content = <WelcomeScreen onGetStarted={() => router.push("/onboarding")} onLogIn={() => router.push("/login")} />;
   else content = <div><PageHeader title="FinBridge" onBack={() => navigate("")} /><p>Không tìm thấy màn hình này.</p></div>;
-  return <div className={"r-app " + theme + (((!screen && (tab === "home" || tab === "transactions" || tab === "tools" || tab === "settings")) || ["accountSettings", "homepageConfiguration", "walletSettings", "walletDetailsEdit", "createWallet1", "category", "categoryDetail", "budget", "savings", "fixedExpenses", "createBudget", "createFixedExpense", "createSavingsGoal", "debt", "loanList", "challenge", "createDebtClerance", "createLoan", "createChallenge"].includes(screen)) ? " fb-home-shell" : "")}>{content}{!screen && <nav className="r-bottom-nav" aria-label="Điều hướng chính">{[["home", "Trang chủ", "f015"], ["transactions", "Giao dịch", "f555"], ["tools", "Công cụ tiền tệ", "f51e"], ["settings", "Tài khoản", "f013"]].map(([id, name, code]) => <button key={id} type="button" className={tab === id ? "active" : ""} aria-current={tab === id ? "page" : undefined} onClick={() => navigate(id === "home" ? "" : "?tab=" + id)}><Icon code={code} /><span>{name}</span></button>)}</nav>}</div>;
+  return <div className={"r-app " + theme + (((!screen && (tab === "home" || tab === "transactions" || tab === "tools" || tab === "settings")) || ["accountSettings", "homepageConfiguration", "walletSettings", "walletDetailsEdit", "createWallet1", "category", "categoryDetail", "budget", "savings", "fixedExpenses", "createBudget", "createFixedExpense", "createSavingsGoal", "debt", "loanList", "challenge", "createDebtClerance", "createLoan", "createChallenge", "featureRequest", "featureRequestCompleted"].includes(screen)) ? " fb-home-shell" : "")}>{content}{!screen && <nav className="r-bottom-nav" aria-label="Điều hướng chính">{[["home", "Trang chủ", "f015"], ["transactions", "Giao dịch", "f555"], ["tools", "Công cụ tiền tệ", "f51e"], ["settings", "Cài đặt", "f013"]].map(([id, name, code]) => <button key={id} type="button" className={tab === id ? "active" : ""} aria-current={tab === id ? "page" : undefined} onClick={() => navigate(id === "home" ? "" : "?tab=" + id)}><Icon code={code} /><span>{name}</span></button>)}</nav>}</div>;
 }
