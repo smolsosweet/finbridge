@@ -1,14 +1,16 @@
 "use client";
 
 import { useRef, useState, type FormEvent } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { Mascot } from "page-mascot";
 import { GoogleIcon } from "./Icons";
 import { authClient } from "@/lib/auth-client";
 import { AUTH_COPY, authLanguage } from "@/lib/auth-copy";
 import { AUTH_FORM_COPY, type AuthMode } from "@/lib/auth-form-copy";
+import welcome from "./WelcomeScreen.module.css";
+import styles from "./AuthCard.module.css";
 
 export function AuthCard({ onBack, lang = "en", configured = false, initialError = false, mode = "login", mailMode = "unavailable", token = "", verified = false }: {
   onBack: () => void; lang?: string; configured?: boolean; initialError?: boolean;
@@ -82,33 +84,40 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
       if (result.error) setError(f.failure); else setNotice(f.checkVerification);
     });
   }
-  const inputClass = "min-h-14 w-full rounded-xl border border-[#dce5e7] bg-white px-4 text-[#173e50] outline-none focus:border-[#147d78] focus:ring-2 focus:ring-[#147d78]/20 disabled:opacity-60";
-  return <main lang={language} className="min-h-dvh w-full bg-gradient-to-b from-[#dff7f5] to-[#f8faf9] px-4 py-6 sm:px-10">
-    <header className="mx-auto flex max-w-5xl items-center justify-between">
-      <button type="button" onClick={onBack} className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm text-[#173e50] hover:bg-white/70"><ArrowLeft size={18} />{t.back}</button>
-      <span className="font-semibold text-[#173e50]">FinBridge</span>
+  const inputClass = styles.input;
+  return <main lang={language} className={`${welcome.welcome} ${styles.page}`}>
+    <header className={welcome.header}>
+      <button type="button" onClick={onBack} className={styles.back}><ArrowLeft size={18} aria-hidden="true" />{t.back}</button>
+      <div className={welcome.brand}>
+        <span className={welcome.brandMark} aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none"><path d="M5 24V13M27 24V13M5 17C11 5 21 5 27 17M5 20H27M11 20V24M16 20V24M21 20V24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
+        </span>
+        <span><span className={welcome.fin}>Fin</span><span className={welcome.bridge}>Bridge</span></span>
+      </div>
     </header>
-    <div className="mx-auto flex max-w-xl flex-col items-center py-5 sm:py-8">
-      <Image src="/sites/rolly/images/Welcome_Icon.png" alt={t.jack} width={72} height={72} className="mb-4 object-contain" />
-      <section className="w-full rounded-3xl border border-[#e0e8e9] bg-white px-5 py-7 text-center shadow-sm sm:p-9">
-        <h1 className="text-3xl font-semibold tracking-tight text-[#173e50]">{title}</h1>
-        <p className="mt-3 text-sm leading-relaxed text-[#6c7e87]">{f.intro}</p>
-        <form onSubmit={submit} className="mt-6 space-y-4 text-left">
+    <div className={styles.content}>
+      <section className={styles.card} aria-labelledby="auth-title">
+        <div className={styles.mascotStage}>
+          <Mascot directions="/mascots/lac-directions.webp" reactions="/mascots/lac-reactions.webp" size={140} label={t.jack} className={welcome.mascot} />
+        </div>
+        <h1 id="auth-title" className={styles.title}>{title}</h1>
+        <p className={styles.intro}>{f.intro}</p>
+        <form onSubmit={submit} className={styles.form}>
           {mode === "signup" && <label className="block text-sm text-[#526d78]">{f.name}<input className={inputClass + " mt-1"} value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} autoComplete="name" disabled={loading} /></label>}
           {mode !== "reset" && <label className="block text-sm text-[#526d78]">{f.email}<input className={inputClass + " mt-1"} type="email" value={email} onChange={(e) => { setEmail(e.target.value); setNeedsVerification(false); }} required maxLength={254} autoComplete="email" disabled={loading} /></label>}
-          {mode !== "forgot" && <label className="block text-sm text-[#526d78]">{f.password}<span className="relative mt-1 block"><input className={inputClass + " pr-14"} type={visible ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={mode === "login" ? undefined : 12} maxLength={128} autoComplete={mode === "login" ? "current-password" : "new-password"} disabled={loading} /><button type="button" aria-label={visible ? f.hide : f.show} aria-pressed={visible} onClick={() => setVisible(!visible)} className="absolute inset-y-0 right-1 grid min-w-12 place-items-center text-[#6c7e87]">{visible ? <EyeOff size={21} /> : <Eye size={21} />}</button></span></label>}
+          {mode !== "forgot" && <label className="block text-sm text-[#526d78]">{f.password}<span className="relative mt-1 block"><input className={`${inputClass} ${styles.passwordInput}`} type={visible ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={mode === "login" ? undefined : 12} maxLength={128} autoComplete={mode === "login" ? "current-password" : "new-password"} disabled={loading} /><button type="button" aria-label={visible ? f.hide : f.show} aria-pressed={visible} onClick={() => setVisible(!visible)} className="absolute inset-y-0 right-1 grid min-w-12 place-items-center text-[#6c7e87]">{visible ? <EyeOff size={21} /> : <Eye size={21} />}</button></span></label>}
           {(mode === "signup" || mode === "reset") && <><label className="block text-sm text-[#526d78]">{f.confirm}<input className={inputClass + " mt-1"} type={visible ? "text" : "password"} value={confirmation} onChange={(e) => setConfirmation(e.target.value)} required minLength={12} maxLength={128} autoComplete="new-password" disabled={loading} /></label><p className="text-xs text-[#6c7e87]">{f.passwordHint}</p></>}
-          <button disabled={disabled} aria-busy={loading} className="min-h-14 w-full rounded-xl bg-[#147d78] px-4 py-3 font-semibold text-white hover:bg-[#106c68] disabled:cursor-not-allowed disabled:opacity-60">{loading ? f.working : label}</button>
+          <button disabled={disabled} aria-busy={loading} className={`${welcome.start} ${styles.submit}`}>{loading ? f.working : label}</button>
         </form>
-        {mode === "login" && <p className="mt-3 text-sm text-[#6c7e87]">{f.forgot} <Link className="font-semibold text-[#147d78] underline-offset-4 hover:underline" href={route("/forgot-password")}>{f.resetLink}</Link></p>}
-        {error && <p role="alert" className="mt-4 rounded-xl bg-[#fff0f0] p-3 text-sm text-[#a33434]">{error}</p>}
-        {notice && <p role="status" className="mt-4 rounded-xl bg-[#edf8f5] p-3 text-sm text-[#147d78]">{notice}</p>}
-        {needsVerification && mailReady && <button type="button" onClick={resend} disabled={loading} className="mt-3 min-h-11 text-sm font-semibold text-[#147d78] underline">{f.resend}</button>}
-        {(mode === "login" || mode === "signup") && <><div className="my-5 flex items-center gap-4 text-xs text-[#6c7e87]"><hr className="flex-1 border-[#e0e8e9]" />{f.or}<hr className="flex-1 border-[#e0e8e9]" /></div><button type="button" onClick={() => void signInGoogle()} disabled={!configured || loading} className="flex min-h-14 w-full items-center justify-center gap-3 rounded-xl border border-[#dce5e7] px-4 py-3 font-medium text-[#173e50] hover:bg-[#edf8f5] disabled:opacity-60"><GoogleIcon />{t.google}</button></>}
-        {!configured && <p role="status" className="mt-4 text-sm text-[#885123]">{t.unavailable}</p>}
-        {!mailReady && <p className="mt-4 text-xs leading-relaxed text-[#885123]">{f.mailUnavailable}</p>}
-        {mailMode === "local" && <p className="mt-4 text-xs leading-relaxed text-[#885123]">{f.localMail}</p>}
-        <p className="mt-5 text-sm text-[#6c7e87]">{mode === "login" ? f.noAccount : f.haveAccount} <Link className="font-semibold text-[#147d78] hover:underline" href={route(mode === "login" ? "/signup" : "/login")}>{mode === "login" ? f.signupLink : f.loginLink}</Link></p>
+        {mode === "login" && <p className={styles.recovery}>{f.forgot} <Link className={styles.link} href={route("/forgot-password")}>{f.resetLink}</Link></p>}
+        {error && <p role="alert" className={styles.error}>{error}</p>}
+        {notice && <p role="status" className={styles.notice}>{notice}</p>}
+        {needsVerification && mailReady && <button type="button" onClick={resend} disabled={loading} className={`${styles.link} ${styles.resend}`}>{f.resend}</button>}
+        {(mode === "login" || mode === "signup") && <><div className={styles.divider}><hr />{f.or}<hr /></div><button type="button" onClick={() => void signInGoogle()} disabled={!configured || loading} className={styles.google}><GoogleIcon />{t.google}</button></>}
+        {!configured && <p role="status" className={styles.delivery}>{t.unavailable}</p>}
+        {!mailReady && <p className={styles.delivery}>{f.mailUnavailable}</p>}
+        {mailMode === "local" && <p className={styles.delivery}>{f.localMail}</p>}
+        <p className={styles.footer}>{mode === "login" ? f.noAccount : f.haveAccount} <Link className={styles.link} href={route(mode === "login" ? "/signup" : "/login")}>{mode === "login" ? f.signupLink : f.loginLink}</Link></p>
       </section>
     </div>
   </main>;

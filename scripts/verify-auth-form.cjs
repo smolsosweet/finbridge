@@ -13,6 +13,7 @@ const fakeReact = { ...React, useState(value) { const i = cursor++; if (!(i in s
 const method = (kind) => async (body) => { calls.push({ kind, body }); return apiError ? { error: apiError } : { data: { url: "https://accounts.google.com" } }; };
 const client = { signIn: { email: method("login"), social: method("google") }, signUp: { email: method("signup") }, requestPasswordReset: method("forgot"), resetPassword: method("reset"), sendVerificationEmail: method("resend") };
 const { AuthCard } = compile("src/components/sites/rolly/AuthCard.tsx", (name) => {
+  if (name.endsWith(".module.css")) return { default: new Proxy({}, { get: (_, key) => String(key) }) };
   if (name === "react") return fakeReact;
   if (name === "next/image") return { default: ({ src, alt }) => React.createElement("img", { src, alt }) };
   if (name === "next/link") return { default: ({ href, children, ...props }) => React.createElement("a", { ...props, href }, children) };
