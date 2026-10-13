@@ -1,26 +1,45 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
-import { Globe } from "lucide-react";
+import { ArrowRight, Globe } from "lucide-react";
+import { Mascot } from "page-mascot";
 import { AUTH_COPY, authLanguage, type AuthLanguage } from "@/lib/auth-copy";
+import styles from "./WelcomeScreen.module.css";
 
 export function WelcomeScreen({ onGetStarted, onLogIn, initialLang = "en" }: { onGetStarted: (lang?: AuthLanguage) => void; onLogIn: (lang?: AuthLanguage) => void; initialLang?: string }) {
   const [lang, setLang] = useState<AuthLanguage>(authLanguage(initialLang));
   const t = AUTH_COPY[lang];
-  return <main lang={lang} className="min-h-dvh flex flex-col items-center bg-gradient-to-b from-[#dff7f5] to-[#f8faf9] px-5 py-7 sm:px-10">
-    <header className="flex w-full max-w-5xl items-center justify-between gap-5">
-      <label className="flex items-center gap-2 rounded-xl border border-[#147d78]/30 bg-white/60 px-3 py-2 text-sm text-[#173e50]"><Globe size={17} /><select aria-label={t.language} value={lang} onChange={(e) => setLang(authLanguage(e.target.value))} className="bg-transparent py-1 focus:outline-2 focus:outline-[#147d78]"><option value="en">English</option><option value="vi">Tiếng Việt</option><option value="zh">中文</option></select></label>
-      <span className="font-semibold tracking-tight text-[#173e50]">FinBridge</span>
+  return <main lang={lang} className={styles.welcome}>
+    <header className={styles.header}>
+      <div className={styles.brand}>
+        <span className={styles.brandMark} aria-hidden="true">
+          <svg viewBox="0 0 32 32" fill="none">
+            <path d="M5 24V13M27 24V13M5 17C11 5 21 5 27 17M5 20H27M11 20V24M16 20V24M21 20V24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+        </span>
+        <span><span className={styles.fin}>Fin</span><span className={styles.bridge}>Bridge</span></span>
+      </div>
+      <label className={styles.language}>
+        <Globe size={17} aria-hidden="true" />
+        <select aria-label={t.language} value={lang} onChange={(e) => setLang(authLanguage(e.target.value))}>
+          <option value="en">English</option>
+          <option value="vi">Tiếng Việt</option>
+          <option value="zh">中文</option>
+        </select>
+      </label>
     </header>
-    <section className="my-auto flex max-w-2xl flex-col items-center py-9 text-center">
-      <p className="max-w-md text-base leading-relaxed text-[#6c7e87] sm:text-lg">{t.greeting}</p>
-      <Image src="/sites/rolly/images/Welcome_Icon.png" alt={t.jack} width={280} height={280} priority className="my-8 h-52 w-52 object-contain sm:h-64 sm:w-64" />
-      <h1 className="text-3xl font-semibold leading-tight tracking-tight text-[#147d78] sm:text-4xl">{t.headline}</h1>
+    <section className={styles.hero} aria-labelledby="welcome-title">
+      <div className={styles.mascotStage}>
+        <Mascot directions="/mascots/lac-directions.webp" reactions="/mascots/lac-reactions.webp" size={140} label={t.jack} className={styles.mascot} />
+      </div>
+      <p className={styles.greeting}>{t.greeting}</p>
+      <h1 id="welcome-title" className={styles.headline}>{t.headline}</h1>
+      <div className={styles.actions}>
+        <button type="button" onClick={() => onGetStarted(lang)} className={styles.start}>
+          {t.start}<ArrowRight size={19} aria-hidden="true" />
+        </button>
+        <button type="button" onClick={() => onLogIn(lang)} className={styles.login}>{t.returning}</button>
+      </div>
     </section>
-    <div className="flex w-full max-w-2xl flex-col items-center gap-5 pb-4">
-      <button type="button" onClick={() => onGetStarted(lang)} className="w-full rounded-2xl bg-[#147d78] px-6 py-4 font-semibold text-white transition-colors hover:bg-[#106762] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#147d78]">{t.start}</button>
-      <button type="button" onClick={() => onLogIn(lang)} className="text-sm text-[#173e50] underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-[#147d78]">{t.returning}</button>
-    </div>
   </main>;
 }
