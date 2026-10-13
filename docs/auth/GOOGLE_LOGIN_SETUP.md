@@ -7,7 +7,8 @@
 - App: http://localhost:3011/
 - First visit: Jack welcome screen. Returning-user link opens Google login.
 - Google callback succeeds -> /app (Home). Valid returning sessions skip welcome.
-- Email/password and Apple are not implemented in this step.
+- Email/password registration, verification and recovery are now documented in
+  [email setup](EMAIL_PASSWORD_SETUP.md). Apple is not included.
 - Accounts and sessions: PostgreSQL, not a simulated login.
 - Financial data remains local browser data, partitioned by authenticated user ID.
   It is NOT synchronized to PostgreSQL or another device. RBAC is not implemented.
@@ -19,7 +20,8 @@ to 127.0.0.1:5434. The existing PostgreSQL service on 5432 was not changed.
 New databases: `finbridge_auth` and `finbridge_auth_test`.
 The app role is not a superuser. App credentials and the signing secret were
 generated locally and written only to ignored `.env.local`; no secret is in Git.
-The Google fields are empty. The button stays unavailable until configured.
+Google credentials were configured locally and the user confirmed successful
+Google login. A new checkout must supply its own ignored credentials.
 
 To restart this dedicated local cluster after reboot (PowerShell):
 
@@ -74,7 +76,8 @@ Different localhost ports have different browser storage.
 
 ## Future Render deployment
 
-This branch has not been pushed or deployed. Create/use the intended NEXT.JS
+Google login was pushed to main at 4582ae1; the email-login extension is still
+local. Nothing has been deployed. Create/use the intended NEXT.JS
 service and persistent Render PostgreSQL database, not the old shared Java demo.
 At deployment time, configure:
 

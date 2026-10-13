@@ -14,12 +14,14 @@ if (!databaseURL) throw new Error("AUTH_TEST_DATABASE_URL required; tests are no
 const db = new URL(databaseURL);
 if (!["127.0.0.1", "localhost"].includes(db.hostname) || db.pathname !== "/finbridge_auth_test") throw new Error("Only the dedicated local finbridge_auth_test database is allowed.");
 const pool = new Pool({ connectionString: databaseURL, max: 2 });
-const migration = await getMigrations({ database: pool }); await migration.runMigrations();
 const source = ts.transpileModule(fs.readFileSync("src/lib/auth-options.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 } }).outputText;
 const { buildAuthOptions } = await import("data:text/javascript;base64," + Buffer.from(source).toString("base64"));
 const baseURL = "http://localhost:3011";
 const config = { baseURL, secret: "synthetic-only-test-secret-" + "x".repeat(40), clientId: "synthetic-client", clientSecret: "synthetic-client-secret", databaseURL };
-const productionOptions = buildAuthOptions(config, pool);
+const mail = [];
+let mailFailure = false;
+const productionOptions = buildAuthOptions(config, pool, async (message) => { if (mailFailure) throw new Error("SYNTHETIC_MAIL_FAILURE"); mail.push(message); });
+const migration = await getMigrations(productionOptions); await migration.runMigrations();
 // Protocol cases isolate OAuth from burst protection; the final case tests the real limiter.
 const auth = betterAuth({ ...productionOptions, rateLimit: { enabled: false } });
 const handlerSource = ts.transpileModule(fs.readFileSync("src/lib/auth-handler.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 } }).outputText;
@@ -73,4 +75,123 @@ test("expired database session is rejected", async () => { const expiring = awai
 test("logout revokes the database session and the old cookie no longer works", async () => { const response = await request("/sign-out", { method: "POST", cookie: signed.cookie, body: {} }); assert.equal(response.status, 200); assert.equal(await session(signed.cookie), null); });
 test("missing Origin on a POST is rejected", async () => { const before = await counts(); const response = await request("/sign-in/social", { method: "POST", origin: "", body: { provider: "google", callbackURL: "/app" } }); assert.equal(response.status, 403); assert.deepEqual(await counts(), before); });
 test("production rate limiter rejects repeated OAuth starts", async () => { const limited = betterAuth(productionOptions); const statuses = []; for (let i = 0; i < 4; i++) { const response = await handleAuthRequest(limited, new Request(baseURL + "/api/auth/sign-in/social", { method: "POST", headers: { origin: baseURL, "content-type": "application/json" }, body: JSON.stringify({ provider: "google", callbackURL: "/app" }) }), baseURL); statuses.push(response.status); } assert.deepEqual(statuses, [200, 200, 200, 429]); });
+const emailBody = { name: "Synthetic Email User", email: "email-user@example.invalid", password: "Synthetic-password-123", callbackURL: "/login?verified=1" };
+let emailCookie, emailUser;
+test("email sign-up stores a hash and default user role, sends verification and creates no session", async () => {
+  const before = await counts();
+  const response = await request("/sign-up/email", { method: "POST", body: emailBody });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).token, null);
+  const data = (await pool.query('SELECT id, role, "emailVerified" FROM "user" WHERE email = $1', [emailBody.email])).rows[0];
+  emailUser = data.id; assert.equal(data.role, "user"); assert.equal(data.emailVerified, false);
+  const credential = (await pool.query('SELECT password FROM "account" WHERE "userId" = $1 AND "providerId" = $2', [emailUser, "credential"])).rows[0];
+  assert.ok(credential.password); assert.notEqual(credential.password, emailBody.password);
+  assert.equal((await counts())[2], before[2]);
+  assert.equal(mail.at(-1).kind, "verify"); assert.equal(mail.at(-1).to, emailBody.email);
+});
+test("unverified email cannot obtain a session, even with the correct password", async () => {
+  const before = (await counts())[2];
+  const response = await request("/sign-in/email", { method: "POST", body: emailBody });
+  assert.equal(response.status, 403); assert.equal((await response.json()).code, "EMAIL_NOT_VERIFIED");
+  assert.equal((await counts())[2], before);
+});
+test("verification link enables email login and uses the same workspace user identity", async () => {
+  const link = new URL(mail.find((message) => message.to === emailBody.email && message.kind === "verify").url);
+  const verified = await request(link.pathname.replace("/api/auth", "") + link.search);
+  assert.equal(verified.status, 302); assert.ok(verified.headers.get("location").includes("/login"));
+  const response = await request("/sign-in/email", { method: "POST", body: emailBody });
+  assert.equal(response.status, 200); emailCookie = cookies(response);
+  const data = await session(emailCookie); assert.equal(data.user.id, emailUser); assert.equal(data.user.role, "user");
+});
+test("wrong password and unknown email return the same safe code and create no sessions", async () => {
+  const before = (await counts())[2], codes = [];
+  for (const email of [emailBody.email, "absent@example.invalid"]) {
+    const response = await request("/sign-in/email", { method: "POST", body: { email, password: "Wrong-password-123" } });
+    assert.equal(response.status, 401); codes.push((await response.json()).code);
+  }
+  assert.equal(codes[0], codes[1]); assert.equal((await counts())[2], before);
+});
+test("duplicate signup cannot replace password, identity or account ownership", async () => {
+  const before = await counts();
+  const response = await request("/sign-up/email", { method: "POST", body: { ...emailBody, password: "Attacker-password-123" } });
+  assert.equal(response.status, 200); assert.deepEqual(await counts(), before);
+  const login = await request("/sign-in/email", { method: "POST", body: { ...emailBody, password: "Attacker-password-123" } });
+  assert.equal(login.status, 401);
+});
+test("client cannot self-assign admin at signup or update-user", async () => {
+  const response = await request("/sign-up/email", { method: "POST", body: { ...emailBody, email: "forged-role@example.invalid", role: "admin", emailVerified: true } });
+  assert.ok([200, 400].includes(response.status));
+  const row = (await pool.query('SELECT role, "emailVerified" FROM "user" WHERE email = $1', ["forged-role@example.invalid"])).rows[0];
+  if (row) { assert.equal(row.role, "user"); assert.equal(row.emailVerified, false); }
+  await request("/update-user", { method: "POST", cookie: emailCookie, body: { role: "admin" } });
+  assert.equal((await session(emailCookie)).user.role, "user");
+});
+test("short password and foreign-origin signup are rejected with zero account writes", async () => {
+  const before = await counts();
+  const short = await request("/sign-up/email", { method: "POST", body: { ...emailBody, email: "short@example.invalid", password: "12345678" } });
+  assert.equal(short.status, 400);
+  const foreign = await request("/sign-up/email", { method: "POST", origin: "https://attacker.invalid", body: { ...emailBody, email: "foreign@example.invalid" } });
+  assert.equal(foreign.status, 403); assert.deepEqual(await counts(), before);
+});
+test("password-reset request is generic for existing and unknown addresses", async () => {
+  const responses = [];
+  for (const email of [emailBody.email, "absent@example.invalid"]) {
+    const response = await request("/request-password-reset", { method: "POST", body: { email, redirectTo: "/reset-password" } });
+    assert.equal(response.status, 200); responses.push(await response.json());
+  }
+  assert.deepEqual(responses[0], responses[1]); assert.equal(mail.at(-1).kind, "reset");
+});
+test("reset link changes the password, revokes sessions and cannot be replayed", async () => {
+  const link = new URL(mail.at(-1).url);
+  const callback = await request(link.pathname.replace("/api/auth", "") + link.search);
+  assert.equal(callback.status, 302);
+  const token = new URL(callback.headers.get("location")).searchParams.get("token");
+  const body = { token, newPassword: "New-synthetic-password-456" };
+  assert.equal((await request("/reset-password", { method: "POST", body })).status, 200);
+  assert.equal(await session(emailCookie), null);
+  assert.equal((await request("/reset-password", { method: "POST", body })).status, 400);
+  assert.equal((await request("/sign-in/email", { method: "POST", body: emailBody })).status, 401);
+  assert.equal((await request("/sign-in/email", { method: "POST", body: { ...emailBody, password: body.newPassword } })).status, 200);
+});
+test("forged and expired reset tokens do not change a password or create sessions", async () => {
+  await request("/request-password-reset", { method: "POST", body: { email: emailBody.email, redirectTo: "/reset-password" } });
+  const token = new URL(mail.at(-1).url).pathname.split("/").at(-1);
+  await pool.query('UPDATE "verification" SET "expiresAt" = $1 WHERE identifier = $2', [new Date(0), "reset-password:" + token]);
+  const before = await counts();
+  const previous = (await pool.query('SELECT password FROM "account" WHERE "userId" = $1 AND "providerId" = $2', [emailUser, "credential"])).rows[0].password;
+  for (const value of ["forged-token", token]) assert.equal((await request("/reset-password", { method: "POST", body: { token: value, newPassword: "Forged-password-123" } })).status, 400);
+  assert.deepEqual(await counts(), before);
+  assert.equal((await pool.query('SELECT password FROM "account" WHERE "userId" = $1 AND "providerId" = $2', [emailUser, "credential"])).rows[0].password, previous);
+});
+test("a Google-only account can add a password only through a valid email reset, preserving its user id", async () => {
+  const email = "google-user-a@example.invalid";
+  const before = (await pool.query('SELECT id FROM "user" WHERE email = $1', [email])).rows[0].id;
+  await request("/request-password-reset", { method: "POST", body: { email, redirectTo: "/reset-password" } });
+  const token = new URL(mail.at(-1).url).pathname.split("/").at(-1);
+  const password = "Google-owner-password-123";
+  assert.equal((await request("/reset-password", { method: "POST", body: { token, newPassword: password } })).status, 200);
+  const login = await request("/sign-in/email", { method: "POST", body: { email, password } });
+  assert.equal(login.status, 200); assert.equal((await session(cookies(login))).user.id, before);
+});
+test("mail-unconfigured server disables signup and reset while retaining verified email login", async () => {
+  const unavailable = betterAuth({ ...buildAuthOptions(config, pool), rateLimit: { enabled: false } });
+  const send = (path, body) => handleAuthRequest(unavailable, new Request(baseURL + "/api/auth" + path, { method: "POST", headers: { origin: baseURL, "content-type": "application/json" }, body: JSON.stringify(body) }), baseURL);
+  const before = await counts();
+  assert.notEqual((await send("/sign-up/email", { ...emailBody, email: "unavailable@example.invalid" })).status, 200);
+  assert.notEqual((await send("/request-password-reset", { email: emailBody.email })).status, 200);
+  assert.deepEqual(await counts(), before);
+  assert.equal((await send("/sign-in/email", { ...emailBody, password: "New-synthetic-password-456" })).status, 200);
+});
+test("SMTP failure creates no authenticated session", async () => {
+  const before = (await counts())[2]; mailFailure = true;
+  // Better Auth intentionally keeps the signup response generic even on delivery failure.
+  try { assert.equal((await request("/sign-up/email", { method: "POST", body: { ...emailBody, email: "mail-failure@example.invalid" } })).status, 200); }
+  finally { mailFailure = false; }
+  assert.equal((await counts())[2], before);
+  assert.equal((await pool.query('SELECT "emailVerified" FROM "user" WHERE email = $1', ["mail-failure@example.invalid"])).rows[0].emailVerified, false);
+  assert.equal((await request("/sign-in/email", { method: "POST", body: { email: "mail-failure@example.invalid", password: emailBody.password } })).status, 403);
+  assert.equal((await request("/send-verification-email", { method: "POST", body: { email: "mail-failure@example.invalid", callbackURL: "/login" } })).status, 200);
+  assert.equal(mail.at(-1).to, "mail-failure@example.invalid");
+});
+
 after(async () => { globalThis.fetch = originalFetch; for (const table of tables) await pool.query('DELETE FROM "' + table + '"'); await pool.end(); });

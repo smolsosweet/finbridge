@@ -1,15 +1,26 @@
 import type { BetterAuthOptions } from "better-auth";
 import type { Pool } from "pg";
 import type { readAuthConfig } from "./auth-config";
+import type { SendAuthMail } from "./auth-mail";
 
-export function buildAuthOptions(config: NonNullable<ReturnType<typeof readAuthConfig>>, database: Pool) {
+export function buildAuthOptions(config: NonNullable<ReturnType<typeof readAuthConfig>>, database: Pool, sendMail?: SendAuthMail) {
   return {
     appName: "FinBridge",
     baseURL: config.baseURL,
     secret: config.secret,
     trustedOrigins: [config.baseURL],
     database,
-    emailAndPassword: { enabled: false },
+    user: { additionalFields: { role: { type: "string" as const, defaultValue: "user", required: true, input: false } } },
+    emailAndPassword: {
+      enabled: true, disableSignUp: !sendMail, requireEmailVerification: true,
+      autoSignIn: false, minPasswordLength: 12, maxPasswordLength: 128,
+      resetPasswordTokenExpiresIn: 1800, revokeSessionsOnPasswordReset: true,
+      sendResetPassword: sendMail ? async ({ user, url }: { user: { email: string }; url: string }) => { await sendMail({ to: user.email, url, kind: "reset" }); } : undefined,
+    },
+    emailVerification: {
+      expiresIn: 3600, sendOnSignUp: true, sendOnSignIn: false, autoSignInAfterVerification: false,
+      sendVerificationEmail: sendMail ? async ({ user, url }: { user: { email: string }; url: string }) => { await sendMail({ to: user.email, url, kind: "verify" }); } : undefined,
+    },
     socialProviders: { google: { clientId: config.clientId, clientSecret: config.clientSecret, prompt: "select_account" as const, includeGrantedScopes: false } },
     account: { encryptOAuthTokens: true, accountLinking: { enabled: false } },
     session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24, cookieCache: { enabled: false } },
