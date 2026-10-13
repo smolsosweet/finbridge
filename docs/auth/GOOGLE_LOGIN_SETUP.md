@@ -2,9 +2,9 @@
 
 ## Current local checkout
 
-- Branch: `feature/google-login`
-- Checkout: `D:\finbridge-google-login` (independent of the Antigravity UI checkout).
-- App: http://localhost:3011/
+- Branch: `main` (Google and email login have both been merged).
+- Checkout: `D:\ai-website-cloner-codex`.
+- App: http://localhost:3000/
 - First visit: Jack welcome screen. Returning-user link opens Google login.
 - Google callback succeeds -> /app (Home). Valid returning sessions skip welcome.
 - Email/password registration, verification and recovery are now documented in
@@ -15,7 +15,7 @@
 
 ## Local database already prepared on this machine
 
-A dedicated PostgreSQL 17 cluster was created at `.local/postgres`, bound ONLY
+A dedicated PostgreSQL 17 cluster is stored at `D:\finbridge-local-data\postgres`, bound ONLY
 to 127.0.0.1:5434. The existing PostgreSQL service on 5432 was not changed.
 New databases: `finbridge_auth` and `finbridge_auth_test`.
 The app role is not a superuser. App credentials and the signing secret were
@@ -26,8 +26,16 @@ Google login. A new checkout must supply its own ignored credentials.
 To restart this dedicated local cluster after reboot (PowerShell):
 
 ```powershell
-& 'C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe' -D 'D:\finbridge-google-login\.local\postgres' -l 'D:\finbridge-google-login\.local\postgres.log' -o '-h 127.0.0.1 -p 5434' -w start
+& 'C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe' -D 'D:\finbridge-local-data\postgres' -l 'D:\finbridge-local-data\postgres.log' -o '-h 127.0.0.1 -p 5434' -w start
 ```
+
+The database was moved out of the temporary login worktree after a clean shutdown.
+Logical dumps, a verified cold copy and both local environment files are preserved
+under `D:\finbridge-local-data\backups\before-worktree-removal`. This directory
+contains private data and credentials; do not upload it or commit it to Git.
+The connection remains `127.0.0.1:5434`, so `.env.local` needs no database URL change.
+All rows in both databases matched their pre-move checksums, and the 28 auth
+PostgreSQL integration tests passed against the isolated test database after moving.
 
 Alternatively, a new machine can use `compose.auth.yml` with a locally supplied
 `FINBRIDGE_LOCAL_DB_PASSWORD`, then fill `.env.local` from `.env.example`.
@@ -40,18 +48,19 @@ Do not run Docker on port 5434 while the native local cluster is running.
    audience and contact information for FinBridge. If in testing mode, add the
    accounts that will test the app to Test users.
 3. Create an OAuth client of type **Web application**.
-4. Set the authorized JavaScript origin to `http://localhost:3011`.
+4. Set the authorized JavaScript origin to `http://localhost:3000`.
 5. Set the authorized redirect URI to
-   `http://localhost:3011/api/auth/callback/google` exactly.
+   `http://localhost:3000/api/auth/callback/google` exactly. You may retain the
+   old localhost:3011 callback for another development server.
 6. In this checkout's ignored `.env.local`, fill:
    `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
    Keep the generated secret and database URL. Do not paste secrets into chat.
 7. Restart the Next.js server:
 
 ```powershell
-Set-Location D:\finbridge-google-login
+Set-Location D:\ai-website-cloner-codex
 npm run auth:migrate
-npm run dev -- --port 3011
+npm run dev -- --port 3000
 ```
 
 8. Open /. Choose language if needed, then Returning user -> Continue with Google.
@@ -76,8 +85,8 @@ Different localhost ports have different browser storage.
 
 ## Future Render deployment
 
-Google login was pushed to main at 4582ae1; the email-login extension is still
-local. Nothing has been deployed. Create/use the intended NEXT.JS
+Google login was pushed to main at 4582ae1; email login was merged at 5029ec7.
+Nothing has been deployed. Create/use the intended NEXT.JS
 service and persistent Render PostgreSQL database, not the old shared Java demo.
 At deployment time, configure:
 

@@ -1,6 +1,7 @@
 # Email login, registration and password recovery
 
-Branch: `feature/email-login`, based on main `4582ae1`.
+Implemented on `feature/email-login`, based on `4582ae1`; merged into `main`
+at `5029ec7`. The local app now runs from `D:\ai-website-cloner-codex`.
 
 ## What is implemented
 
@@ -87,7 +88,9 @@ credentials and the real email adapter variables. Add the production Google
 callback URL. Run `npm run auth:migrate` against the new database before serving
 traffic. The migration now uses the same auth schema options as the app.
 
-Git pushes deploy code, not the local `.local/postgres` cluster or its data.
+Git pushes deploy code, not the local PostgreSQL cluster or its data. The local
+cluster is now stored independently at `D:\finbridge-local-data\postgres`; see
+[local database startup and backup](GOOGLE_LOGIN_SETUP.md).
 Moving existing data requires a deliberate PostgreSQL dump/restore. Accounts
 created locally therefore do not automatically appear on a newly provisioned DB.
 Render Free PostgreSQL currently expires after 30 days; choose persistent paid
