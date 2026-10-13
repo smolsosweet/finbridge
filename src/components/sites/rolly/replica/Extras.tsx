@@ -63,12 +63,164 @@ export function CompletedRequests({ navigate }: { navigate: (screen: string) => 
 export function FeatureRequests({ navigate }: { navigate: (screen: string) => void }) {
   const state = useAppState();
   const [other, setOther] = useState(false);
-  return <div className="r-feature-page"><PageHeader title="Yêu cầu tính năng" close onBack={() => navigate("?tab=settings")} /><div className="r-feature-intro"><Mascot /><h2>Hãy giúp chúng tôi cải thiện!</h2><p>Hãy bỏ phiếu cho các tính năng bạn muốn thấy hoặc đề xuất các tính năng mới. Chúng tôi ưu tiên phát triển dựa trên phản hồi của cộng đồng.</p></div><button className="r-feature-completed" onClick={() => navigate("featureRequestCompleted")}>Xem yêu cầu đã hoàn thành ›</button><div className="r-feature-list">{requests.map(([title, desc], i) => <article key={title}><div><h3>{title}</h3><p>{desc}</p><small>{i === 0 ? "Đang thực hiện" : "Đang được xem xét"}</small></div><button aria-label={"Bỏ phiếu: " + title} className={state.settings["vote" + i] ? "r-voted" : ""} onClick={() => setSetting("vote" + i, !state.settings["vote" + i])}><ThumbsUp fill="currentColor" /></button></article>)}</div><button className="r-primary" onClick={() => setOther(true)}>Tôi có yêu cầu khác</button>{other && <Modal title="Tôi có yêu cầu khác" onClose={() => setOther(false)}><div className="r-form"><textarea aria-label="Yêu cầu của bạn" placeholder="Yêu cầu của bạn..." /><p>Liên kết tham khảo bên dưới mở trang liên hệ của Rolly.</p><a className="r-primary" href="https://rollyapp.ai/vi/lien-he" target="_blank" rel="noreferrer">Liên hệ với chúng tôi</a></div></Modal>}</div>;
+  const [customRequest, setCustomRequest] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  function handleSendRequest(e: React.FormEvent) {
+    e.preventDefault();
+    if (!customRequest.trim()) return;
+    setSubmitted(true);
+    setTimeout(() => {
+      setSubmitted(false);
+      setCustomRequest("");
+      setOther(false);
+    }, 1500);
+  }
+
+  return (
+    <div className="r-feature-page">
+      <PageHeader
+        title="Yêu cầu tính năng"
+        subtitle="Hãy bỏ phiếu cho các tính năng bạn muốn thấy hoặc đề xuất các tính năng mới cho FinBridge."
+        close
+        onBack={() => navigate("?tab=settings")}
+      />
+      <button className="r-feature-completed" onClick={() => navigate("featureRequestCompleted")}>
+        Xem yêu cầu đã hoàn thành ›
+      </button>
+      <div className="r-feature-list">
+        {requests.map(([title, desc], i) => (
+          <article key={title}>
+            <div>
+              <h3>{title}</h3>
+              <p>{desc}</p>
+              <small>{i === 0 ? "Đang thực hiện" : "Đang được xem xét"}</small>
+            </div>
+            <button
+              aria-label={"Bỏ phiếu: " + title}
+              className={state.settings["vote" + i] ? "r-voted" : ""}
+              onClick={() => setSetting("vote" + i, !state.settings["vote" + i])}
+            >
+              <ThumbsUp fill="currentColor" />
+            </button>
+          </article>
+        ))}
+      </div>
+      <button className="r-primary" onClick={() => setOther(true)}>
+        Tôi có yêu cầu khác
+      </button>
+      {other && (
+        <Modal title="Tôi có yêu cầu khác" wide onClose={() => setOther(false)}>
+          {submitted ? (
+            <div className="r-dialog-note" style={{ color: "var(--r-teal)", textAlign: "center", padding: "20px" }}>
+              Cảm ơn bạn! Yêu cầu tính năng đã được gửi tới đội ngũ FinBridge.
+            </div>
+          ) : (
+            <form className="r-form" onSubmit={handleSendRequest}>
+              <textarea
+                aria-label="Yêu cầu của bạn"
+                placeholder="Mô tả tính năng hoặc ý tưởng bạn mong muốn FinBridge phát triển..."
+                value={customRequest}
+                onChange={(e) => setCustomRequest(e.target.value)}
+                required
+                rows={4}
+              />
+              <p className="r-dialog-note">
+                Đội ngũ FinBridge sẽ ghi nhận và xem xét đưa tính năng này vào lộ trình cập nhật sắp tới.
+              </p>
+              <button type="submit" className="r-primary">
+                Gửi yêu cầu
+              </button>
+            </form>
+          )}
+        </Modal>
+      )}
+    </div>
+  );
 }
 export function PremiumPage({ navigate }: { navigate: (screen: string) => void }) {
   const [trial, setTrial] = useState(false);
   const [plans, setPlans] = useState(false);
   const [selected, setSelected] = useState("Hàng năm");
   const [payment, setPayment] = useState(false);
-  return <div className="r-premium-page"><PageHeader close onBack={() => navigate("?tab=settings")} /><Mascot /><h1>Dùng thử FinBridge Premium miễn phí</h1><h2>Xây dựng thói quen quản lý tiền bạc tốt hơn bằng các công cụ AI mạnh mẽ.</h2><ul>{["Mở khóa tiềm năng đầy đủ - truy cập mọi tính năng", "Quét hóa đơn hoặc phiếu thu để dễ dàng liệt kê từng giao dịch", "Nhập liệu bằng giọng nói với các lệnh đơn giản để theo dõi chi tiêu rảnh tay", "Tạo nhiều ví để quản lý tài chính cho du lịch, công việc và cuộc sống cá nhân một cách riêng biệt", "Mời bạn bè/gia đình vào ví để cùng nhau quản lý chi phí chung", "Hiểu rõ hơn về thói quen chi tiêu của bạn với phân tích AI nâng cao", "Khóa sinh trắc học cho ví của bạn để bảo mật tốt hơn", "Xuất/Nhập tệp CSV"].map((text, i) => <li key={text}><Icon code={["f534", "f030", "f130", "f555", "f234", "f201", "f023", "f019"][i]} />{text}</li>)}</ul><p>VÀ NHIỀU HƠN NỮA...</p><button className="r-text-link" onClick={() => setPayment(true)}>Đổi mã khuyến mãi</button><div className="r-premium-bottom"><div className="r-toggle-row"><span>Kích hoạt bản dùng thử miễn phí</span><Toggle checked={trial} label="Kích hoạt bản dùng thử miễn phí" onChange={setTrial} /></div><b>₫249,000 mỗi năm <small>(20,750/tháng)</small></b><button className="r-premium-continue" onClick={() => setPlans(true)}>Tiếp tục</button><button className="r-text-link" onClick={() => setPlans(true)}>Xem tất cả các kế hoạch</button></div>{plans && <Modal onClose={() => setPlans(false)}><div className="r-plan-list">{[["Hàng tháng", "₫79,000"], ["Hàng năm", "₫249,000"], ["Trọn đời", "₫739,000"]].map(([name, price]) => <button key={name} className={name === selected ? "active" : ""} onClick={() => setSelected(name)}><span><b>{name}</b><small>{price}</small></span>{name === selected ? "✓" : "○"}</button>)}</div><p className="r-center r-small">Đăng ký sẽ tự động gia hạn, bạn có thể hủy bất cứ lúc nào.</p><button className="r-primary" onClick={() => { setPlans(false); setPayment(true); }}>Bắt đầu dùng thử miễn phí ›</button></Modal>}{payment && <Modal title="FinBridge Premium" onClose={() => setPayment(false)}><p>Thanh toán và kích hoạt Premium cần thực hiện trên dịch vụ Rolly được dẫn liên kết bên dưới.</p><a href="https://app.rollyapp.ai/" target="_blank" rel="noreferrer" className="r-primary">Mở dịch vụ Rolly tham khảo</a></Modal>}</div>;
+  return (
+    <div className="r-premium-page">
+      <PageHeader close onBack={() => navigate("?tab=settings")} />
+      <h1>Dùng thử FinBridge Premium miễn phí</h1>
+      <h2>Xây dựng thói quen quản lý tiền bạc tốt hơn bằng các công cụ AI mạnh mẽ.</h2>
+      <ul>
+        {[
+          "Mở khóa tiềm năng đầy đủ - truy cập mọi tính năng",
+          "Quét hóa đơn hoặc phiếu thu để dễ dàng liệt kê từng giao dịch",
+          "Nhập liệu bằng giọng nói với các lệnh đơn giản để theo dõi chi tiêu rảnh tay",
+          "Tạo nhiều ví để quản lý tài chính cho du lịch, công việc và cuộc sống cá nhân một cách riêng biệt",
+          "Mời bạn bè/gia đình vào ví để cùng nhau quản lý chi phí chung",
+          "Hiểu rõ hơn về thói quen chi tiêu của bạn với phân tích AI nâng cao",
+          "Khóa sinh trắc học cho ví của bạn để bảo mật tốt hơn",
+          "Xuất/Nhập tệp CSV",
+        ].map((text, i) => (
+          <li key={text}>
+            <Icon code={["f534", "f030", "f130", "f555", "f234", "f201", "f023", "f019"][i]} />
+            {text}
+          </li>
+        ))}
+      </ul>
+      <p>VÀ NHIỀU HƠN NỮA...</p>
+      <button className="r-text-link" onClick={() => setPayment(true)}>
+        Đổi mã khuyến mãi
+      </button>
+      <div className="r-premium-bottom">
+        <div className="r-toggle-row">
+          <span>Kích hoạt bản dùng thử miễn phí</span>
+          <Toggle checked={trial} label="Kích hoạt bản dùng thử miễn phí" onChange={setTrial} />
+        </div>
+        <b>
+          ₫249,000 mỗi năm <small>(20,750/tháng)</small>
+        </b>
+        <button className="r-premium-continue" onClick={() => setPlans(true)}>
+          Tiếp tục
+        </button>
+        <button className="r-text-link" onClick={() => setPlans(true)}>
+          Xem tất cả các kế hoạch
+        </button>
+      </div>
+      {plans && (
+        <Modal wide onClose={() => setPlans(false)}>
+          <div className="r-plan-list">
+            {[
+              ["Hàng tháng", "₫79,000"],
+              ["Hàng năm", "₫249,000"],
+              ["Trọn đời", "₫739,000"],
+            ].map(([name, price]) => (
+              <button key={name} className={name === selected ? "active" : ""} onClick={() => setSelected(name)}>
+                <span>
+                  <b>{name}</b>
+                  <small>{price}</small>
+                </span>
+                {name === selected ? "✓" : "○"}
+              </button>
+            ))}
+          </div>
+          <p className="r-center r-small">Đăng ký sẽ tự động gia hạn, bạn có thể hủy bất cứ lúc nào.</p>
+          <button
+            className="r-primary"
+            onClick={() => {
+              setPlans(false);
+              setPayment(true);
+            }}
+          >
+            Bắt đầu dùng thử miễn phí ›
+          </button>
+        </Modal>
+      )}
+      {payment && (
+        <Modal title="FinBridge Premium" wide onClose={() => setPayment(false)}>
+          <p>Tính năng thanh toán Premium đang được tích hợp trực tiếp trong các bản cập nhật sắp tới của FinBridge.</p>
+          <button type="button" className="r-primary" onClick={() => setPayment(false)}>
+            Đã hiểu
+          </button>
+        </Modal>
+      )}
+    </div>
+  );
 }
