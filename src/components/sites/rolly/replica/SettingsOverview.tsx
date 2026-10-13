@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { FinBridgeHeader } from "./FinBridgeHeader";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
+import { FeatureRequestsModal } from "./Extras";
 import { Modal } from "./Ui";
 import { setSetting, useAppState, type AppState } from "./store";
 
@@ -70,6 +71,42 @@ const COPY = {
     creditCard: "Thẻ tín dụng",
     currentBalance: "Số dư hiện tại",
     addWallet: "Thêm ví mới",
+    termsSections: [
+      {
+        heading: "1. Giới thiệu & Phạm vi dịch vụ",
+        body: "FinBridge là ứng dụng trợ lý tài chính cá nhân thông minh, giúp người dùng theo dõi các khoản thu chi, lập ngân sách dự toán, quản lý các khoản chi cố định và thống kê dòng tiền một cách chủ động và minh bạch.",
+      },
+      {
+        heading: "2. Trách nhiệm của người dùng",
+        body: "Người dùng chịu trách nhiệm bảo mật thiết bị đăng nhập và tính chính xác của các số liệu giao dịch được nhập vào hệ thống. FinBridge khuyến khích bạn kiểm tra định kỳ các số dư thực tế so với sổ sách trong ứng dụng.",
+      },
+      {
+        heading: "3. Quyền sở hữu trí tuệ",
+        body: "Mọi thiết kế giao diện, thuật toán thống kê, tài sản thương hiệu và biểu tượng thuộc bản quyền của FinBridge. Nghiêm cấm sao chép, đảo ngược mã nguồn hoặc phân phối lại khi chưa có sự đồng ý bằng văn bản.",
+      },
+      {
+        heading: "4. Giới hạn trách nhiệm",
+        body: "FinBridge cung cấp công cụ hỗ trợ theo dõi và quản lý dữ liệu cá nhân, không cấu thành lời khuyên tư vấn tài chính, đầu tư hoặc bảo hiểm có chứng chỉ pháp lý.",
+      },
+    ],
+    privacySections: [
+      {
+        heading: "1. Cam kết quyền riêng tư tuyệt đối",
+        body: "FinBridge coi quyền riêng tư và an toàn dữ liệu của bạn là ưu tiên cao nhất. Dữ liệu tài chính, ví và các khoản chi tiêu thuộc về bạn và chỉ phục vụ cho việc quản lý tài chính của chính bạn.",
+      },
+      {
+        heading: "2. Lưu trữ và mã hóa an toàn",
+        body: "Mọi thông tin giao dịch, hạn mức ngân sách và lịch sử dòng tiền được lưu trữ cục bộ và đồng bộ hóa qua kết nối mã hóa tiêu chuẩn cao (TLS/SSL).",
+      },
+      {
+        heading: "3. Không thương mại hóa dữ liệu cá nhân",
+        body: "FinBridge cam kết không bao giờ bán, cho thuê, chia sẻ hay tiết lộ thông tin tài chính hoặc hành vi chi tiêu của bạn cho bất kỳ bên thứ ba, công ty quảng cáo hay đối tác môi giới nào.",
+      },
+      {
+        heading: "4. Quyền kiểm soát toàn diện",
+        body: "Bạn có toàn quyền truy xuất, sửa đổi hoặc xóa vĩnh viễn toàn bộ dữ liệu tài khoản và các ví đã tạo khỏi thiết bị và hệ thống bất cứ lúc nào trong mục Cài đặt tài khoản.",
+      },
+    ],
   },
   en: {
     eyebrow: "ACCOUNT & SETTINGS",
@@ -115,6 +152,42 @@ const COPY = {
     creditCard: "Credit Card",
     currentBalance: "Current balance",
     addWallet: "Add wallet",
+    termsSections: [
+      {
+        heading: "1. Introduction & Scope of Services",
+        body: "FinBridge is an intelligent personal finance assistant designed to help users track income and expenses, plan budgets, manage recurring commitments, and analyze cash flow transparently and proactively.",
+      },
+      {
+        heading: "2. User Responsibilities",
+        body: "Users are responsible for safeguarding login access on their devices and ensuring the accuracy of transaction data entered into the system. FinBridge encourages periodic reconciliation between real accounts and application ledgers.",
+      },
+      {
+        heading: "3. Intellectual Property Rights",
+        body: "All user interface designs, statistical models, brand assets, and icons are the proprietary intellectual property of FinBridge. Reproduction, reverse engineering, or redistribution without prior written consent is strictly prohibited.",
+      },
+      {
+        heading: "4. Limitation of Liability",
+        body: "FinBridge provides personal bookkeeping and financial organization tools. Application insights do not constitute certified financial, investment, legal, or tax advisory services.",
+      },
+    ],
+    privacySections: [
+      {
+        heading: "1. Absolute Commitment to Privacy",
+        body: "FinBridge treats your privacy and data security as our utmost priority. All financial records, wallets, and transaction entries belong solely to you and serve only your personal financial management.",
+      },
+      {
+        heading: "2. Secure Storage & Encryption",
+        body: "All transaction data, budget thresholds, and cash flow histories are stored securely and synchronized using enterprise-grade encryption protocols (TLS/SSL).",
+      },
+      {
+        heading: "3. Zero Commercialization of Personal Data",
+        body: "FinBridge pledges never to sell, rent, monetize, share, or disclose your financial information or spending habits to any third-party advertisers, data brokers, or marketing partners.",
+      },
+      {
+        heading: "4. Complete Data Sovereignty",
+        body: "You retain full control to export, modify, or permanently delete your account data and all associated wallets at any time directly through Account Settings.",
+      },
+    ],
   },
   zh: {
     eyebrow: "账户与设置",
@@ -160,6 +233,42 @@ const COPY = {
     creditCard: "信用卡",
     currentBalance: "当前余额",
     addWallet: "添加钱包",
+    termsSections: [
+      {
+        heading: "1. 简介与服务范围",
+        body: "FinBridge 是一款智能个人财务管理助手，帮助用户追踪收支、制定预算、管理固定开销并清晰透明地掌握现金流动态。",
+      },
+      {
+        heading: "2. 用户责任",
+        body: "用户应对登录设备的安全以及录入系统的交易数据的准确性负责。FinBridge 建议您定期核对实际账户与应用记录的账目。",
+      },
+      {
+        heading: "3. 知识产权",
+        body: "所有界面设计、统计分析模型、品牌资产与图标均为 FinBridge 的专有知识产权。未经书面许可，严禁复制、反向工程或重新分发。",
+      },
+      {
+        heading: "4. 责任限制",
+        body: "FinBridge 提供个人记账与财务规划辅助工具。应用内的洞察与分析不构成具法律效力的认证财务、投资、法律或税务咨询建议。",
+      },
+    ],
+    privacySections: [
+      {
+        heading: "1. 绝对隐私承诺",
+        body: "FinBridge 将您的隐私与数据安全视为重中之重。所有财务数据、钱包和交易记录均归您所有，仅用于您的个人财务管理。",
+      },
+      {
+        heading: "2. 安全存储与加密",
+        body: "所有交易信息、预算限额与现金流记录均安全存储，并通过业界标准的高强度加密协议（TLS/SSL）进行传输同步。",
+      },
+      {
+        heading: "3. 绝不将个人数据商业化",
+        body: "FinBridge 承诺绝不出售、出租、共享或向任何第三方广告商、数据中介或商业伙伴披露您的财务信息或消费行为。",
+      },
+      {
+        heading: "4. 拥有完全的数据控制权",
+        body: "您拥有对个人数据的完全控制权，可随时在“账户设置”中导出、修改或永久删除您的账户及其关联的所有钱包数据。",
+      },
+    ],
   },
 };
 
@@ -171,6 +280,7 @@ export function settingsLanguage(value: unknown): "vi" | "en" | "zh" {
 export function SettingsOverview({ navigate }: { navigate: (screen: string) => void }) {
   const state = useAppState();
   const [calendarLedgerOpen, setCalendarLedgerOpen] = useState(false);
+  const [featuresModalOpen, setFeaturesModalOpen] = useState(false);
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [termsModalOpen, setTermsModalOpen] = useState(false);
   const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
@@ -206,7 +316,7 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
       title: t.features,
       subtitle: t.featuresSub,
       icon: <ListTodo size={22} />,
-      onClick: () => navigate("featureRequest"),
+      onClick: () => setFeaturesModalOpen(true),
     },
     {
       id: "contact",
@@ -236,29 +346,14 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
 
   return (
     <main className="r-dashboard fb-home fb-settings">
-      <FinBridgeHeader lang={lang}>
-        <div className="fb-header-actions">
-          <button
-            type="button"
-            className="fb-header-calendar-btn"
-            onClick={() => setCalendarLedgerOpen(true)}
-            aria-label={t.calendar}
-            title={t.calendar}
-          >
-            <CalendarDays size={18} />
-            <span className="fb-header-btn-text">{t.calendar}</span>
-          </button>
-          <button
-            type="button"
-            className="fb-settings-theme"
-            aria-label={t.theme}
-            title={t.theme}
-            onClick={() => setSetting("theme", state.settings.theme === "dark" ? "light" : "dark")}
-          >
-            {state.settings.theme === "dark" ? <Moon size={19} /> : <Sun size={19} />}
-          </button>
-        </div>
-      </FinBridgeHeader>
+      <FinBridgeHeader
+        lang={lang}
+        theme={String(state.settings.theme || "light")}
+        currentLanguage={String(state.settings.language || "Tiếng Việt")}
+        onOpenCalendar={() => setCalendarLedgerOpen(true)}
+        onToggleTheme={() => setSetting("theme", state.settings.theme === "dark" ? "light" : "dark")}
+        onSelectLanguage={(val) => setSetting("language", val)}
+      />
 
       {/* Synchronized header & intro matching Home, Transactions, and Planning */}
       <div className="fb-home-intro fb-settings-header">
@@ -355,34 +450,12 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
       {termsModalOpen && (
         <Modal title={t.termsTitle} wide onClose={() => setTermsModalOpen(false)}>
           <div className="fb-legal-modal-body">
-            <section className="fb-legal-section">
-              <h4>1. Giới thiệu & Phạm vi dịch vụ</h4>
-              <p>
-                FinBridge là ứng dụng trợ lý tài chính cá nhân thông minh, giúp người dùng theo dõi các khoản thu chi,
-                lập ngân sách dự toán, quản lý các khoản chi cố định và thống kê dòng tiền một cách chủ động và minh bạch.
-              </p>
-            </section>
-            <section className="fb-legal-section">
-              <h4>2. Trách nhiệm của người dùng</h4>
-              <p>
-                Người dùng chịu trách nhiệm bảo mật thiết bị đăng nhập và tính chính xác của các số liệu giao dịch được nhập
-                vào hệ thống. FinBridge khuyến khích bạn kiểm tra định kỳ các số dư thực tế so với sổ sách trong ứng dụng.
-              </p>
-            </section>
-            <section className="fb-legal-section">
-              <h4>3. Quyền sở hữu trí tuệ</h4>
-              <p>
-                Mọi thiết kế giao diện, thuật toán thống kê, tài sản thương hiệu và biểu tượng thuộc bản quyền của FinBridge.
-                Nghiêm cấm sao chép, đảo ngược mã nguồn hoặc phân phối lại khi chưa có sự đồng ý bằng văn bản.
-              </p>
-            </section>
-            <section className="fb-legal-section">
-              <h4>4. Giới hạn trách nhiệm</h4>
-              <p>
-                FinBridge cung cấp công cụ hỗ trợ theo dõi và quản lý dữ liệu cá nhân, không cấu thành lời khuyên tư vấn tài
-                chính, đầu tư hoặc bảo hiểm có chứng chỉ pháp lý.
-              </p>
-            </section>
+            {t.termsSections.map((sec, idx) => (
+              <section key={idx} className="fb-legal-section">
+                <h4>{sec.heading}</h4>
+                <p>{sec.body}</p>
+              </section>
+            ))}
             <div className="fb-modal-actions">
               <button type="button" className="r-primary" onClick={() => setTermsModalOpen(false)}>
                 {t.close}
@@ -396,34 +469,12 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
       {privacyModalOpen && (
         <Modal title={t.privacyTitle} wide onClose={() => setPrivacyModalOpen(false)}>
           <div className="fb-legal-modal-body">
-            <section className="fb-legal-section">
-              <h4>1. Cam kết quyền riêng tư tuyệt đối</h4>
-              <p>
-                FinBridge coi quyền riêng tư và an toàn dữ liệu của bạn là ưu tiên cao nhất. Dữ liệu tài chính, ví và các khoản
-                chi tiêu thuộc về bạn và chỉ phục vụ cho việc quản lý tài chính của chính bạn.
-              </p>
-            </section>
-            <section className="fb-legal-section">
-              <h4>2. Lưu trữ và mã hóa an toàn</h4>
-              <p>
-                Mọi thông tin giao dịch, hạn mức ngân sách và lịch sử dòng tiền được lưu trữ cục bộ và đồng bộ hóa qua kết nối
-                mã hóa tiêu chuẩn cao (TLS/SSL).
-              </p>
-            </section>
-            <section className="fb-legal-section">
-              <h4>3. Không thương mại hóa dữ liệu cá nhân</h4>
-              <p>
-                FinBridge cam kết <strong>không bao giờ</strong> bán, cho thuê, chia sẻ hay tiết lộ thông tin tài chính hoặc
-                hành vi chi tiêu của bạn cho bất kỳ bên thứ ba, công ty quảng cáo hay đối tác môi giới nào.
-              </p>
-            </section>
-            <section className="fb-legal-section">
-              <h4>4. Quyền kiểm soát toàn diện</h4>
-              <p>
-                Bạn có toàn quyền truy xuất, sửa đổi hoặc xóa vĩnh viễn toàn bộ dữ liệu tài khoản và các ví đã tạo khỏi thiết bị
-                và hệ thống bất cứ lúc nào trong mục Cài đặt tài khoản.
-              </p>
-            </section>
+            {t.privacySections.map((sec, idx) => (
+              <section key={idx} className="fb-legal-section">
+                <h4>{sec.heading}</h4>
+                <p>{sec.body}</p>
+              </section>
+            ))}
             <div className="fb-modal-actions">
               <button type="button" className="r-primary" onClick={() => setPrivacyModalOpen(false)}>
                 {t.close}
@@ -432,6 +483,9 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
           </div>
         </Modal>
       )}
+
+      {/* Modal: Yêu cầu tính năng */}
+      {featuresModalOpen && <FeatureRequestsModal onClose={() => setFeaturesModalOpen(false)} />}
 
       {/* Modal: Lịch thu chi */}
       {calendarLedgerOpen && <CalendarLedgerModal navigate={navigate} onClose={() => setCalendarLedgerOpen(false)} />}

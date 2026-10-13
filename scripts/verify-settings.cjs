@@ -79,6 +79,7 @@ const overview = compile("SettingsOverview.tsx", (name) => {
   if (name === "./store") return store;
   if (name === "./FinBridgeHeader") return header;
   if (name === "./CalendarLedgerModal") return { CalendarLedgerModal: () => null };
+  if (name === "./Extras") return { FeatureRequestsModal: () => null };
   if (name === "./Ui") return ui;
   return localRequire(name);
 });
@@ -134,9 +135,10 @@ const root = overview.SettingsOverview({ navigate });
 find(root, (node) => node.props && node.props["aria-label"] === "Cài đặt tài khoản").props.onClick();
 assert.equal(destination, "accountSettings");
 
-// Clicking feature requests card
-find(root, (node) => node.props && node.props["aria-label"] === "Yêu cầu tính năng").props.onClick();
-assert.equal(destination, "featureRequest");
+// Clicking feature requests card opens feature modal
+const featureCard = find(root, (node) => node.props && node.props["aria-label"] === "Yêu cầu tính năng");
+assert.ok(featureCard, "Feature requests card should be present");
+featureCard.props.onClick();
 
 // 3. Verify AccountSettings renders Image 2 requirements
 const settings = compile("Settings.tsx", resolve);

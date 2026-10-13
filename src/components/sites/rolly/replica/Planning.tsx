@@ -160,20 +160,14 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const filteredFixed = fixed.filter((item) => { const parent = budgets.find((budget) => budget.id === item.budgetId); return (parentFilter === "all" || item.budgetId === parentFilter) && (walletFilter === "all" || parent?.wallet === walletFilter); });
 
   return <main className="r-dashboard fb-home fb-planning">
-    <FinBridgeHeader lang={lang}>
-      <div className="fb-header-actions">
-        <button
-          type="button"
-          className="fb-header-calendar-btn"
-          onClick={() => setCalendarLedgerOpen(true)}
-          aria-label={lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar ledger"}
-          title={lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar ledger"}
-        >
-          <CalendarDays size={18} />
-          <span className="fb-header-btn-text">{lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar"}</span>
-        </button>
-      </div>
-    </FinBridgeHeader>
+    <FinBridgeHeader
+      lang={lang}
+      theme={String(state.settings?.theme || "light")}
+      currentLanguage={String(state.settings?.language || "Tiếng Việt")}
+      onOpenCalendar={() => setCalendarLedgerOpen(true)}
+      onToggleTheme={() => updateState((s) => ({ ...s, settings: { ...s?.settings, theme: s?.settings?.theme === "dark" ? "light" : "dark" } }))}
+      onSelectLanguage={(val) => updateState((s) => ({ ...s, settings: { ...s?.settings, language: val } }))}
+    />
 
     <div className="fb-home-intro fb-planning-header">
       <div>

@@ -233,29 +233,27 @@ export function AccountSettings({
 
   return (
     <main className="r-dashboard fb-home fb-settings fb-account-settings-page">
-      <FinBridgeHeader lang={lang}>
-        <div className="fb-header-actions">
-          <select
-            aria-label={t.langLabel}
-            className="fb-header-lang-select"
-            value={String(state.settings.language)}
-            onChange={(e) => setSetting("language", e.target.value)}
-          >
-            {["Tiếng Việt", "English", "中文", "Bahasa Indonesia", "Español", "Français"].map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-        </div>
+      <FinBridgeHeader
+        lang={lang}
+        theme={String(state.settings.theme || "light")}
+        currentLanguage={String(state.settings.language || "Tiếng Việt")}
+        onOpenCalendar={() => navigate("calendar")}
+        onToggleTheme={() => setSetting("theme", state.settings.theme === "dark" ? "light" : "dark")}
+      >
+        <select
+          aria-label={t.langLabel}
+          className="fb-header-lang-select"
+          value={String(state.settings.language)}
+          onChange={(e) => setSetting("language", e.target.value)}
+        >
+          {["Tiếng Việt", "English", "中文", "Bahasa Indonesia", "Español", "Français"].map((l) => (
+            <option key={l} value={l}>
+              {l}
+            </option>
+          ))}
+        </select>
       </FinBridgeHeader>
 
-      <div className="fb-settings-back-row">
-        <button type="button" className="fb-settings-back" onClick={() => navigate("?tab=settings")}>
-          <ChevronLeft size={20} />
-          <span>{t.back}</span>
-        </button>
-      </div>
 
       <div className="fb-home-intro fb-account-settings-intro">
         <div>
