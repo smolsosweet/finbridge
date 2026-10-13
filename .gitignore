@@ -47,6 +47,7 @@ next-env.d.ts
 
 # Local temp files
 temp/
+.local/
 
 # Local UI verification logs
 docs/finbridge-ui/*.log

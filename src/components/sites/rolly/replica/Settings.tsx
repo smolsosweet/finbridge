@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { signOutGoogle } from "@/lib/sign-out";
 import {
   Bell,
   Coins,
@@ -45,13 +47,18 @@ const COPY_ACCOUNT = {
     notificationSub: "Thời gian nhận thông báo nhắc nhở ghi chép chi tiêu",
     switchAccount: "Đổi tài khoản",
     switchAccountSub: "Chuyển đổi sang tài khoản khác hoặc đăng nhập mới",
-    logout: "Đăng xuất",
-    logoutSub: "Thoát khỏi phiên làm việc hiện tại",
     delete: "Xóa tài khoản",
     deleteSub: "Xóa vĩnh viễn dữ liệu tài khoản và thiết lập trên thiết bị này",
     save: "Lưu thay đổi",
     cancel: "Hủy",
     langLabel: "Ngôn ngữ hiển thị",
+    logout: "Đăng xuất",
+    logoutHint: "Thoát khỏi phiên làm việc hiện tại",
+    logoutSub: "Thoát khỏi phiên làm việc hiện tại",
+    logoutTitle: "Đăng xuất?",
+    logoutNote: "Bạn sẽ quay lại màn hình chào mừng.",
+    logoutBusy: "Đang đăng xuất…",
+    logoutError: "Không thể đăng xuất. Vui lòng thử lại.",
   },
   en: {
     eyebrow: "ACCOUNT SETTINGS",
@@ -68,13 +75,18 @@ const COPY_ACCOUNT = {
     notificationSub: "Daily reminder time for recording expenses",
     switchAccount: "Switch account",
     switchAccountSub: "Switch to another account or sign in",
-    logout: "Log out",
-    logoutSub: "End current session on this device",
     delete: "Delete account",
     deleteSub: "Permanently erase account data and settings on this device",
     save: "Save changes",
     cancel: "Cancel",
     langLabel: "Display language",
+    logout: "Sign out",
+    logoutHint: "End your current session",
+    logoutSub: "End current session on this device",
+    logoutTitle: "Sign out?",
+    logoutNote: "You will return to the welcome screen.",
+    logoutBusy: "Signing out…",
+    logoutError: "Could not sign out. Please try again.",
   },
   zh: {
     eyebrow: "账户设置",
@@ -91,13 +103,18 @@ const COPY_ACCOUNT = {
     notificationSub: "每日记账提醒时间",
     switchAccount: "切换账户",
     switchAccountSub: "切换至其他账户或登录新账户",
-    logout: "退出登录",
-    logoutSub: "退出此设备上的当前会话",
     delete: "注销账户",
     deleteSub: "永久清除此设备上的账户数据和偏好设置",
     save: "保存更改",
     cancel: "取消",
     langLabel: "显示语言",
+    logout: "退出登录",
+    logoutHint: "结束当前会话",
+    logoutSub: "退出此设备上的当前会话",
+    logoutTitle: "退出登录？",
+    logoutNote: "您将返回欢迎页面。",
+    logoutBusy: "正在退出登录…",
+    logoutError: "无法退出登录。请重试。",
   },
 };
 
@@ -111,6 +128,9 @@ export function AccountSettings({
   const state = useAppState();
   const lang = settingsLanguage(state.settings.language);
   const t = COPY_ACCOUNT[lang];
+  const router = useRouter();
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const [logoutError, setLogoutError] = useState(false);
 
   const [option, setOption] = useState(initialOption);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -124,12 +144,29 @@ export function AccountSettings({
   const [nameInput, setNameInput] = useState(displayName);
   const [emailInput, setEmailInput] = useState(email);
 
-  const close = () => setOption("");
+  const close = () => {
+    setOption("");
+    setLogoutError(false);
+  };
 
   function openEditProfile() {
     setNameInput(displayName);
     setEmailInput(email);
     setProfileModalOpen(true);
+  }
+
+  async function logout() {
+    if (logoutBusy) return;
+    setLogoutBusy(true);
+    setLogoutError(false);
+    try {
+      await signOutGoogle();
+      router.replace("/");
+      router.refresh();
+    } catch {
+      setLogoutError(true);
+      setLogoutBusy(false);
+    }
   }
 
   function handleSaveProfile(e: FormEvent) {
@@ -177,7 +214,7 @@ export function AccountSettings({
     {
       id: "logout",
       name: t.logout,
-      sub: t.logoutSub,
+      sub: t.logoutHint || t.logoutSub,
       icon: <LogOut size={20} />,
       onClick: () => setOption("logout"),
       danger: false,
@@ -414,23 +451,22 @@ export function AccountSettings({
 
           {option === "logout" && (
             <div className="fb-dialog-confirm">
-              <h2>Đăng xuất tài khoản?</h2>
+              <h2>{t.logoutTitle || "Đăng xuất tài khoản?"}</h2>
               <p className="r-dialog-note">
-                Bạn có chắc chắn muốn đăng xuất khỏi tài khoản <b>{email}</b> trên thiết bị này?
+                {t.logoutNote || `Bạn có chắc chắn muốn đăng xuất khỏi tài khoản ${email} trên thiết bị này?`}
               </p>
+              {logoutError && <p role="alert" style={{ color: "#ef4444" }}>{t.logoutError}</p>}
               <div className="fb-modal-actions">
-                <button type="button" className="r-button" onClick={close}>
+                <button type="button" className="r-button" disabled={logoutBusy} onClick={close}>
                   {t.cancel}
                 </button>
                 <button
                   type="button"
                   className="r-primary"
-                  onClick={() => {
-                    close();
-                    navigate("welcome");
-                  }}
+                  disabled={logoutBusy}
+                  onClick={() => void logout()}
                 >
-                  Xác nhận đăng xuất
+                  {logoutBusy ? t.logoutBusy : t.logout}
                 </button>
               </div>
             </div>

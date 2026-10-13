@@ -44,6 +44,7 @@ let state = {
 };
 
 let writes = 0, cursor = 0, slots = [], destination = "";
+let signOutCalls = 0, signOutFails = false, route = "", refreshes = 0;
 const testReact = {
   ...React,
   useState(initial) {
@@ -62,7 +63,6 @@ const store = {
   updateState(update) { writes++; state = update(state); },
   setSetting(key, value) { writes++; state.settings[key] = value; },
 };
-
 const header = compile("FinBridgeHeader.tsx");
 const ui = {
   Icon: () => React.createElement("span"),
@@ -88,7 +88,8 @@ function resolve(name) {
   if (name === "./FinBridgeHeader") return header;
   if (name === "./SettingsOverview") return overview;
   if (name === "./Ui") return ui;
-  if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams() };
+  if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams(), useRouter: () => ({ replace: (next) => { route = next; }, refresh: () => { refreshes++; } }) };
+  if (name === "@/lib/sign-out") return { async signOutGoogle() { signOutCalls++; if (signOutFails) throw new Error("SIGN_OUT_FAILED"); } };
   if (name === "./Tools") return { CurrencySelect: () => null };
   return localRequire(name);
 }
@@ -167,3 +168,38 @@ assert.equal(JSON.stringify(state.wallets), JSON.stringify(JSON.parse(snapshot).
 assert.equal(JSON.stringify(state.transactions), JSON.stringify(JSON.parse(snapshot).transactions));
 
 process.stdout.write("PASS: Unified SettingsOverview (no mascot, matching intro banner & cards), AccountSettings Image-2 profile/format/reminders/auth, zero financial writes.\n");
+
+async function verifyLogout() {
+  const financialBefore = JSON.stringify({ wallets: state.wallets, transactions: state.transactions });
+  const writesBefore = writes;
+  for (const [language, label] of [["English", "Sign out"], ["Tiếng Việt", "Đăng xuất"], ["中文", "退出登录"]]) {
+    state.settings.language = language;
+    slots = []; cursor = 0;
+    const props = { navigate };
+    const accountRender = () => { cursor = 0; return settings.AccountSettings(props); };
+    const logoutRow = find(accountRender(), (node) => node.type === "button" && node.props.className === "fb-account-opt-row " && node.props.children[1]?.props.children[0]?.props.children === label);
+    assert.ok(logoutRow, `Localized logout in account settings: ${language}`);
+    const callsBefore = signOutCalls;
+    logoutRow.props.onClick();
+    assert.equal(signOutCalls, callsBefore, "Opening confirmation must not revoke the session");
+    const confirm = () => find(accountRender(), (node) => node.type === "button" && node.props.className === "r-primary" && node.props.children === label);
+    assert.ok(confirm());
+    signOutFails = true; route = "";
+    confirm().props.onClick();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(route, "", "Failed sign-out must keep the current page");
+    assert.ok(find(accountRender(), (node) => node.props.role === "alert"));
+    signOutFails = false;
+    const refreshBefore = refreshes;
+    confirm().props.onClick();
+    assert.ok(find(accountRender(), (node) => node.type === "button" && node.props.className === "r-primary" && node.props.disabled));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(route, "/");
+    assert.equal(refreshes, refreshBefore + 1);
+    assert.equal(signOutCalls, callsBefore + 2);
+  }
+  assert.equal(writes, writesBefore);
+  assert.equal(JSON.stringify({ wallets: state.wallets, transactions: state.transactions }), financialBefore);
+  process.stdout.write("PASS: account logout confirmation, server sign-out call, welcome redirect, failure handling and VI/EN/ZH labels; zero financial writes.\n");
+}
+verifyLogout().catch((error) => { console.error(error); process.exitCode = 1; });
