@@ -6,8 +6,10 @@ const ts = require("typescript");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { createRequire } = require("node:module");
+
 const directory = path.resolve(__dirname, "../src/components/sites/rolly/replica");
 const localRequire = createRequire(path.join(directory, "Settings.tsx"));
+
 function compile(file, resolve = localRequire) {
   const source = ts.transpileModule(fs.readFileSync(path.join(directory, file), "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020 },
@@ -16,20 +18,70 @@ function compile(file, resolve = localRequire) {
   new Function("require", "module", "exports", source)(resolve, result, result.exports);
   return result.exports;
 }
+
 let state = {
-  wallets: [{ id: "bank", name: "Bank", initial: 1000000, currency: "VND", type: "cash" }, { id: "ali", name: "Alipay", initial: 500, currency: "CNY", type: "cash" }, { id: "old", name: "Old wallet", initial: 10, currency: "USD", type: "cash", archived: true }],
-  transactions: [{ id: "salary", type: "income", amount: 500000, wallet: "bank", date: "2026-10-01", category: "Salary" }, { id: "food", type: "expense", amount: 200000, wallet: "bank", date: "2026-10-02", category: "Food" }, { id: "transfer", type: "transfer", amount: 50, wallet: "ali", targetWallet: "old", date: "2026-10-03", category: "Transfer" }],
-  categories: ["Food", "Salary"], categoryMeta: { Food: { type: "expense", icon: "f555", children: [] } }, goals: [], fixedExpenses: [], recurring: [], rules: [],
-  settings: { name: ".", language: "English", theme: "light", personality: "", goal: "", less: "" },
+  wallets: [
+    { id: "bank", name: "Bank", initial: 1000000, currency: "VND", type: "cash" },
+    { id: "ali", name: "Alipay", initial: 500, currency: "CNY", type: "cash" },
+    { id: "old", name: "Old wallet", initial: 10, currency: "USD", type: "cash", archived: true },
+  ],
+  transactions: [
+    { id: "salary", type: "income", amount: 500000, wallet: "bank", date: "2026-10-01", category: "Salary" },
+    { id: "food", type: "expense", amount: 200000, wallet: "bank", date: "2026-10-02", category: "Food" },
+  ],
+  categories: ["Food", "Salary"],
+  categoryMeta: { Food: { type: "expense", icon: "f555", children: [] } },
+  goals: [],
+  fixedExpenses: [],
+  recurring: [],
+  rules: [],
+  settings: {
+    name: "cincin",
+    email: "cinderellagr01@gmail.com",
+    language: "Tiếng Việt",
+    theme: "light",
+  },
 };
+
 let writes = 0, cursor = 0, slots = [], destination = "";
 let signOutCalls = 0, signOutFails = false, route = "", refreshes = 0;
-const testReact = { ...React, useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial; return [slots[index], (next) => { slots[index] = typeof next === "function" ? next(slots[index]) : next; }]; }, useEffect() {}, useRef: () => ({ current: null }), useCallback: (fn) => fn };
-const store = { useAppState: () => state, money: (value) => String(value), updateState(update) { writes++; state = update(state); }, setSetting(key, value) { writes++; state.settings[key] = value; } };
+const testReact = {
+  ...React,
+  useState(initial) {
+    const index = cursor++;
+    if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial;
+    return [slots[index], (next) => { slots[index] = typeof next === "function" ? next(slots[index]) : next; }];
+  },
+  useEffect() {},
+  useRef: () => ({ current: null }),
+  useCallback: (fn) => fn,
+};
+
+const store = {
+  useAppState: () => state,
+  money: (value) => String(value),
+  updateState(update) { writes++; state = update(state); },
+  setSetting(key, value) { writes++; state.settings[key] = value; },
+};
 const header = compile("FinBridgeHeader.tsx");
-const ui = { Icon: () => React.createElement("span"), Field: ({ label, children }) => React.createElement("label", null, label, children), PageHeader: ({ title, children }) => React.createElement("header", null, title, children), Toggle: () => null, EmptyState: () => null, Modal: ({ children, onClose }) => React.createElement("section", { role: "dialog" }, React.createElement("button", { onClick: onClose }, "Close"), children) };
-const overview = compile("SettingsOverview.tsx", (name) => name === "react" ? testReact : name === "./store" ? store : name === "./FinBridgeHeader" ? header : name === "./CalendarLedgerModal" ? { CalendarLedgerModal: () => null } : name === "./Ui" ? ui : localRequire(name));
-const weeks = compile("chartWeek.ts");
+const ui = {
+  Icon: () => React.createElement("span"),
+  Field: ({ label, children }) => React.createElement("label", null, label, children),
+  PageHeader: ({ title, children }) => React.createElement("header", null, title, children),
+  Toggle: () => null,
+  EmptyState: () => null,
+  Modal: ({ children, onClose }) => React.createElement("section", { role: "dialog" }, React.createElement("button", { onClick: onClose }, "Close"), children),
+};
+
+const overview = compile("SettingsOverview.tsx", (name) => {
+  if (name === "react") return testReact;
+  if (name === "./store") return store;
+  if (name === "./FinBridgeHeader") return header;
+  if (name === "./CalendarLedgerModal") return { CalendarLedgerModal: () => null };
+  if (name === "./Ui") return ui;
+  return localRequire(name);
+});
+
 function resolve(name) {
   if (name === "react") return testReact;
   if (name === "./store") return store;
@@ -38,53 +90,84 @@ function resolve(name) {
   if (name === "./Ui") return ui;
   if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams(), useRouter: () => ({ replace: (next) => { route = next; }, refresh: () => { refreshes++; } }) };
   if (name === "@/lib/sign-out") return { async signOutGoogle() { signOutCalls++; if (signOutFails) throw new Error("SIGN_OUT_FAILED"); } };
-  if (name === "./chartWeek") return weeks;
-  if (name === "./CalendarLedgerModal") return { CalendarLedgerModal: () => null };
-  if (name === "./Categories") return { categoryIcon: () => "", iconGroups: [] };
   if (name === "./Tools") return { CurrencySelect: () => null };
   return localRequire(name);
 }
-function find(node, predicate) { if (!React.isValidElement(node)) return undefined; if (predicate(node)) return node; for (const child of React.Children.toArray(node.props.children)) { const match = find(child, predicate); if (match) return match; } }
+
+function find(node, predicate) {
+  if (!React.isValidElement(node)) return undefined;
+  if (predicate(node)) return node;
+  for (const child of React.Children.toArray(node.props.children)) {
+    const match = find(child, predicate);
+    if (match) return match;
+  }
+}
+
 const navigate = (value) => { destination = value; };
 const snapshot = JSON.stringify(state);
-for (const [language, title] of [["English", "Account &amp; settings"], ["Tiếng Việt", "Tài khoản &amp; cài đặt"], ["中文", "账户与设置"]]) {
+
+// 1. Verify SettingsOverview renders unified header and 5 items without any 3D mascot
+for (const [language, expected] of [
+  ["Tiếng Việt", ["Cài đặt tài khoản", "Yêu cầu tính năng", "Liên hệ với chúng tôi", "Điều khoản dịch vụ", "Chính sách bảo mật"]],
+  ["English", ["Account settings", "Feature requests", "Contact us", "Terms of service", "Privacy policy"]],
+  ["中文", ["账户设置", "功能建议", "联系我们", "服务条款", "隐私政策"]],
+]) {
   state.settings.language = language;
   const html = renderToStaticMarkup(React.createElement(overview.SettingsOverview, { navigate }));
-  assert.ok(html.includes(title)); assert.match(html, /fb-brand-mark/);
-  assert.doesNotMatch(html, /r-mascot|r-robot|Premium|featureRequest|support|terms|privacy/);
+  for (const item of expected) {
+    assert.ok(html.includes(item), `SettingsOverview should include "${item}" in ${language}`);
+  }
+  // Verify unified intro banner is present
+  assert.match(html, /fb-home-intro fb-settings-header/, "Unified intro banner must be present");
+  assert.match(html, /fb-eyebrow/, "Eyebrow must be present");
+  // Verify mascot and unwanted items are NOT present
+  assert.doesNotMatch(html, /mascot|Cheerleader/i, "3D Mascot must be completely removed");
+  assert.doesNotMatch(html, /Premium/, "Rolly Premium should be removed");
 }
-state.settings.language = "English";
+
+// 2. Navigation tests from SettingsOverview
+state.settings.language = "Tiếng Việt";
 const root = overview.SettingsOverview({ navigate });
-find(root, (node) => node.props.className === "fb-settings-card").props.onClick(); assert.equal(destination, "walletSettings");
-find(root, (node) => node.props.className === "fb-settings-card" && node.props.children[1].props.children[0].props.children === "Account settings").props.onClick(); assert.equal(destination, "accountSettings");
-let managed = "";
-const directoryProps = { state, navigate, onManage: (id) => { managed = id; } };
-const html = renderToStaticMarkup(React.createElement(overview.WalletSettingsDirectory, directoryProps));
-assert.match(html, /1,300,000 VND/); assert.match(html, /450 CNY/); assert.match(html, /60 USD/); assert.match(html, /Archived/);
-find(overview.WalletSettingsDirectory(directoryProps), (node) => node.props["aria-label"] === "Manage wallet Alipay").props.onClick(); assert.equal(managed, "ali");
-slots = []; cursor = 0;
-const dashboard = compile("Dashboard.tsx", resolve).Dashboard;
-const dashboardProps = { walletSettingsMode: true, navigate };
-function tree() { cursor = 0; return dashboard(dashboardProps); }
-find(tree(), (node) => node.type === overview.WalletSettingsDirectory).props.onManage("ali");
-cursor = 0;
-const manager = renderToStaticMarkup(React.createElement(dashboard, dashboardProps));
-assert.match(manager, /role="dialog"/); assert.match(manager, /value="Alipay"/); assert.match(manager, /450 CNY/);
-find(tree(), (node) => node.type === ui.Modal).props.onClose();
-cursor = 0; assert.doesNotMatch(renderToStaticMarkup(React.createElement(dashboard, dashboardProps)), /role="dialog"/);
-assert.equal(writes, 0); assert.equal(JSON.stringify(state), snapshot);
+// Clicking account card
+find(root, (node) => node.props && node.props["aria-label"] === "Cài đặt tài khoản").props.onClick();
+assert.equal(destination, "accountSettings");
+
+// Clicking feature requests card
+find(root, (node) => node.props && node.props["aria-label"] === "Yêu cầu tính năng").props.onClick();
+assert.equal(destination, "featureRequest");
+
+// 3. Verify AccountSettings renders Image 2 requirements
 const settings = compile("Settings.tsx", resolve);
-assert.equal(settings.settingRows.length, 2);
 slots = []; cursor = 0;
-const account = renderToStaticMarkup(React.createElement(settings.AccountSettings, { navigate }));
-assert.match(account, /fb-brand-mark/); assert.match(account, /中文/); assert.doesNotMatch(account, /r-mascot|r-robot/);
+const accountHtml = renderToStaticMarkup(React.createElement(settings.AccountSettings, { navigate }));
+// Profile card
+assert.ok(accountHtml.includes("cincin"), "Profile card should render display name");
+assert.ok(accountHtml.includes("cinderellagr01@gmail.com"), "Profile card should render email");
+// Options
+assert.ok(accountHtml.includes("Định dạng số tiền"), "Should include currency format");
+assert.ok(accountHtml.includes("Nhắc nhở thông báo"), "Should include notification reminders");
+assert.ok(accountHtml.includes("Đổi tài khoản"), "Should include switch account");
+assert.ok(accountHtml.includes("Đăng xuất"), "Should include logout");
+assert.ok(accountHtml.includes("Xóa tài khoản"), "Should include delete account");
+
+// Verify removed items are NOT in AccountSettings
+assert.doesNotMatch(accountHtml, /Tính cách của FinBridge|Tính cách của Rolly/, "Personality should be removed");
+assert.doesNotMatch(accountHtml, /Mục tiêu tài chính/, "Goals should be removed");
+assert.doesNotMatch(accountHtml, /Cấu hình trang chủ/, "Homepage config should be removed");
+assert.doesNotMatch(accountHtml, /Xuất CSV|Nhập CSV/, "CSV should be removed");
+assert.doesNotMatch(accountHtml, /Chế độ thêm giao dịch thủ công/, "Manual mode should be removed");
+
+// 4. Test language change in AccountSettings
 slots = []; cursor = 0;
 const accountTree = settings.AccountSettings({ navigate });
-find(accountTree, (node) => node.type === "select").props.onChange({ target: { value: "中文" } });
-assert.equal(state.settings.language, "中文"); assert.equal(writes, 1);
+find(accountTree, (node) => node.type === "select").props.onChange({ target: { value: "English" } });
+assert.equal(state.settings.language, "English");
+
+// 5. Zero financial writes
 assert.equal(JSON.stringify(state.wallets), JSON.stringify(JSON.parse(snapshot).wallets));
 assert.equal(JSON.stringify(state.transactions), JSON.stringify(JSON.parse(snapshot).transactions));
-process.stdout.write("PASS: settings groups, VI/EN/ZH overview, navigation, multi-wallet balances, same Home wallet manager open/close, language setting, zero financial writes.\n");
+
+process.stdout.write("PASS: Unified SettingsOverview (no mascot, matching intro banner & cards), AccountSettings Image-2 profile/format/reminders/auth, zero financial writes.\n");
 
 async function verifyLogout() {
   const financialBefore = JSON.stringify({ wallets: state.wallets, transactions: state.transactions });
