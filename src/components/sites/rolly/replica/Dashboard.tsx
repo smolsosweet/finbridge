@@ -9,6 +9,7 @@ import { categoryIcon, iconGroups } from "./Categories";
 import { calendarWeek, localDateKey, shiftCalendarWeek } from "./chartWeek";
 import { WalletSettingsDirectory } from "./SettingsOverview";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
+import { FinBridgeHeader } from "./FinBridgeHeader";
 
 type DashboardSample = {
   id: string;
@@ -66,6 +67,46 @@ export const DASHBOARD_SAMPLE: DashboardSample[] = [
 
 export const DASHBOARD_I18N = {
   vi: {
+    overviewEyebrow: "TỔNG QUAN",
+    welcomePrefix: "Chào ",
+    defaultGreeting: "Tiền của bạn, trong tầm tay.",
+    introSub: "Theo dõi dòng tiền. Chủ động cho những kế hoạch tiếp theo.",
+    addTransaction: "Thêm giao dịch",
+    yourWallets: "Ví của bạn",
+    activeWalletsSuffix: "ví hoạt động",
+    unlinkedSuffix: "đã hủy liên kết",
+    unlinkedChip: (count: number) => `Đã hủy (${count})`,
+    addWallet: "Thêm ví",
+    flowThisPeriod: "Dòng tiền trong kỳ",
+    flowSub: "Tổng hợp từ tất cả ví đã tích hợp",
+    totalIncome: "Tổng thu",
+    totalExpense: "Tổng chi",
+    fromAllWalletsInPeriod: "Từ mọi ví trong kỳ",
+    currencyNote: "Tiền tệ được hiển thị riêng, không quy đổi tỷ giá.",
+    details: "Chi tiết",
+    walletFlowTitle: "Chi & thu theo ví",
+    walletFlowSub: "Số liệu của từng ví đã tích hợp trong kỳ",
+    manageWallets: "Quản lý ví",
+    expShort: "Chi ",
+    incShort: "Thu ",
+    mainWallet: "Ví chính",
+    netChange: "Thay đổi ròng",
+    cost: "Chi phí",
+    income: "Thu nhập",
+    txThisPeriod: "Giao dịch trong kỳ",
+    selectedWalletBalance: "Số dư ví đã chọn",
+    habitEyebrow: "MỖI NGÀY MỘT CHÚT",
+    habitTitle: "Hiểu tiền của mình hơn.",
+    habitSub: "Ghi lại các khoản thu và chi để có một bức tranh rõ ràng hơn.",
+    viewTransactionsAction: "Xem giao dịch",
+    periodDay: "Ngày",
+    periodWeek: "Tuần",
+    periodMonth: "Tháng",
+    periodYear: "Năm",
+    periodAllTime: "Mọi thời gian",
+    periodCustomRange: "Phạm vi tùy chỉnh",
+    formatMonthYear: (m: number, y: number) => `tháng ${m + 1} năm ${y}`,
+    formatYearOnly: (y: number) => `Năm ${y}`,
     cardTitle: "Xu hướng chi tiêu",
     cardSubtitle: "Theo dõi thu, chi và dòng tiền theo thời gian",
     viewTransactions: "Xem giao dịch",
@@ -107,6 +148,46 @@ export const DASHBOARD_I18N = {
     tableColCount: "Giao dịch",
   },
   en: {
+    overviewEyebrow: "OVERVIEW",
+    welcomePrefix: "Welcome, ",
+    defaultGreeting: "Your money, in your hands.",
+    introSub: "Track cash flow. Plan ahead with confidence.",
+    addTransaction: "Add transaction",
+    yourWallets: "Your wallets",
+    activeWalletsSuffix: "active wallet",
+    unlinkedSuffix: "unlinked",
+    unlinkedChip: (count: number) => `Unlinked (${count})`,
+    addWallet: "Add wallet",
+    flowThisPeriod: "Cash flow this period",
+    flowSub: "Aggregated across all integrated wallets",
+    totalIncome: "Total income",
+    totalExpense: "Total expense",
+    fromAllWalletsInPeriod: "From all wallets this period",
+    currencyNote: "Currencies are shown separately without exchange rate conversion.",
+    details: "Details",
+    walletFlowTitle: "Income & expense by wallet",
+    walletFlowSub: "Data for each integrated wallet this period",
+    manageWallets: "Manage wallets",
+    expShort: "Exp ",
+    incShort: "Inc ",
+    mainWallet: "Main wallet",
+    netChange: "Net change",
+    cost: "Expense",
+    income: "Income",
+    txThisPeriod: "Transactions this period",
+    selectedWalletBalance: "Selected wallet balance",
+    habitEyebrow: "LITTLE BY LITTLE",
+    habitTitle: "Understand your money better.",
+    habitSub: "Record income and expenses for a clearer financial picture.",
+    viewTransactionsAction: "View transactions",
+    periodDay: "Day",
+    periodWeek: "Week",
+    periodMonth: "Month",
+    periodYear: "Year",
+    periodAllTime: "All time",
+    periodCustomRange: "Custom range",
+    formatMonthYear: (m: number, y: number) => `${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m]} ${y}`,
+    formatYearOnly: (y: number) => `Year ${y}`,
     cardTitle: "Spending trend",
     cardSubtitle: "Track income, expenses, and cash flow over time",
     viewTransactions: "View transactions",
@@ -148,6 +229,46 @@ export const DASHBOARD_I18N = {
     tableColCount: "Count",
   },
   zh: {
+    overviewEyebrow: "总览",
+    welcomePrefix: "你好，",
+    defaultGreeting: "掌握您的财富。",
+    introSub: "追踪现金流，从容规划未来。",
+    addTransaction: "添加交易",
+    yourWallets: "您的钱包",
+    activeWalletsSuffix: "个活跃钱包",
+    unlinkedSuffix: "已解绑",
+    unlinkedChip: (count: number) => `已解绑 (${count})`,
+    addWallet: "添加钱包",
+    flowThisPeriod: "本期现金流",
+    flowSub: "汇总自所有已集成钱包",
+    totalIncome: "总收入",
+    totalExpense: "总支出",
+    fromAllWalletsInPeriod: "来自本期所有钱包",
+    currencyNote: "货币分别显示，不折算汇率。",
+    details: "详情",
+    walletFlowTitle: "按钱包收支",
+    walletFlowSub: "本期各已集成钱包数据",
+    manageWallets: "管理钱包",
+    expShort: "支 ",
+    incShort: "收 ",
+    mainWallet: "主钱包",
+    netChange: "净变动",
+    cost: "支出",
+    income: "收入",
+    txThisPeriod: "本期交易",
+    selectedWalletBalance: "已选钱包余额",
+    habitEyebrow: "日积月累",
+    habitTitle: "更懂您的每一笔财富。",
+    habitSub: "记录日常收支，掌握清晰财务全貌。",
+    viewTransactionsAction: "查看交易",
+    periodDay: "按日",
+    periodWeek: "按周",
+    periodMonth: "按月",
+    periodYear: "按年",
+    periodAllTime: "全部时间",
+    periodCustomRange: "自定义范围",
+    formatMonthYear: (m: number, y: number) => `${y}年${m + 1}月`,
+    formatYearOnly: (y: number) => `${y}年`,
     cardTitle: "支出趋势",
     cardSubtitle: "追踪各时期的收入、支出与现金流",
     viewTransactions: "查看交易",
@@ -912,9 +1033,9 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
             : `${formatVnDate(from)} – ${formatVnDate(to)}`;
 
   const periodDateLabel = period === "Tháng"
-    ? `tháng ${month + 1} năm ${year}`
+    ? t.formatMonthYear(month, year)
     : period === "Năm"
-      ? `Năm ${year}`
+      ? t.formatYearOnly(year)
       : period === "Ngày"
         ? formatVnDate(day)
         : period === "Tuần"
@@ -980,11 +1101,20 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
   const list = transactionsTab ? records : records.filter((t) => t.type === type);
   const close = useCallback(() => setModal(""), []);
   const addTransaction = () => navigate(state.settings.manual ? "addTransaction" : "addTransactionChatMode");
-  const walletName = (name: string) => name === "." ? "Ví chính" : name;
+  const walletName = (name: string) => (!name || name === "." || name === "Ví chính" || name === "Main wallet" || name === "主钱包") ? t.mainWallet : name;
+  const periodDisplay = (p: string) => {
+    if (p === "Ngày") return t.periodDay;
+    if (p === "Tuần") return t.periodWeek;
+    if (p === "Tháng") return t.periodMonth;
+    if (p === "Năm") return t.periodYear;
+    if (p === "Mọi thời gian") return t.periodAllTime;
+    if (p === "Phạm vi tùy chỉnh") return t.periodCustomRange;
+    return p;
+  };
   const periodControls = (
     <div className="r-period-controls">
       <button type="button" onClick={() => setModal("period")} className="r-period">
-        {period}
+        {periodDisplay(period)}
         <CalendarDays size={17} />
         <ChevronDown size={17} />
       </button>
@@ -1034,37 +1164,45 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
       {list.length === 0 ? <EmptyState title="Chưa có giao dịch trong kỳ này." text="Nhấn + để thêm giao dịch." className="r-dashboard-empty" /> : transactionRows}
       <button type="button" className="r-fab" aria-label="Thêm giao dịch" onClick={addTransaction}><Plus size={32} /></button>
     </> : <>
-      <header className="fb-home-header">
-        <div className="fb-brand"><span className="fb-brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M5 24V13M27 24V13M5 17C11 5 21 5 27 17M5 20H27M11 20V24M16 20V24M21 20V24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg></span><span>FinBridge<small>Không gian tài chính của bạn</small></span></div>
-        <div className="fb-header-actions">
-          <button
-            type="button"
-            className="fb-header-calendar-btn"
-            onClick={() => setCalendarLedgerOpen(true)}
-            aria-label={lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar ledger"}
-            title={lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar ledger"}
-          >
-            <CalendarDays size={18} />
-            <span className="fb-header-btn-text">{lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar"}</span>
-          </button>
+      <FinBridgeHeader
+        lang={lang}
+        theme={String(state.settings.theme || "light")}
+        currentLanguage={String(state.settings.language || "Tiếng Việt")}
+        onOpenCalendar={() => setCalendarLedgerOpen(true)}
+        onToggleTheme={() => updateState((s) => ({ ...s, settings: { ...s.settings, theme: s.settings.theme === "dark" ? "light" : "dark" } }))}
+        onSelectLanguage={(val) => updateState((s) => ({ ...s, settings: { ...s.settings, language: val } }))}
+      />
+      <div className="fb-home-intro">
+        <div>
+          <p className="fb-eyebrow">{t.overviewEyebrow}</p>
+          <h1>{state.settings.name && state.settings.name !== "." ? `${t.welcomePrefix}${state.settings.name}` : t.defaultGreeting}</h1>
+          <p>{t.introSub}</p>
         </div>
-      </header>
-      <div className="fb-home-intro"><div><p className="fb-eyebrow">TỔNG QUAN</p><h1>{state.settings.name && state.settings.name !== "." ? `Chào ${state.settings.name}` : "Tiền của bạn, trong tầm tay."}</h1><p>Theo dõi dòng tiền. Chủ động cho những kế hoạch tiếp theo.</p></div><button type="button" className="fb-add-button" onClick={addTransaction}><Plus size={18} />Thêm giao dịch</button></div>
-      <section className="fb-wallet-section" aria-label="Ví của bạn">
+        <button type="button" className="fb-add-button" onClick={addTransaction}>
+          <Plus size={18} />
+          <span>{t.addTransaction}</span>
+        </button>
+      </div>
+      <section className="fb-wallet-section" aria-label={t.yourWallets}>
         <div className="fb-section-heading">
           <div>
-            <h2>Ví của bạn</h2>
-            <span>{activeWallets.length} ví hoạt động{archivedWallets.length > 0 ? ` · ${archivedWallets.length} đã hủy liên kết` : ""}</span>
+            <h2>{t.yourWallets}</h2>
+            <span>
+              {lang === "en"
+                ? `${activeWallets.length} ${t.activeWalletsSuffix}${activeWallets.length === 1 ? "" : "s"}`
+                : `${activeWallets.length} ${t.activeWalletsSuffix}`}
+              {archivedWallets.length > 0 ? ` · ${archivedWallets.length} ${t.unlinkedSuffix}` : ""}
+            </span>
           </div>
           {archivedWallets.length > 0 && (
             <button
               type="button"
               className="fb-archived-wallets-chip"
               onClick={() => openManageWalletModal(archivedWallets[0].id)}
-              title="Xem danh sách ví đã hủy liên kết"
+              title={t.unlinkedChip(archivedWallets.length)}
             >
               <Ban size={13} />
-              <span>Đã hủy ({archivedWallets.length})</span>
+              <span>{t.unlinkedChip(archivedWallets.length)}</span>
             </button>
           )}
         </div>
@@ -1083,21 +1221,21 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
           ))}
           <button type="button" className="r-new-wallet" onClick={openAddWalletModal}>
             <Plus size={20} />
-            <span>Thêm ví</span>
+            <span>{t.addWallet}</span>
           </button>
         </div>
       </section>
       <section className="fb-finance-dashboard" aria-label="Dashboard dòng tiền">
-        <section ref={overviewCardRef} className="fb-overview fb-finance-overview"><div className="fb-section-heading"><div><h2>Dòng tiền trong kỳ</h2><p className="fb-section-note">Tổng hợp từ tất cả ví đã tích hợp</p></div>{periodControls}</div>
+        <section ref={overviewCardRef} className="fb-overview fb-finance-overview"><div className="fb-section-heading"><div><h2>{t.flowThisPeriod}</h2><p className="fb-section-note">{t.flowSub}</p></div>{periodControls}</div>
           <div className="r-summary fb-flow-summary-container">
             <div className="fb-flow-vertical-stack">
               <div className="fb-flow-row r-income" onClick={() => setModal("flowIncomeDetails")} role="button" tabIndex={0}>
                 <div className="fb-flow-row-header">
                   <span className="fb-flow-row-label">
                     <ArrowUpRight size={18} />
-                    <span>Tổng thu</span>
+                    <span>{t.totalIncome}</span>
                   </span>
-                  <small>Từ mọi ví trong kỳ</small>
+                  <small>{t.fromAllWalletsInPeriod}</small>
                 </div>
                 <div className="fb-flow-row-amounts">
                   {incomeTotals.map((item) => (
@@ -1112,9 +1250,9 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                 <div className="fb-flow-row-header">
                   <span className="fb-flow-row-label">
                     <ArrowDownRight size={18} />
-                    <span>Tổng chi</span>
+                    <span>{t.totalExpense}</span>
                   </span>
-                  <small>Từ mọi ví trong kỳ</small>
+                  <small>{t.fromAllWalletsInPeriod}</small>
                 </div>
                 <div className="fb-flow-row-amounts">
                   {expenseTotals.map((item) => (
@@ -1127,9 +1265,9 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
             </div>
 
             <div className="fb-flow-footer-row">
-              <p className="fb-currency-note">Tiền tệ được hiển thị riêng, không quy đổi tỷ giá.</p>
+              <p className="fb-currency-note">{t.currencyNote}</p>
               <button type="button" className="fb-flow-detail-link" onClick={() => setModal("flowComparisonChart")}>
-                <span>Chi tiết</span>
+                <span>{t.details}</span>
                 <Info size={13} />
               </button>
             </div>
@@ -1397,17 +1535,50 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
             </>
           )}
         </section>
-        <section className="fb-wallet-flow-card" style={overviewHeight ? { height: `${overviewHeight}px`, maxHeight: `${overviewHeight}px` } : undefined}><div className="fb-section-heading"><div><h2>Chi & thu theo ví</h2><p className="fb-section-note">Số liệu của từng ví đã tích hợp trong kỳ</p></div><button type="button" className="fb-view-transactions" onClick={openAddWalletModal}><Plus size={15} />Thêm ví</button></div><div className="fb-wallet-flow-list">{walletFlows.map((flow) => <button type="button" key={flow.wallet.id} className={flow.wallet.id === wallet.id ? "is-selected" : ""} onClick={() => { setWalletId(flow.wallet.id); setDashboardCategory("all"); setFocusedBucketKey(null); }}><span><b>{walletName(flow.wallet.name)}</b><small>{flow.wallet.currency}</small></span><span className="fb-wallet-flow-numbers"><small className="r-expense">Chi {formatHomeMoney(flow.expense, flow.wallet.currency)}</small><small className="r-income">Thu {formatHomeMoney(flow.income, flow.wallet.currency)}</small></span><ArrowRight size={16} /></button>)}</div><button type="button" className="fb-manage-wallets" onClick={() => openManageWalletModal(wallet.id)}>Quản lý ví<ArrowRight size={16} /></button></section>
+        <section className="fb-wallet-flow-card" style={overviewHeight ? { height: `${overviewHeight}px`, maxHeight: `${overviewHeight}px` } : undefined}>
+          <div className="fb-section-heading">
+            <div>
+              <h2>{t.walletFlowTitle}</h2>
+              <p className="fb-section-note">{t.walletFlowSub}</p>
+            </div>
+            <button type="button" className="fb-view-transactions" onClick={openAddWalletModal}>
+              <Plus size={15} />{t.addWallet}
+            </button>
+          </div>
+          <div className="fb-wallet-flow-list">
+            {walletFlows.map((flow) => (
+              <button
+                type="button"
+                key={flow.wallet.id}
+                className={flow.wallet.id === wallet.id ? "is-selected" : ""}
+                onClick={() => { setWalletId(flow.wallet.id); setDashboardCategory("all"); setFocusedBucketKey(null); }}
+              >
+                <span>
+                  <b>{walletName(flow.wallet.name)}</b>
+                  <small>{flow.wallet.currency}</small>
+                </span>
+                <span className="fb-wallet-flow-numbers">
+                  <small className="r-expense">{t.expShort}{formatHomeMoney(flow.expense, flow.wallet.currency)}</small>
+                  <small className="r-income">{t.incShort}{formatHomeMoney(flow.income, flow.wallet.currency)}</small>
+                </span>
+                <ArrowRight size={16} />
+              </button>
+            ))}
+          </div>
+          <button type="button" className="fb-manage-wallets" onClick={() => openManageWalletModal(wallet.id)}>
+            {t.manageWallets}<ArrowRight size={16} />
+          </button>
+        </section>
       </section>
       <div className="fb-workspace"><div className="fb-main-column">
-        <section className="fb-overview"><div className="fb-section-heading"><h2>Dòng tiền trong kỳ</h2>{periodControls}</div>
-          <button type="button" className="r-summary" onClick={() => setModal("totals")} aria-label="Xem chi tiết dòng tiền"><div className="r-summary-top"><span><small>Thay đổi ròng</small><b>{formatHomeMoney(income - expense, wallet.currency, true)}</b></span><span className="fb-detail-label">Chi tiết<Info size={16} /></span></div><div className="r-summary-cards"><div className="r-expense"><span><ArrowDownRight size={18} />Chi phí</span><b>{formatHomeMoney(expense, wallet.currency)}</b></div><div className="r-income"><span><ArrowUpRight size={18} />Thu nhập</span><b>{formatHomeMoney(income, wallet.currency)}</b></div></div></button>
+        <section className="fb-overview"><div className="fb-section-heading"><h2>{t.flowThisPeriod}</h2>{periodControls}</div>
+          <button type="button" className="r-summary" onClick={() => setModal("totals")} aria-label="Xem chi tiết dòng tiền"><div className="r-summary-top"><span><small>{t.netChange}</small><b>{formatHomeMoney(income - expense, wallet.currency, true)}</b></span><span className="fb-detail-label">{t.details}<Info size={16} /></span></div><div className="r-summary-cards"><div className="r-expense"><span><ArrowDownRight size={18} />{t.cost}</span><b>{formatHomeMoney(expense, wallet.currency)}</b></div><div className="r-income"><span><ArrowUpRight size={18} />{t.income}</span><b>{formatHomeMoney(income, wallet.currency)}</b></div></div></button>
         </section>
-        <section className="fb-activity"><div className="fb-section-heading"><h2>Giao dịch trong kỳ</h2><div className="r-type-pills"><button type="button" className={type === "expense" ? "active" : ""} onClick={() => setType("expense")}>Chi phí</button><button type="button" className={type === "income" ? "active" : ""} onClick={() => setType("income")}>Thu nhập</button></div></div>
-          {list.length === 0 ? <div className="fb-empty"><span className="fb-empty-icon"><ReceiptText size={26} /></span><h3>Chưa có {type === "expense" ? "khoản chi" : "khoản thu"} trong kỳ này</h3><p>Ghi lại một giao dịch để bắt đầu theo dõi dòng tiền.</p><button type="button" className="fb-empty-action" onClick={addTransaction}><Plus size={16} />Thêm giao dịch</button></div> : transactionRows}
+        <section className="fb-activity"><div className="fb-section-heading"><h2>{t.txThisPeriod}</h2><div className="r-type-pills"><button type="button" className={type === "expense" ? "active" : ""} onClick={() => setType("expense")}>{t.cost}</button><button type="button" className={type === "income" ? "active" : ""} onClick={() => setType("income")}>{t.income}</button></div></div>
+          {list.length === 0 ? <div className="fb-empty"><span className="fb-empty-icon"><ReceiptText size={26} /></span><h3>Chưa có {type === "expense" ? "khoản chi" : "khoản thu"} trong kỳ này</h3><p>Ghi lại một giao dịch để bắt đầu theo dõi dòng tiền.</p><button type="button" className="fb-empty-action" onClick={addTransaction}><Plus size={16} />{t.addTransaction}</button></div> : transactionRows}
         </section>
-      </div><aside className="fb-side-column">{state.settings.totalBalance && <section className="fb-balance-card"><span className="fb-balance-icon"><Wallet size={20} /></span><p>Số dư ví đã chọn</p><h2>{formatHomeMoney(allBalance, wallet.currency)}</h2><small>{walletName(wallet.name)} · {wallet.currency}</small><div className="fb-balance-decor" aria-hidden="true"><span /><span /><span /><span /><span /></div><button type="button" onClick={() => openManageWalletModal(wallet.id)}>Quản lý ví<ArrowRight size={16} /></button></section>}
-        <section className="fb-habit-card"><p className="fb-eyebrow">MỖI NGÀY MỘT CHÚT</p><h3>Hiểu tiền của mình hơn.</h3><p>Ghi lại các khoản thu và chi để có một bức tranh rõ ràng hơn.</p><button type="button" onClick={() => navigate("?tab=transactions")}>Xem giao dịch<ArrowRight size={16} /></button></section>
+      </div><aside className="fb-side-column">{state.settings.totalBalance && <section className="fb-balance-card"><span className="fb-balance-icon"><Wallet size={20} /></span><p>{t.selectedWalletBalance}</p><h2>{formatHomeMoney(allBalance, wallet.currency)}</h2><small>{walletName(wallet.name)} · {wallet.currency}</small><div className="fb-balance-decor" aria-hidden="true"><span /><span /><span /><span /><span /></div><button type="button" onClick={() => openManageWalletModal(wallet.id)}>{t.manageWallets}<ArrowRight size={16} /></button></section>}
+        <section className="fb-habit-card"><p className="fb-eyebrow">{t.habitEyebrow}</p><h3>{t.habitTitle}</h3><p>{t.habitSub}</p><button type="button" onClick={() => navigate("?tab=transactions")}>{t.viewTransactionsAction}<ArrowRight size={16} /></button></section>
       </aside></div>
       <button type="button" className="r-fab fb-mobile-add" aria-label="Thêm giao dịch" onClick={addTransaction}><Plus size={26} /></button>
     </>}

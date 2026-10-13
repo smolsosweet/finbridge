@@ -8,6 +8,7 @@ import { localDateKey } from "./chartWeek";
 import { HistoryPeriodPicker, matchesHistoryPeriod, type HistoryPeriod } from "./HistoryPeriodPicker";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
 import { useAppState } from "./store";
+import * as storeModule from "./store";
 import { FinBridgeHeader } from "./FinBridgeHeader";
 
 const PAGE_SIZE = 5;
@@ -125,21 +126,30 @@ export function TransactionHistory({ navigate }: { navigate: (screen: string) =>
 
   const addActionLabel = lang === "vi" ? "Thêm giao dịch" : lang === "zh" ? "添加交易" : "Add transaction";
 
+  const handleToggleTheme = () => {
+    if (typeof (storeModule as any).setSetting === "function") {
+      (storeModule as any).setSetting("theme", state.settings?.theme === "dark" ? "light" : "dark");
+    } else if (typeof (storeModule as any).updateState === "function") {
+      (storeModule as any).updateState((s: any) => ({ ...s, settings: { ...s?.settings, theme: s?.settings?.theme === "dark" ? "light" : "dark" } }));
+    }
+  };
+  const handleSelectLanguage = (val: string) => {
+    if (typeof (storeModule as any).setSetting === "function") {
+      (storeModule as any).setSetting("language", val);
+    } else if (typeof (storeModule as any).updateState === "function") {
+      (storeModule as any).updateState((s: any) => ({ ...s, settings: { ...s?.settings, language: val } }));
+    }
+  };
+
   return <main className="r-dashboard fb-home fb-history">
-    <FinBridgeHeader lang={lang}>
-      <div className="fb-header-actions">
-        <button
-          type="button"
-          className="fb-header-calendar-btn"
-          onClick={() => setCalendarLedgerOpen(true)}
-          aria-label={lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar ledger"}
-          title={lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar ledger"}
-        >
-          <CalendarDays size={18} />
-          <span className="fb-header-btn-text">{lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar"}</span>
-        </button>
-      </div>
-    </FinBridgeHeader>
+    <FinBridgeHeader
+      lang={lang}
+      theme={String(state.settings?.theme || "light")}
+      currentLanguage={String(state.settings?.language || "Tiếng Việt")}
+      onOpenCalendar={() => setCalendarLedgerOpen(true)}
+      onToggleTheme={handleToggleTheme}
+      onSelectLanguage={handleSelectLanguage}
+    />
 
     <div className="fb-home-intro fb-history-header">
       <div>
