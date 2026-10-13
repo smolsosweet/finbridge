@@ -1566,7 +1566,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
             ))}
           </div>
           <button type="button" className="fb-manage-wallets" onClick={() => openManageWalletModal(wallet.id)}>
-            {t.manageWallets}<ArrowRight size={16} />
+            <span className="fb-manage-wallets-text">{t.manageWallets}</span><ArrowRight size={16} />
           </button>
         </section>
       </section>
@@ -1577,7 +1577,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
         <section className="fb-activity"><div className="fb-section-heading"><h2>{t.txThisPeriod}</h2><div className="r-type-pills"><button type="button" className={type === "expense" ? "active" : ""} onClick={() => setType("expense")}>{t.cost}</button><button type="button" className={type === "income" ? "active" : ""} onClick={() => setType("income")}>{t.income}</button></div></div>
           {list.length === 0 ? <div className="fb-empty"><span className="fb-empty-icon"><ReceiptText size={26} /></span><h3>Chưa có {type === "expense" ? "khoản chi" : "khoản thu"} trong kỳ này</h3><p>Ghi lại một giao dịch để bắt đầu theo dõi dòng tiền.</p><button type="button" className="fb-empty-action" onClick={addTransaction}><Plus size={16} />{t.addTransaction}</button></div> : transactionRows}
         </section>
-      </div><aside className="fb-side-column">{state.settings.totalBalance && <section className="fb-balance-card"><span className="fb-balance-icon"><Wallet size={20} /></span><p>{t.selectedWalletBalance}</p><h2>{formatHomeMoney(allBalance, wallet.currency)}</h2><small>{walletName(wallet.name)} · {wallet.currency}</small><div className="fb-balance-decor" aria-hidden="true"><span /><span /><span /><span /><span /></div><button type="button" className="fb-manage-wallets" onClick={() => openManageWalletModal(wallet.id)}>{t.manageWallets}<ArrowRight size={16} /></button></section>}
+      </div><aside className="fb-side-column">{state.settings.totalBalance && <section className="fb-balance-card"><span className="fb-balance-icon"><Wallet size={20} /></span><p>{t.selectedWalletBalance}</p><h2>{formatHomeMoney(allBalance, wallet.currency)}</h2><small>{walletName(wallet.name)} · {wallet.currency}</small><div className="fb-balance-decor" aria-hidden="true"><span /><span /><span /><span /><span /></div><button type="button" className="fb-manage-wallets" onClick={() => openManageWalletModal(wallet.id)}><span className="fb-manage-wallets-text">{t.manageWallets}</span><ArrowRight size={16} /></button></section>}
         <section className="fb-habit-card"><p className="fb-eyebrow">{t.habitEyebrow}</p><h3>{t.habitTitle}</h3><p>{t.habitSub}</p><button type="button" onClick={() => navigate("?tab=transactions")}>{t.viewTransactionsAction}<ArrowRight size={16} /></button></section>
       </aside></div>
       <button type="button" className="r-fab fb-mobile-add" aria-label="Thêm giao dịch" onClick={addTransaction}><Plus size={26} /></button>
