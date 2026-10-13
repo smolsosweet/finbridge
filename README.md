@@ -160,3 +160,9 @@ Welcome introduces Jack; Google sign-in returns to Home. Google credentials must
 be configured before login is available. Accounts/sessions use PostgreSQL;
 wallets and transactions still live in a per-account browser workspace.
 [Verification results and limits](docs/auth/RESULTS.md).
+
+Email/password login, verified registration and password recovery are available
+in the current email-login branch. See [email setup and Render database notes](docs/auth/EMAIL_PASSWORD_SETUP.md).
+Real delivery requires a configured sender/provider; local outbox is development
+only. PostgreSQL users now have a server-controlled role defaulting to `user`;
+full RBAC and database-backed financial workspaces are not yet implemented.

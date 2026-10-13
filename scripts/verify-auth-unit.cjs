@@ -12,6 +12,43 @@ function compile(relative, resolve = require) {
 const storage = compile("src/lib/workspace-storage.ts");
 const config = compile("src/lib/auth-config.ts");
 const copy = compile("src/lib/auth-copy.ts");
+const mail = compile("src/lib/auth-mail.ts");
+test("Brevo requires a key and a verified-sender address shape; unknown modes are rejected", () => {
+  assert.throws(() => mail.readMailConfig({ AUTH_EMAIL_MODE: "brevo" }));
+  assert.throws(() => mail.readMailConfig({ AUTH_EMAIL_MODE: "unknown" }));
+  assert.throws(() => mail.readMailConfig({ AUTH_EMAIL_MODE: "brevo", BREVO_API_KEY: "synthetic", AUTH_EMAIL_FROM: "sender\r\n@example.invalid" }));
+  assert.equal(mail.readMailConfig({ AUTH_EMAIL_MODE: "brevo", BREVO_API_KEY: "synthetic", AUTH_EMAIL_FROM: "sender@example.invalid" }).mode, "brevo");
+});
+test("Brevo sends only a transactional message over HTTPS and rejects provider errors without retry", async () => {
+  const originalFetch = global.fetch; let requests = 0;
+  const sender = mail.createMailSender({ AUTH_EMAIL_MODE: "brevo", BREVO_API_KEY: "synthetic-only", AUTH_EMAIL_FROM: "sender@example.invalid" });
+  try {
+    global.fetch = async (url, options) => {
+      requests++; assert.equal(url, "https://api.brevo.com/v3/smtp/email"); assert.equal(options.method, "POST"); assert.equal(options.redirect, "error");
+      assert.equal(options.headers["api-key"], "synthetic-only");
+      const body = JSON.parse(options.body);
+      assert.deepEqual(body.to, [{ email: "recipient@example.invalid" }]);
+      assert.equal(body.sender.email, "sender@example.invalid"); assert.ok(body.textContent.includes("https://finbridge.example/verify"));
+      assert.equal(body.subject, "Verify your FinBridge email"); return new Response(null, { status: requests === 1 ? 201 : 429 });
+    };
+    const message = { to: "recipient@example.invalid", kind: "verify", url: "https://finbridge.example/verify" };
+    await sender(message); await assert.rejects(() => sender(message), /AUTH_EMAIL_DELIVERY_FAILED/); assert.equal(requests, 2);
+  } finally { global.fetch = originalFetch; }
+});
+test("local auth mail is blocked in production and on non-local origins", () => {
+  assert.equal(mail.readMailConfig({}), null);
+  assert.equal(mail.readMailConfig({ AUTH_EMAIL_MODE: "local", NODE_ENV: "development", BETTER_AUTH_URL: "http://localhost:3011" }).mode, "local");
+  assert.throws(() => mail.readMailConfig({ AUTH_EMAIL_MODE: "local", NODE_ENV: "production", BETTER_AUTH_URL: "https://finbridge.example" }));
+  assert.throws(() => mail.readMailConfig({ AUTH_EMAIL_MODE: "local", NODE_ENV: "development", BETTER_AUTH_URL: "https://remote.example" }));
+});
+test("SMTP rejects incomplete, cleartext and injected sender settings", () => {
+  const smtp = { SMTP_HOST: "smtp.example.invalid", SMTP_USER: "fixture", SMTP_PASSWORD: "synthetic", SMTP_FROM: "FinBridge <mail@example.invalid>" };
+  assert.equal(mail.readMailConfig(smtp).port, 587);
+  assert.equal(mail.readMailConfig({ ...smtp, SMTP_PORT: "465" }).port, 465);
+  assert.throws(() => mail.readMailConfig({ ...smtp, SMTP_PASSWORD: "" }));
+  assert.throws(() => mail.readMailConfig({ ...smtp, SMTP_PORT: "25" }));
+  assert.throws(() => mail.readMailConfig({ ...smtp, SMTP_FROM: "fake\r\nBcc: attacker@example.invalid" }));
+});
 const legacy = JSON.stringify({ wallets: [{ id: "bank", currency: "VND", initial: 1000000 }], transactions: [{ amount: 200000, wallet: "bank" }], settings: { name: "Old name" } });
 function fixture() { const records = new Map([[storage.LEGACY_WORKSPACE_KEY, legacy]]); return { records, getItem: (key) => records.get(key) || null, setItem: (key, value) => records.set(key, value) }; }
 test("legacy bytes remain accessible for backup; never auto-loaded for a new account", () => { const s = fixture(); assert.equal(storage.legacyWorkspaceBackup(s), legacy); assert.equal(storage.readUserWorkspace(s, "new-user"), null); assert.equal(s.records.size, 1); });
