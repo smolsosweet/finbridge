@@ -3,9 +3,10 @@ import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { LegacyWorkspaceNotice } from "./LegacyWorkspaceNotice";
 import { authClient } from "@/lib/auth-client";
+import { AuthenticatedUserContext, type AuthenticatedUser } from "./AuthenticatedUser";
 import { activateUserWorkspace, clearUserWorkspace, subscribeWorkspace, workspaceOwner } from "@/components/sites/rolly/replica/store";
 
-export function AuthenticatedWorkspace({ user, children }: { user: { id: string; name: string }; children: ReactNode }) {
+export function AuthenticatedWorkspace({ user, children }: { user: AuthenticatedUser; children: ReactNode }) {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
   const ready = useSyncExternalStore(subscribeWorkspace, () => workspaceOwner() === user.id, () => false);
@@ -21,5 +22,8 @@ export function AuthenticatedWorkspace({ user, children }: { user: { id: string;
     }
   }, [session?.user.id, isPending, user.id, router]);
   if (!ready || (!isPending && session?.user.id !== user.id)) return <div role="status" className="min-h-screen grid place-items-center bg-[#f3f6f6] text-[#147d78]">FinBridge…</div>;
-  return <><LegacyWorkspaceNotice />{children}</>;
+  const currentUser = session?.user.id === user.id
+    ? { id: session.user.id, name: session.user.name, email: session.user.email }
+    : user;
+  return <AuthenticatedUserContext.Provider value={currentUser}><LegacyWorkspaceNotice />{children}</AuthenticatedUserContext.Provider>;
 }

@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { signOutGoogle } from "@/lib/sign-out";
+import { useAuthenticatedUser } from "@/components/auth/AuthenticatedUser";
 import {
   Bell,
   Coins,
@@ -33,6 +34,9 @@ export function SettingsMenu({ navigate }: { navigate: (screen: string) => void 
 
 const COPY_ACCOUNT = {
   vi: {
+    emailManaged: "Email được lấy từ tài khoản đăng nhập và không thể đổi tại đây.",
+    currentAccount: "Tài khoản đang đăng nhập",
+    switchAccountNote: "Bạn sẽ đăng xuất, sau đó đăng nhập bằng tài khoản khác. Dữ liệu của mỗi tài khoản được giữ riêng trên trình duyệt này.",
     eyebrow: "THIẾT LẬP TÀI KHOẢN",
     title: "Cài đặt tài khoản",
     intro: "Tùy chỉnh thông tin cá nhân, định dạng tiền tệ và bảo mật tài khoản FinBridge.",
@@ -61,6 +65,9 @@ const COPY_ACCOUNT = {
     logoutError: "Không thể đăng xuất. Vui lòng thử lại.",
   },
   en: {
+    emailManaged: "Email comes from your sign-in account and cannot be changed here.",
+    currentAccount: "Signed-in account",
+    switchAccountNote: "You will sign out, then sign in with another account. Each account's data stays separate in this browser.",
     eyebrow: "ACCOUNT SETTINGS",
     title: "Account settings",
     intro: "Customize user profile, currency format and FinBridge account security.",
@@ -89,6 +96,9 @@ const COPY_ACCOUNT = {
     logoutError: "Could not sign out. Please try again.",
   },
   zh: {
+    emailManaged: "邮箱来自您的登录账户，无法在此更改。",
+    currentAccount: "当前登录账户",
+    switchAccountNote: "您将退出登录，然后使用其他账户登录。每个账户的数据在此浏览器中分别保存。",
     eyebrow: "账户设置",
     title: "账户设置",
     intro: "自定义个人资料、货币格式及 FinBridge 账户安全。",
@@ -126,6 +136,7 @@ export function AccountSettings({
   initialOption?: string;
 }) {
   const state = useAppState();
+  const authenticatedUser = useAuthenticatedUser();
   const lang = settingsLanguage(state.settings.language);
   const t = COPY_ACCOUNT[lang];
   const router = useRouter();
@@ -135,14 +146,12 @@ export function AccountSettings({
   const [option, setOption] = useState(initialOption);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [switchAccountModalOpen, setSwitchAccountModalOpen] = useState(false);
-  const [switchEmailInput, setSwitchEmailInput] = useState("");
 
   const rawName = String(state.settings.name || "").trim();
   const displayName = rawName && rawName !== "." ? rawName : "cincin";
-  const email = String(state.settings.email || "cinderellagr01@gmail.com");
+  const email = authenticatedUser?.email || "";
 
   const [nameInput, setNameInput] = useState(displayName);
-  const [emailInput, setEmailInput] = useState(email);
 
   const close = () => {
     setOption("");
@@ -151,7 +160,6 @@ export function AccountSettings({
 
   function openEditProfile() {
     setNameInput(displayName);
-    setEmailInput(email);
     setProfileModalOpen(true);
   }
 
@@ -172,18 +180,12 @@ export function AccountSettings({
   function handleSaveProfile(e: FormEvent) {
     e.preventDefault();
     if (nameInput.trim()) setSetting("name", nameInput.trim());
-    if (emailInput.trim()) setSetting("email", emailInput.trim());
     setProfileModalOpen(false);
   }
 
-  function handleSwitchAccount(e: FormEvent) {
+  async function handleSwitchAccount(e: FormEvent) {
     e.preventDefault();
-    if (switchEmailInput.trim()) {
-      setSetting("email", switchEmailInput.trim());
-      setSetting("name", switchEmailInput.split("@")[0] || displayName);
-      setSwitchEmailInput("");
-      setSwitchAccountModalOpen(false);
-    }
+    await logout();
   }
 
   const accountRows = [
@@ -322,11 +324,10 @@ export function AccountSettings({
               <input
                 aria-label={t.emailLabel}
                 type="email"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                placeholder="name@example.com"
-                required
+                value={email}
+                readOnly
               />
+              <small>{t.emailManaged}</small>
             </label>
             <div className="fb-modal-actions">
               <button type="button" className="r-button" onClick={() => setProfileModalOpen(false)}>
@@ -347,31 +348,22 @@ export function AccountSettings({
             <div className="fb-current-account-badge">
               <UserCheck size={18} />
               <div>
-                <small>Tài khoản đang đăng nhập</small>
+                <small>{t.currentAccount}</small>
                 <b>{displayName} ({email})</b>
               </div>
             </div>
 
             <form className="r-form" onSubmit={handleSwitchAccount}>
-              <label>
-                Đăng nhập tài khoản khác
-                <input
-                  type="email"
-                  placeholder="Nhập email tài khoản muốn chuyển..."
-                  value={switchEmailInput}
-                  onChange={(e) => setSwitchEmailInput(e.target.value)}
-                  required
-                />
-              </label>
               <p className="r-dialog-note">
-                Dữ liệu ví và giao dịch sẽ tự động gắn kết tương ứng với tài khoản email bạn chuyển sang.
+                {t.switchAccountNote}
               </p>
+              {logoutError && <p role="alert">{t.logoutError}</p>}
               <div className="fb-modal-actions">
                 <button type="button" className="r-button" onClick={() => setSwitchAccountModalOpen(false)}>
                   {t.cancel}
                 </button>
-                <button type="submit" className="r-primary">
-                  Chuyển tài khoản
+                <button type="submit" className="r-primary" disabled={logoutBusy}>
+                  {logoutBusy ? t.logoutBusy : t.switchAccount}
                 </button>
               </div>
             </form>
@@ -497,7 +489,7 @@ export function AccountSettings({
                       settings: {
                         ...s.settings,
                         name: "cincin",
-                        email: "cinderellagr01@gmail.com",
+                        email: "",
                       },
                     }));
                     close();

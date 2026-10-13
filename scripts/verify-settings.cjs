@@ -37,7 +37,7 @@ let state = {
   rules: [],
   settings: {
     name: "cincin",
-    email: "cinderellagr01@gmail.com",
+    email: "stale-workspace@example.invalid",
     language: "Tiếng Việt",
     theme: "light",
   },
@@ -45,6 +45,7 @@ let state = {
 
 let writes = 0, cursor = 0, slots = [], destination = "";
 let signOutCalls = 0, signOutFails = false, route = "", refreshes = 0;
+let authenticatedUser = { id: "google-user-A", name: "Google User A", email: "signed-in-google@example.invalid" };
 const testReact = {
   ...React,
   useState(initial) {
@@ -90,6 +91,7 @@ function resolve(name) {
   if (name === "./Ui") return ui;
   if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams(), useRouter: () => ({ replace: (next) => { route = next; }, refresh: () => { refreshes++; } }) };
   if (name === "@/lib/sign-out") return { async signOutGoogle() { signOutCalls++; if (signOutFails) throw new Error("SIGN_OUT_FAILED"); } };
+  if (name === "@/components/auth/AuthenticatedUser") return { useAuthenticatedUser: () => authenticatedUser };
   if (name === "./Tools") return { CurrencySelect: () => null };
   return localRequire(name);
 }
@@ -142,7 +144,8 @@ slots = []; cursor = 0;
 const accountHtml = renderToStaticMarkup(React.createElement(settings.AccountSettings, { navigate }));
 // Profile card
 assert.ok(accountHtml.includes("cincin"), "Profile card should render display name");
-assert.ok(accountHtml.includes("cinderellagr01@gmail.com"), "Profile card should render email");
+assert.ok(accountHtml.includes(authenticatedUser.email), "Profile card must render the authenticated email");
+assert.doesNotMatch(accountHtml, /stale-workspace@example.invalid|cinderellagr01@gmail.com/, "Saved or simulated email must not override the signed-in identity");
 // Options
 assert.ok(accountHtml.includes("Định dạng số tiền"), "Should include currency format");
 assert.ok(accountHtml.includes("Nhắc nhở thông báo"), "Should include notification reminders");
@@ -202,4 +205,60 @@ async function verifyLogout() {
   assert.equal(JSON.stringify({ wallets: state.wallets, transactions: state.transactions }), financialBefore);
   process.stdout.write("PASS: account logout confirmation, server sign-out call, welcome redirect, failure handling and VI/EN/ZH labels; zero financial writes.\n");
 }
-verifyLogout().catch((error) => { console.error(error); process.exitCode = 1; });
+async function verifyAccountIdentity() {
+  const financialBefore = JSON.stringify({ wallets: state.wallets, transactions: state.transactions });
+  const originalSettings = { ...state.settings };
+  const userA = authenticatedUser;
+  const renderAccount = () => { cursor = 0; return settings.AccountSettings({ navigate }); };
+
+  for (const language of ["English", "Tiếng Việt", "中文"]) {
+    state.settings.language = language;
+    state.settings.email = "forged-local@example.invalid";
+    slots = []; cursor = 0;
+    const html = renderToStaticMarkup(renderAccount());
+    assert.ok(html.includes(userA.email));
+    assert.doesNotMatch(html, /forged-local@example.invalid|cinderellagr01@gmail.com/);
+    find(renderAccount(), (node) => node.props.className === "fb-account-profile-edit-btn").props.onClick();
+    const field = find(renderAccount(), (node) => node.type === "input" && node.props.type === "email");
+    assert.equal(field.props.value, userA.email);
+    assert.equal(field.props.readOnly, true);
+    assert.equal(field.props.onChange, undefined);
+  }
+
+  state.settings.language = "English";
+  slots = []; cursor = 0;
+  find(renderAccount(), (node) => node.props.className === "fb-account-profile-edit-btn").props.onClick();
+  find(renderAccount(), (node) => node.type === "input" && node.props.autoFocus).props.onChange({ target: { value: "Updated local display name" } });
+  find(renderAccount(), (node) => node.type === "form").props.onSubmit({ preventDefault() {} });
+  assert.equal(state.settings.name, "Updated local display name");
+  assert.equal(state.settings.email, "forged-local@example.invalid", "Saving a display name must not write account identity to local settings");
+  authenticatedUser = { id: "email-user-B", name: "Email User B", email: "password-user-b@example.invalid" };
+  const accountB = renderToStaticMarkup(renderAccount());
+  assert.ok(accountB.includes(authenticatedUser.email), "A different authenticated account must show its own email");
+  assert.ok(!accountB.includes(userA.email), "Previous account email must not leak after switching identity");
+  authenticatedUser = null;
+  const absent = renderToStaticMarkup(renderAccount());
+  assert.doesNotMatch(absent, /forged-local@example.invalid|password-user-b@example.invalid|cinderellagr01@gmail.com/);
+  authenticatedUser = userA;
+
+  slots = []; cursor = 0;
+  const switchRow = find(renderAccount(), (node) => node.type === "button" && node.props.className === "fb-account-opt-row " && node.props.children[1]?.props.children[0]?.props.children === "Switch account");
+  const writesBefore = writes, callsBefore = signOutCalls;
+  switchRow.props.onClick();
+  assert.equal(signOutCalls, callsBefore, "Opening the switch-account dialog must not sign out");
+  assert.equal(find(renderAccount(), (node) => node.type === "input" && node.props.type === "email"), undefined, "Typing an email must not impersonate an account");
+  signOutFails = true; route = "";
+  await find(renderAccount(), (node) => node.type === "form").props.onSubmit({ preventDefault() {} });
+  assert.equal(route, "");
+  assert.ok(find(renderAccount(), (node) => node.props.role === "alert"));
+  signOutFails = false;
+  await find(renderAccount(), (node) => node.type === "form").props.onSubmit({ preventDefault() {} });
+  assert.equal(signOutCalls, callsBefore + 2);
+  assert.equal(route, "/", "Switching accounts must use real sign-out and subsequent sign-in");
+  assert.equal(writes, writesBefore, "Switching identity must not modify local profile or financial data");
+  assert.equal(JSON.stringify({ wallets: state.wallets, transactions: state.transactions }), financialBefore);
+  state.settings = originalSettings;
+  process.stdout.write("PASS: authenticated account email in EN/VI/ZH; stale and forged local identity ignored; read-only profile email; account switching signs out without local identity or financial writes.\n");
+}
+
+verifyAccountIdentity().then(verifyLogout).catch((error) => { console.error(error); process.exitCode = 1; });
