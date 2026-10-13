@@ -152,3 +152,11 @@ The project keeps one portable Agent Skill at `.agents/skills/clone-website/`. C
 ## License
 
 MIT
+
+## FinBridge Google login branch
+
+The login implementation is documented in [Google login setup](docs/auth/GOOGLE_LOGIN_SETUP.md).
+Welcome introduces Jack; Google sign-in returns to Home. Google credentials must
+be configured before login is available. Accounts/sessions use PostgreSQL;
+wallets and transactions still live in a per-account browser workspace.
+[Verification results and limits](docs/auth/RESULTS.md).
