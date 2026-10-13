@@ -8,7 +8,9 @@ export interface Transaction { id: string; title: string; amount: number; type: 
 export interface Goal { id: string; kind: string; title: string; amount: number; saved: number; currency: string; date: string; cycle: string; category: string; wallet: string; direction: string; person: string; }
 export interface FixedExpense { id: string; budgetId: string; title: string; amount: number; category: string; dueDate: string; recurrence: "once" | "weekly" | "monthly" | "yearly"; active: boolean; }
 export interface CategoryMetadata { type: string; icon: string; children: string[]; archived?: boolean; }
-export interface AppState { wallets: Wallet[]; transactions: Transaction[]; goals: Goal[]; fixedExpenses?: FixedExpense[]; recurring: Transaction[]; rules: string[]; categories: string[]; categoryMeta: Record<string, CategoryMetadata>; receiptDraft?: string; settings: Record<string, string | boolean>; }
+export interface ChatMessage { role: "assistant" | "user"; text: string; transaction?: Transaction; draftIds?: string[]; walletChoiceDraftIds?: string[]; categoryChoiceDraftIds?: string[]; retryReceipt?: boolean; }
+export interface TransactionChatSession { messages: ChatMessage[]; drafts: Array<{ id: string; title: string; amount: number | null; type: "expense" | "income" | null; category: string | null; date: string | null; wallet: string | null; currency: string | null; needsReview: string[] }>; clarifyingDraftId: string | null; }
+export interface AppState { wallets: Wallet[]; transactions: Transaction[]; goals: Goal[]; fixedExpenses?: FixedExpense[]; recurring: Transaction[]; rules: string[]; categories: string[]; categoryMeta: Record<string, CategoryMetadata>; receiptDraft?: string; transactionChat?: TransactionChatSession; settings: Record<string, string | boolean>; }
 export const initialState: AppState = {
   wallets: [{ id: "default", name: ".", currency: "USD", initial: 0, type: "cash" }],
   transactions: [], goals: [], fixedExpenses: [], recurring: [], rules: [],
