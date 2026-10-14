@@ -3,12 +3,61 @@
   height: 100svh;
   min-height: 0;
   overflow: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
-.page[data-mode="signup"],
-.page[data-mode="reset"] {
-  height: auto;
-  min-height: 100svh;
-  overflow-y: auto;
+.page::-webkit-scrollbar {
+  display: none;
+}
+
+.authHeader {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: 100%;
+  max-width: 1120px;
+  gap: 16px;
+}
+
+.headerLeft {
+  justify-self: start;
+}
+
+.headerCenter {
+  justify-self: center;
+}
+
+.headerRight {
+  justify-self: end;
+}
+
+.brandButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: #172f3c;
+  cursor: pointer;
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+.brandButton:hover {
+  transform: translateY(-1px);
+  opacity: 0.9;
+}
+
+.brandButton:focus-visible {
+  outline: 2px solid #7b40f2;
+  outline-offset: 4px;
+}
+
+.brandText {
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -.7px;
 }
 
 .back {
@@ -28,25 +77,37 @@
 .back:hover { background: #ffffff; color: #5930b5; }
 
 .content {
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   flex: 1;
   min-height: 0;
   width: 100%;
   max-width: 480px;
-  place-items: center;
   margin: 0 auto;
-  padding: clamp(8px, 1.8vh, 20px) 0;
+  padding: clamp(8px, 1.5vh, 20px) 0 clamp(64px, 12vh, 120px);
+}
+.page[data-mode="signup"] .content,
+.page[data-mode="reset"] .content {
+  justify-content: flex-start;
+  padding-top: clamp(32px, 4.8vh, 44px);
+  padding-bottom: clamp(16px, 2.5vh, 28px);
 }
 .card {
   position: relative;
   width: 100%;
-  padding: clamp(16px, 2.2vh, 24px) clamp(20px, 3.5vw, 32px) clamp(18px, 2.6vh, 28px);
+  padding: clamp(28px, 3.8vh, 36px) clamp(24px, 4vw, 36px) clamp(24px, 3.2vh, 32px);
   border: 1px solid #e2e8f0;
   border-radius: 24px;
   background: #ffffff;
   text-align: center;
   box-shadow: 0 12px 48px #7b40f20b, 0 2px 8px #172f3c05;
   animation: arrive .45s ease-out both;
+}
+.page[data-mode="signup"] .card,
+.page[data-mode="reset"] .card {
+  padding: clamp(24px, 3.2vh, 30px) clamp(24px, 4vw, 36px) clamp(20px, 2.8vh, 26px);
 }
 .card::before {
   content: "";
@@ -56,14 +117,6 @@
   border-radius: 0 0 4px 4px;
   background: var(--welcome-gradient);
 }
-.mascotStage {
-  display: grid;
-  place-items: center;
-  width: clamp(82px, 12vh, 130px);
-  height: clamp(82px, 12vh, 130px);
-  margin: -4px auto 0;
-}
-.card[data-mode="signup"] .mascotStage { width: clamp(64px, 9vh, 92px); height: clamp(64px, 9vh, 92px); }
 .title { margin: 0; font-size: clamp(25px, 3.4vh, 30px); font-weight: 650; line-height: 1.25; letter-spacing: -.8px; }
 .intro { margin: clamp(6px, 1.2vh, 10px) 0 0; color: #64748b; font-size: 13px; line-height: 1.5; }
 .form { display: flex; flex-direction: column; gap: clamp(8px, 1.4vh, 14px); margin-top: clamp(12px, 2.2vh, 24px); text-align: left; }
@@ -123,18 +176,24 @@
 }
 @keyframes arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 480px) {
-  .page { padding: 14px 16px; }
-  .back { padding-left: 0; }
-  .content { padding: 8px 0; }
-  .card { padding: 16px 20px 18px; border-radius: 20px; }
-  .title { font-size: 27px; }
+  .page { padding: 14px 16px; height: auto; min-height: 100svh; overflow-y: auto; }
+  .authHeader { gap: 8px; }
+  .back { padding-left: 0; font-size: 12px; }
+  .brandButton { gap: 6px; }
+  .brandText { font-size: 18px; }
+  .content { padding: 12px 0 32px; }
+  .page[data-mode="signup"] .content,
+  .page[data-mode="reset"] .content { padding-top: 12px; padding-bottom: 24px; }
+  .card { padding: 24px 20px 20px; border-radius: 20px; }
+  .title { font-size: 25px; }
   .input { font-size: 16px; }
 }
 @media (max-height: 680px) {
-  .page { padding-top: 10px; padding-bottom: 10px; }
+  .page { padding-top: 10px; padding-bottom: 10px; height: auto; min-height: 100svh; overflow-y: auto; }
   .back { min-height: 36px; }
-  .mascotStage { width: 64px; height: 64px; }
-  .card[data-mode="signup"] .mascotStage { width: 48px; height: 48px; }
+  .content { padding: 8px 0 20px; }
+  .page[data-mode="signup"] .content,
+  .page[data-mode="reset"] .content { padding-top: 8px; padding-bottom: 16px; }
   .intro { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Globe } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Mascot } from "page-mascot";
 import { AUTH_COPY, authLanguage, type AuthLanguage } from "@/lib/auth-copy";
+import { LanguageSelector } from "./LanguageSelector";
 import styles from "./WelcomeScreen.module.css";
 
 export function WelcomeScreen({ onGetStarted, onLogIn, initialLang = "en" }: { onGetStarted: (lang?: AuthLanguage) => void; onLogIn: (lang?: AuthLanguage) => void; initialLang?: string }) {
@@ -19,14 +20,7 @@ export function WelcomeScreen({ onGetStarted, onLogIn, initialLang = "en" }: { o
         </span>
         <span><span className={styles.fin}>Fin</span><span className={styles.bridge}>Bridge</span></span>
       </div>
-      <label className={styles.language}>
-        <Globe size={17} aria-hidden="true" />
-        <select aria-label={t.language} value={lang} onChange={(e) => setLang(authLanguage(e.target.value))}>
-          <option value="en">English</option>
-          <option value="vi">Tiếng Việt</option>
-          <option value="zh">中文</option>
-        </select>
-      </label>
+      <LanguageSelector value={lang} onChange={setLang} />
     </header>
     <section className={styles.hero} aria-labelledby="welcome-title">
       <div className={styles.mascotStage}>

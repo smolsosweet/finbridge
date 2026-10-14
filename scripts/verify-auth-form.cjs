@@ -17,8 +17,9 @@ const { AuthCard } = compile("src/components/sites/rolly/AuthCard.tsx", (name) =
   if (name === "react") return fakeReact;
   if (name === "next/image") return { default: ({ src, alt }) => React.createElement("img", { src, alt }) };
   if (name === "next/link") return { default: ({ href, children, ...props }) => React.createElement("a", { ...props, href }, children) };
-  if (name === "next/navigation") return { useRouter: () => ({ replace: (url) => { destination = url; }, refresh() {} }) };
+  if (name === "next/navigation") return { useRouter: () => ({ replace: (url) => { destination = url; }, push: (url) => { destination = url; }, refresh() {} }) };
   if (name === "./Icons") return { GoogleIcon: () => React.createElement("span", null, "G") };
+  if (name === "./LanguageSelector") return { LanguageSelector: () => React.createElement("div", null) };
   if (name === "@/lib/auth-client") return { authClient: client };
   if (name === "@/lib/auth-copy") return copy;
   if (name === "@/lib/auth-form-copy") return forms;
@@ -48,7 +49,7 @@ async function main() {
   assert.equal(calls[0].kind, "login"); assert.equal(destination, "/app"); assert.equal(calls[0].body.password, "Synthetic-password-123");
   reset("login"); fill("email", "fixture@example.invalid"); fill("current-password", "Wrong-password-123"); apiError = { code: "INVALID_EMAIL_OR_PASSWORD", status: 401 }; await submit();
   assert.equal(destination, ""); assert.ok(find(tree(), (node) => node.props.role === "alert"));
-  reset("signup"); fill("name", "Fixture"); fill("email", "fixture@example.invalid"); fill("new-password", "Synthetic-password-123");
+  reset("signup"); fill("email", "fixture@example.invalid"); fill("new-password", "Synthetic-password-123");
   const confirmInput = find(tree(), (node) => node.type === "input" && node.props.autoComplete === "new-password" && node.props.value === "");
   confirmInput.props.onChange({ target: { value: "Different-password-123" } }); await submit(); assert.equal(calls.length, 0);
   confirmInput.props.onChange({ target: { value: "Synthetic-password-123" } }); await submit(); assert.equal(calls[0].kind, "signup"); assert.equal(destination, ""); assert.ok(find(tree(), (node) => node.props.role === "status"));

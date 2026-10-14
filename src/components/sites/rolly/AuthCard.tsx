@@ -4,11 +4,11 @@ import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
-import { Mascot } from "page-mascot";
 import { GoogleIcon } from "./Icons";
 import { authClient } from "@/lib/auth-client";
-import { AUTH_COPY, authLanguage } from "@/lib/auth-copy";
+import { AUTH_COPY, authLanguage, type AuthLanguage } from "@/lib/auth-copy";
 import { AUTH_FORM_COPY, type AuthMode } from "@/lib/auth-form-copy";
+import { LanguageSelector } from "./LanguageSelector";
 import welcome from "./WelcomeScreen.module.css";
 import styles from "./AuthCard.module.css";
 
@@ -16,7 +16,8 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
   onBack: () => void; lang?: string; configured?: boolean; initialError?: boolean;
   mode?: AuthMode; mailMode?: "local" | "smtp" | "brevo" | "unavailable"; token?: string; verified?: boolean;
 }) {
-  const language = authLanguage(lang), t = AUTH_COPY[language], f = AUTH_FORM_COPY[language];
+  const [language, setLanguage] = useState<AuthLanguage>(authLanguage(lang));
+  const t = AUTH_COPY[language], f = AUTH_FORM_COPY[language];
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(initialError ? (mode === "reset" ? f.invalidToken : t.failure) : "");
@@ -24,7 +25,6 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
-  const [name, setName] = useState("");
   const [visible, setVisible] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
   const inFlight = useRef(false);
@@ -33,7 +33,6 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
   const loginCallback = route("/login") + "&verified=1";
   const title = mode === "signup" ? f.signupTitle : mode === "forgot" ? f.forgotTitle : mode === "reset" ? f.resetTitle : f.loginTitle;
   const label = mode === "signup" ? f.signup : mode === "forgot" ? f.sendReset : mode === "reset" ? f.savePassword : f.login;
-  const mascotSize = mode === "signup" ? 78 : 112;
   const disabled = !configured || loading || ((mode === "signup" || mode === "forgot") && !mailReady) || (mode === "reset" && (!token || initialError));
   function failure(code?: string, status?: number) {
     if (status === 429) return f.limited;
@@ -57,7 +56,8 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
         if (result.error) { setError(failure(result.error.code, result.error.status)); return; }
         router.replace("/app"); router.refresh();
       } else if (mode === "signup") {
-        const result = await authClient.signUp.email({ name: name.trim(), email: email.trim(), password, callbackURL: loginCallback });
+        const fallbackName = email.trim().split("@")[0] || "User";
+        const result = await authClient.signUp.email({ name: fallbackName, email: email.trim(), password, callbackURL: loginCallback });
         if (result.error) { setError(failure(result.error.code, result.error.status)); return; }
         setPassword(""); setConfirmation(""); setNotice(f.checkVerification);
       } else if (mode === "forgot") {
@@ -87,24 +87,27 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
   }
   const inputClass = styles.input;
   return <main lang={language} data-mode={mode} className={`${welcome.welcome} ${styles.page}`}>
-    <header className={welcome.header}>
-      <button type="button" onClick={onBack} className={styles.back}><ArrowLeft size={18} aria-hidden="true" />{t.back}</button>
-      <div className={welcome.brand}>
-        <span className={welcome.brandMark} aria-hidden="true">
-          <svg viewBox="0 0 32 32" fill="none"><path d="M5 24V13M27 24V13M5 17C11 5 21 5 27 17M5 20H27M11 20V24M16 20V24M21 20V24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
-        </span>
-        <span><span className={welcome.fin}>Fin</span><span className={welcome.bridge}>Bridge</span></span>
+    <header className={styles.authHeader}>
+      <div className={styles.headerLeft}>
+        <button type="button" onClick={onBack} className={styles.back}><ArrowLeft size={18} aria-hidden="true" />{t.back}</button>
+      </div>
+      <div className={styles.headerCenter}>
+        <button type="button" onClick={() => router.push("/?lang=" + language)} className={styles.brandButton} title="FinBridge" aria-label="FinBridge">
+          <span className={welcome.brandMark} aria-hidden="true">
+            <svg viewBox="0 0 32 32" fill="none"><path d="M5 24V13M27 24V13M5 17C11 5 21 5 27 17M5 20H27M11 20V24M16 20V24M21 20V24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
+          </span>
+          <span className={styles.brandText}><span className={welcome.fin}>Fin</span><span className={welcome.bridge}>Bridge</span></span>
+        </button>
+      </div>
+      <div className={styles.headerRight}>
+        <LanguageSelector value={language} onChange={setLanguage} />
       </div>
     </header>
     <div className={styles.content}>
       <section className={styles.card} data-mode={mode} aria-labelledby="auth-title">
-        <div className={styles.mascotStage}>
-          <Mascot directions="/mascots/lac-directions.webp" reactions="/mascots/lac-reactions.webp" size={mascotSize} label={t.jack} className={welcome.mascot} />
-        </div>
         <h1 id="auth-title" className={styles.title}>{title}</h1>
         <p className={styles.intro}>{f.intro}</p>
         <form onSubmit={submit} className={styles.form}>
-          {mode === "signup" && <label className="block text-sm text-[#526d78]">{f.name}<input className={inputClass + " mt-1"} value={name} onChange={(e) => setName(e.target.value)} required maxLength={100} autoComplete="name" disabled={loading} /></label>}
           {mode !== "reset" && <label className="block text-sm text-[#526d78]">{f.email}<input className={inputClass + " mt-1"} type="email" value={email} onChange={(e) => { setEmail(e.target.value); setNeedsVerification(false); }} required maxLength={254} autoComplete="email" disabled={loading} /></label>}
           {mode !== "forgot" && <label className="block text-sm text-[#526d78]">{f.password}<span className="relative mt-1 block"><input className={`${inputClass} ${styles.passwordInput}`} type={visible ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={mode === "login" ? undefined : 12} maxLength={128} autoComplete={mode === "login" ? "current-password" : "new-password"} disabled={loading} /><button type="button" aria-label={visible ? f.hide : f.show} aria-pressed={visible} onClick={() => setVisible(!visible)} className="absolute inset-y-0 right-1 grid min-w-12 place-items-center text-[#6c7e87]">{visible ? <EyeOff size={21} /> : <Eye size={21} />}</button></span></label>}
           {(mode === "signup" || mode === "reset") && <><label className="block text-sm text-[#526d78]">{f.confirm}<input className={inputClass + " mt-1"} type={visible ? "text" : "password"} value={confirmation} onChange={(e) => setConfirmation(e.target.value)} required minLength={12} maxLength={128} autoComplete="new-password" disabled={loading} /></label><p className="text-xs text-[#6c7e87]">{f.passwordHint}</p></>}
