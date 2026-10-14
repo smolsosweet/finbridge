@@ -577,6 +577,73 @@ export function HomepageConfiguration({ navigate }: { navigate: (screen: string)
   );
 }
 
+function isSentinelWalletName(name: string | null | undefined): boolean {
+  if (name === null || name === undefined) return true;
+  if (typeof name !== "string") return false;
+  const trimmed = name.trim();
+  return !trimmed || trimmed === "." || trimmed === "Ví chính" || trimmed === "Main wallet" || trimmed === "主钱包";
+}
+
+const COPY_WALLET_SCREEN = {
+  vi: {
+    back: "Quay lại",
+    backAria: "Quay lại",
+    editTitle: "Chỉnh sửa ví",
+    addTitle: "Thêm ví mới",
+    defaultWalletName: "Ví mới",
+    mainWallet: "Ví chính",
+    walletNameLabel: "Tên ví",
+    currencyLabel: "Tiền tệ",
+    initialBalanceLabel: "Số dư ban đầu",
+    saveWallet: "Lưu ví",
+    currencyNames: {
+      VND: "VND (Việt Nam Đồng)",
+      USD: "USD (Đô la Mỹ)",
+      EUR: "EUR (Euro)",
+      CNY: "CNY (Nhân dân tệ)",
+      JPY: "JPY (Yên Nhật)",
+    },
+  },
+  en: {
+    back: "Back",
+    backAria: "Back",
+    editTitle: "Edit Wallet",
+    addTitle: "Add New Wallet",
+    defaultWalletName: "New wallet",
+    mainWallet: "Main wallet",
+    walletNameLabel: "Wallet name",
+    currencyLabel: "Currency",
+    initialBalanceLabel: "Initial balance",
+    saveWallet: "Save wallet",
+    currencyNames: {
+      VND: "VND (Vietnamese Dong)",
+      USD: "USD (US Dollar)",
+      EUR: "EUR (Euro)",
+      CNY: "CNY (Chinese Yuan)",
+      JPY: "JPY (Japanese Yen)",
+    },
+  },
+  zh: {
+    back: "返回",
+    backAria: "返回",
+    editTitle: "编辑钱包",
+    addTitle: "添加新钱包",
+    defaultWalletName: "新钱包",
+    mainWallet: "主钱包",
+    walletNameLabel: "钱包名称",
+    currencyLabel: "货币",
+    initialBalanceLabel: "初始余额",
+    saveWallet: "保存钱包",
+    currencyNames: {
+      VND: "VND (越南盾)",
+      USD: "USD (美元)",
+      EUR: "EUR (欧元)",
+      CNY: "CNY (人民币)",
+      JPY: "JPY (日元)",
+    },
+  },
+};
+
 export function WalletScreen({
   screen,
   walletId,
@@ -587,25 +654,36 @@ export function WalletScreen({
   navigate: (screen: string) => void;
 }) {
   const state = useAppState();
-  const wallet = state.wallets.find((w) => w.id === walletId) || state.wallets[0];
-  const [name, setName] = useState(wallet?.name || "");
+  const lang = settingsLanguage(state.settings.language);
+  const t = COPY_WALLET_SCREEN[lang];
+  const wallet = walletId ? (state.wallets.find((w) => w.id === walletId) || state.wallets[0]) : undefined;
+
+  const isSentinel = Boolean(wallet && isSentinelWalletName(wallet.name));
+  const [name, setName] = useState(isSentinel ? "" : (wallet?.name || ""));
   const [currency, setCurrency] = useState(wallet?.currency || "VND");
   const [initial, setInitial] = useState(String(wallet?.initial || 0));
 
   function handleSave(e: FormEvent) {
     e.preventDefault();
+    const trimmed = name.trim();
+    const finalName = walletId
+      ? (isSentinel
+          ? (!trimmed || isSentinelWalletName(trimmed) ? "." : trimmed)
+          : (trimmed || wallet?.name || "."))
+      : (trimmed || t.defaultWalletName);
+
     if (walletId) {
       updateState((s) => ({
         ...s,
         wallets: s.wallets.map((w) =>
-          w.id === walletId ? { ...w, name, currency, initial: Number(initial) || 0 } : w
+          w.id === walletId ? { ...w, name: finalName, currency, initial: Number(initial) || 0 } : w
         ),
       }));
     } else {
       const id = "wallet_" + Date.now();
       updateState((s) => ({
         ...s,
-        wallets: [...s.wallets, { id, name: name || "Ví mới", currency, initial: Number(initial) || 0, type: "cash" }],
+        wallets: [...s.wallets, { id, name: finalName, currency, initial: Number(initial) || 0, type: "cash" }],
       }));
     }
     navigate("?tab=home");
@@ -616,33 +694,43 @@ export function WalletScreen({
       <FinBridgeHeader />
       <div className="fb-settings-container">
         <div className="fb-settings-back-row">
-          <button type="button" className="fb-settings-back" onClick={() => navigate("?tab=home")}>
+          <button
+            type="button"
+            className="fb-settings-back"
+            onClick={() => navigate("?tab=home")}
+            aria-label={t.backAria}
+          >
             <ChevronLeft size={18} />
-            <span>Quay lại</span>
+            <span>{t.back}</span>
           </button>
         </div>
         <form className="r-form" onSubmit={handleSave}>
-          <h2>{walletId ? "Chỉnh sửa ví" : "Thêm ví mới"}</h2>
+          <h2>{walletId ? t.editTitle : t.addTitle}</h2>
           <label>
-            Tên ví
-            <input value={name} onChange={(e) => setName(e.target.value)} required />
+            {t.walletNameLabel}
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={isSentinel ? t.mainWallet : t.defaultWalletName}
+              required={!isSentinel && !walletId}
+            />
           </label>
           <label>
-            Tiền tệ
+            {t.currencyLabel}
             <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
-              {["VND", "USD", "EUR", "CNY", "JPY"].map((c) => (
+              {(["VND", "USD", "EUR", "CNY", "JPY"] as const).map((c) => (
                 <option key={c} value={c}>
-                  {c}
+                  {t.currencyNames[c] || c}
                 </option>
               ))}
             </select>
           </label>
           <label>
-            Số dư ban đầu
+            {t.initialBalanceLabel}
             <input type="number" value={initial} onChange={(e) => setInitial(e.target.value)} />
           </label>
           <button type="submit" className="r-primary">
-            Lưu ví
+            {t.saveWallet}
           </button>
         </form>
       </div>

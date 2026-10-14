@@ -38,7 +38,9 @@
     "test:onboarding": "node --test scripts/verify-onboarding.cjs scripts/verify-onboarding-form.cjs",
     "test:auth:postgres": "node --test scripts/verify-auth-postgres.mjs",
     "test:transaction-ai": "node --experimental-strip-types --test scripts/verify-transaction-ai.mjs",
-    "test:scenario-planner": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-scenario-planner.mjs"
+    "test:scenario-planner": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-scenario-planner.mjs",
+    "test:localization": "node --test scripts/verify-localization.cjs",
+    "test:localization:e2e": "node scripts/verify-localization-e2e.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

@@ -9,6 +9,152 @@ import { answerFinancialQuery, type FinancialAction } from "@/lib/financial-chat
 import { localPlanReply, modelHistory } from "@/lib/chat-local-plan";
 import planStyles from "./FinancialOutlook.module.css";
 import { tools } from "./Tools";
+import { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName, type AppLanguage } from "@/lib/i18n";
+
+export interface TransactionFormCopy {
+  expense: string;
+  income: string;
+  item: string;
+  amount: string;
+  category: string;
+  subcategory: string;
+  wallet: string;
+  date: string;
+  nextScheduledDate: string;
+  recurringInterval: string;
+  timeUnit: string;
+  recurringUnits: Array<{ value: string; label: string }>;
+  note: string;
+  attachedImage: string;
+  attach: string;
+  attached: string;
+  cancel: string;
+  save: string;
+  confirm: string;
+  deleteTransaction: string;
+  addTransaction: string;
+  editTransaction: string;
+  addTransactionSubtitle: string;
+  editTransactionSubtitle: string;
+  deleteConfirmTitle: string;
+  deleteConfirmMessage: string;
+  uncategorized: string;
+}
+
+export const TRANSACTION_FORM_I18N: Record<AppLanguage, TransactionFormCopy> = {
+  vi: {
+    expense: "Chi phí",
+    income: "Thu nhập",
+    item: "Mục",
+    amount: "Số tiền",
+    category: "Loại",
+    subcategory: "Danh mục phụ (tùy chọn)",
+    wallet: "Chọn Ví",
+    date: "Ngày",
+    nextScheduledDate: "Lịch trình tiếp theo Ngày",
+    recurringInterval: "Khoảng thời gian định kỳ",
+    timeUnit: "Đơn vị thời gian",
+    recurringUnits: [
+      { value: "day", label: "Ngày" },
+      { value: "week", label: "Tuần" },
+      { value: "month", label: "Tháng" },
+      { value: "year", label: "Năm" },
+    ],
+    note: "Ghi chú",
+    attachedImage: "Hình ảnh đính kèm",
+    attach: "Đính kèm",
+    attached: "✓ Đã đính kèm",
+    cancel: "Hủy bỏ",
+    save: "Lưu",
+    confirm: "Xác nhận",
+    deleteTransaction: "Xóa giao dịch",
+    addTransaction: "Thêm giao dịch",
+    editTransaction: "Chỉnh sửa giao dịch",
+    addTransactionSubtitle: "Thêm giao dịch của bạn bên dưới.",
+    editTransactionSubtitle: "Chỉnh sửa giao dịch của bạn bên dưới.",
+    deleteConfirmTitle: "Xóa giao dịch?",
+    deleteConfirmMessage: "Bạn có chắc chắn muốn xóa giao dịch này không?",
+    uncategorized: "Chưa được phân loại",
+  },
+  en: {
+    expense: "Expense",
+    income: "Income",
+    item: "Item",
+    amount: "Amount",
+    category: "Category",
+    subcategory: "Subcategory (optional)",
+    wallet: "Wallet",
+    date: "Date",
+    nextScheduledDate: "Next scheduled date",
+    recurringInterval: "Recurring interval",
+    timeUnit: "Time unit",
+    recurringUnits: [
+      { value: "day", label: "Daily" },
+      { value: "week", label: "Weekly" },
+      { value: "month", label: "Monthly" },
+      { value: "year", label: "Yearly" },
+    ],
+    note: "Note",
+    attachedImage: "Attached image",
+    attach: "Attach",
+    attached: "✓ Attached",
+    cancel: "Cancel",
+    save: "Save",
+    confirm: "Confirm",
+    deleteTransaction: "Delete transaction",
+    addTransaction: "Add transaction",
+    editTransaction: "Edit transaction",
+    addTransactionSubtitle: "Add your transaction below.",
+    editTransactionSubtitle: "Edit your transaction below.",
+    deleteConfirmTitle: "Delete transaction?",
+    deleteConfirmMessage: "Are you sure you want to delete this transaction?",
+    uncategorized: "Uncategorized",
+  },
+  zh: {
+    expense: "支出",
+    income: "收入",
+    item: "项目",
+    amount: "金额",
+    category: "分类",
+    subcategory: "子分类（可选）",
+    wallet: "钱包",
+    date: "日期",
+    nextScheduledDate: "下次计划日期",
+    recurringInterval: "周期频率",
+    timeUnit: "时间单位",
+    recurringUnits: [
+      { value: "day", label: "每天" },
+      { value: "week", label: "每周" },
+      { value: "month", label: "每月" },
+      { value: "year", label: "每年" },
+    ],
+    note: "备注",
+    attachedImage: "附加图片",
+    attach: "附件",
+    attached: "✓ 已附加",
+    cancel: "取消",
+    save: "保存",
+    confirm: "确认",
+    deleteTransaction: "删除交易",
+    addTransaction: "添加交易",
+    editTransaction: "编辑交易",
+    addTransactionSubtitle: "在下方添加您的交易。",
+    editTransactionSubtitle: "在下方编辑您的交易。",
+    deleteConfirmTitle: "删除交易？",
+    deleteConfirmMessage: "您确定要删除此交易吗？",
+    uncategorized: "未分类",
+  },
+};
+
+export function normalizeRecurringUnit(raw: string | undefined): "day" | "week" | "month" | "year" {
+  if (!raw) return "month";
+  const lower = raw.trim().toLowerCase();
+  if (lower === "ngày" || lower === "day" || lower === "daily" || lower === "每天" || lower === "天" || lower === "日") return "day";
+  if (lower === "tuần" || lower === "week" || lower === "weekly" || lower === "每周" || lower === "周") return "week";
+  if (lower === "tháng" || lower === "month" || lower === "monthly" || lower === "每月" || lower === "月") return "month";
+  if (lower === "năm" || lower === "year" || lower === "yearly" || lower === "每年" || lower === "年") return "year";
+  return "month";
+}
 
 function clarificationQuestion(fields: string[]) {
   const labels: Record<string, string> = { amount: "số tiền", type: "đây là khoản thu hay chi", category: "danh mục", date: "ngày giao dịch", wallet: "ví hoặc tiền tệ" };
@@ -38,9 +184,22 @@ function getBalanceAnswer(message: string, state: AppState, selectedWalletId: st
   }).join("\n");
 }
 
-export function TransactionForm({ navigate, id = "", recurring = false, onClose }: { navigate: (screen: string) => void; id?: string; recurring?: boolean; onClose?: () => void }) {
+export function TransactionForm({
+  navigate,
+  id = "",
+  recurring = false,
+  onClose,
+}: {
+  navigate: (screen: string) => void;
+  id?: string;
+  recurring?: boolean;
+  onClose?: () => void;
+}) {
   const state = useAppState();
-  const existing = state.transactions.find((t) => t.id === id);
+  const lang = resolveLanguage(state.settings.language);
+  const t = TRANSACTION_FORM_I18N[lang];
+
+  const existing = state.transactions.find((item) => item.id === id);
   const [type, setType] = useState<"expense" | "income">(existing?.type === "income" ? "income" : "expense");
   const [title, setTitle] = useState(existing?.title || "");
   const [amount, setAmount] = useState(existing ? String(existing.amount) : "");
@@ -51,32 +210,234 @@ export function TransactionForm({ navigate, id = "", recurring = false, onClose 
   const [image, setImage] = useState(existing?.image || "");
   const [subcategory, setSubcategory] = useState(existing?.subcategory || "");
   const [interval, setInterval] = useState(existing?.interval || 1);
-  const [unit, setUnit] = useState(existing?.unit || "Tháng");
+  const [unit, setUnit] = useState<string>(() => normalizeRecurringUnit(existing?.unit));
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const back = () => onClose ? onClose() : navigate("?tab=transactions");
+
+  const back = () => (onClose ? onClose() : navigate("?tab=transactions"));
+
   const save = (e: FormEvent) => {
     e.preventDefault();
     if (Number(amount) <= 0) return;
-    const item: Transaction = { id: existing?.id || crypto.randomUUID(), type, title, amount: Number(amount), date, category, subcategory, wallet, note, image: image || (!id ? state.receiptDraft : "") || "", ...(recurring ? { interval, unit } : {}) };
-    updateState((s) => recurring ? { ...s, recurring: [...s.recurring, item] } : { ...s, receiptDraft: "", transactions: existing ? s.transactions.map((t) => t.id === existing.id ? item : t) : [...s.transactions, item] });
+    const item: Transaction = {
+      id: existing?.id || crypto.randomUUID(),
+      type,
+      title,
+      amount: Number(amount),
+      date,
+      category,
+      subcategory,
+      wallet,
+      note,
+      image: image || (!id ? state.receiptDraft : "") || "",
+      ...(recurring ? { interval, unit } : {}),
+    };
+    updateState((s) =>
+      recurring
+        ? { ...s, recurring: [...s.recurring, item] }
+        : {
+            ...s,
+            receiptDraft: "",
+            transactions: existing
+              ? s.transactions.map((target) => (target.id === existing.id ? item : target))
+              : [...s.transactions, item],
+          }
+    );
     back();
   };
-  const content = <form className="r-form" onSubmit={save}>
-    <div className="r-type-pills r-align-left"><button type="button" className={type === "expense" ? "active" : ""} onClick={() => setType("expense")}>Chi phí</button><button type="button" className={type === "income" ? "active" : ""} onClick={() => setType("income")}>Thu nhập</button></div>
-    <input aria-label="Mục" placeholder="Mục" required value={title} onChange={(e) => setTitle(e.target.value)} />
-    <input aria-label="Số tiền" placeholder="Số tiền" required min="0.01" step="any" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
-    <Field label="Loại"><select value={category} onChange={(e) => { setCategory(e.target.value); setSubcategory(""); }}>{state.categories.filter((c) => (state.categoryMeta[c]?.type || "expense") === type).map((c) => <option key={c}>{c}</option>)}</select></Field>
-    <Field label="Danh mục phụ (tùy chọn)"><select value={subcategory} onChange={(event) => setSubcategory(event.target.value)}><option value="">-</option>{(state.categoryMeta[category]?.children || []).map((child) => <option key={child}>{child}</option>)}</select></Field>
-    <Field label="Chọn Ví"><select value={wallet} onChange={(e) => setWallet(e.target.value)}>{state.wallets.map((w) => <option value={w.id} key={w.id}>{w.name}</option>)}</select></Field>
-    <Field label={recurring ? "Lịch trình tiếp theo Ngày" : "Ngày"}><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
-    {recurring && <div className="r-date-cycle"><Field label="Khoảng thời gian định kỳ"><input type="number" min="1" value={interval} onChange={(event) => setInterval(Number(event.target.value))} required /></Field><select aria-label="Đơn vị thời gian" value={unit} onChange={(event) => setUnit(event.target.value)}>{["Ngày", "Tuần", "Tháng", "Năm"].map((c) => <option key={c}>{c}</option>)}</select></div>}
-    <textarea aria-label="Ghi chú" placeholder="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
-    {!recurring && <label className="r-attachment">Hình ảnh đính kèm<input aria-label="Đính kèm" type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => setImage(String(reader.result)); reader.readAsDataURL(file); }} />{(image || (!id && state.receiptDraft)) && <span>✓ Đã đính kèm</span>}</label>}
-    <div className="r-two-options">{recurring && <button type="button" className="r-secondary" onClick={back}>Hủy bỏ</button>}<button type="submit" className="r-primary">{recurring ? "Xác nhận" : "Lưu"}</button></div>
-    {existing && <button type="button" className="r-danger" onClick={() => setConfirmDelete(true)}>Xóa giao dịch</button>}
-  </form>;
+
+  const content = (
+    <form className="r-form" onSubmit={save}>
+      <div className="r-type-pills r-align-left">
+        <button
+          type="button"
+          className={type === "expense" ? "active" : ""}
+          onClick={() => setType("expense")}
+        >
+          {t.expense}
+        </button>
+        <button
+          type="button"
+          className={type === "income" ? "active" : ""}
+          onClick={() => setType("income")}
+        >
+          {t.income}
+        </button>
+      </div>
+
+      <input
+        aria-label={t.item}
+        placeholder={t.item}
+        required
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+      />
+
+      <input
+        aria-label={t.amount}
+        placeholder={t.amount}
+        required
+        min="0.01"
+        step="any"
+        type="number"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+      />
+
+      <Field label={t.category}>
+        <select
+          value={category}
+          onChange={(e) => {
+            setCategory(e.target.value);
+            setSubcategory("");
+          }}
+        >
+          {state.categories
+            .filter((c) => (state.categoryMeta[c]?.type || "expense") === type)
+            .map((c) => (
+              <option key={c} value={c}>
+                {resolveCategoryDisplayName(c, lang)}
+              </option>
+            ))}
+        </select>
+      </Field>
+
+      <Field label={t.subcategory}>
+        <select
+          value={subcategory}
+          onChange={(event) => setSubcategory(event.target.value)}
+        >
+          <option value="">-</option>
+          {(state.categoryMeta[category]?.children || []).map((child) => (
+            <option key={child} value={child}>
+              {child}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <Field label={t.wallet}>
+        <select value={wallet} onChange={(e) => setWallet(e.target.value)}>
+          {state.wallets.map((w) => (
+            <option value={w.id} key={w.id}>
+              {resolveWalletDisplayName(w.name, lang)}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      <Field label={recurring ? t.nextScheduledDate : t.date}>
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+        />
+      </Field>
+
+      {recurring && (
+        <div className="r-date-cycle">
+          <Field label={t.recurringInterval}>
+            <input
+              type="number"
+              min="1"
+              value={interval}
+              onChange={(event) => setInterval(Number(event.target.value))}
+              required
+            />
+          </Field>
+          <select
+            aria-label={t.timeUnit}
+            value={normalizeRecurringUnit(unit)}
+            onChange={(event) => setUnit(event.target.value)}
+          >
+            {t.recurringUnits.map((u) => (
+              <option key={u.value} value={u.value}>
+                {u.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <textarea
+        aria-label={t.note}
+        placeholder={t.note}
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2}
+      />
+
+      {!recurring && (
+        <label className="r-attachment">
+          {t.attachedImage}
+          <input
+            aria-label={t.attach}
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = () => setImage(String(reader.result));
+              reader.readAsDataURL(file);
+            }}
+          />
+          {(image || (!id && state.receiptDraft)) && <span>{t.attached}</span>}
+        </label>
+      )}
+
+      <div className="r-two-options">
+        {recurring && (
+          <button type="button" className="r-secondary" onClick={back}>
+            {t.cancel}
+          </button>
+        )}
+        <button type="submit" className="r-primary">
+          {recurring ? t.confirm : t.save}
+        </button>
+      </div>
+
+      {existing && (
+        <button
+          type="button"
+          className="r-danger"
+          onClick={() => setConfirmDelete(true)}
+        >
+          {t.deleteTransaction}
+        </button>
+      )}
+    </form>
+  );
+
   if (recurring) return content;
-  return <div className="r-form-page"><PageHeader title={existing ? "Chỉnh sửa giao dịch" : "Thêm giao dịch"} subtitle={existing ? "Chỉnh sửa giao dịch của bạn bên dưới." : "Thêm giao dịch của bạn bên dưới."} close onBack={back} />{content}{confirmDelete && <Modal title="Xóa giao dịch?" onClose={() => setConfirmDelete(false)}><p>Bạn có chắc chắn muốn xóa giao dịch này không?</p><button className="r-danger" onClick={() => { updateState((s) => ({ ...s, transactions: s.transactions.filter((t) => t.id !== id) })); back(); }}>Xóa giao dịch</button></Modal>}</div>;
+
+  return (
+    <div className="r-form-page">
+      <PageHeader
+        title={existing ? t.editTransaction : t.addTransaction}
+        subtitle={existing ? t.editTransactionSubtitle : t.addTransactionSubtitle}
+        close
+        onBack={back}
+      />
+      {content}
+      {confirmDelete && (
+        <Modal title={t.deleteConfirmTitle} onClose={() => setConfirmDelete(false)}>
+          <p>{t.deleteConfirmMessage}</p>
+          <button
+            className="r-danger"
+            onClick={() => {
+              updateState((s) => ({
+                ...s,
+                transactions: s.transactions.filter((t) => t.id !== id),
+              }));
+              back();
+            }}
+          >
+            {t.deleteTransaction}
+          </button>
+        </Modal>
+      )}
+    </div>
+  );
 }
 
 export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {

@@ -11,6 +11,7 @@ import { WalletSettingsDirectory } from "./SettingsOverview";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
 import { FinBridgeHeader } from "./FinBridgeHeader";
 import { FinancialOutlook } from "./FinancialOutlook";
+import { resolveLanguage, resolveWalletDisplayName, isSentinelWalletName, resolveCategoryDisplayName } from "@/lib/i18n";
 
 type DashboardSample = {
   id: string;
@@ -147,6 +148,207 @@ export const DASHBOARD_I18N = {
     tableColExpense: "Chi phí",
     tableColNet: "Ròng",
     tableColCount: "Giao dịch",
+
+    // F2: Add Wallet Modal
+    addWalletModalTitle: "Thêm ví mới",
+    addWalletDesc: "Tạo ví để phân bổ tài chính và quản lý dòng tiền chi tiết.",
+    walletTypeLabel: "Loại ví",
+    walletTypeCash: "Tiền mặt",
+    walletTypeCredit: "Thẻ tín dụng",
+    walletNameLabel: "Tên ví",
+    walletNamePlaceholder: "Ví dụ: Ví tiêu dùng, Techcombank, VIB...",
+    walletCurrencyLabel: "Đơn vị tiền tệ",
+    initialBalanceLabel: "Số dư ban đầu",
+    unsettledBalanceLabel: "Số dư chưa thanh toán",
+    creditLimitLabel: "Hạn mức tín dụng",
+    creditLimitPlaceholder: "Ví dụ: 50,000,000",
+    cancel: "Hủy",
+    saveWallet: "Lưu ví",
+    currencyOptions: {
+      VND: "VND (Việt Nam Đồng)",
+      USD: "USD (Đô la Mỹ)",
+      EUR: "EUR (Euro)",
+      JPY: "JPY (Yên Nhật)",
+      SGD: "SGD (Đô la Singapore)",
+      GBP: "GBP (Bảng Anh)",
+      AUD: "AUD (Đô la Úc)",
+    },
+    currencyOptionsList: [
+      { code: "VND", label: "VND (Việt Nam Đồng)" },
+      { code: "USD", label: "USD (Đô la Mỹ)" },
+      { code: "EUR", label: "EUR (Euro)" },
+      { code: "JPY", label: "JPY (Yên Nhật)" },
+      { code: "SGD", label: "SGD (Đô la Singapore)" },
+      { code: "GBP", label: "GBP (Bảng Anh)" },
+      { code: "AUD", label: "AUD (Đô la Úc)" },
+    ],
+
+    // F4: Wallet Selectors & Action Aria-labels
+    selectWalletModalTitle: "Chọn ví",
+    selectWalletAria: (name: string) => `Chọn ví ${name}`,
+    manageWalletAria: (name: string) => `Quản lý ví ${name}`,
+
+    // F3: Manage Wallet - Details Tab
+    manageWalletModalTitle: (name: string) => `Quản lý ví: ${name}`,
+    walletInfoTab: "Thông tin ví",
+    categoryManagerTab: "Quản lý danh mục",
+    walletArchivedBannerTitle: "Ví đang ở trạng thái hủy liên kết (đã lưu trữ)",
+    walletArchivedBannerDesc: "Ví này bị ẩn khỏi mục chọn khi tạo giao dịch mới, nhưng tất cả lịch sử giao dịch vẫn được giữ nguyên.",
+    currencyUnitLabel: "Đơn vị tiền tệ",
+    lockedBadge: "Đã khóa (đã phát sinh giao dịch)",
+    lockedCurrencyHelper: "Không thể đổi tiền tệ khi đã có giao dịch để tránh xung đột tỷ giá và dữ liệu lịch sử.",
+    initialBalanceLabelCredit: "Số dư chưa thanh toán ban đầu",
+    initialBalanceLabelCash: "Số dư ban đầu",
+    lockedInitialBalanceHelperPrefix: "Số dư ban đầu được cố định để bảo toàn tính toàn vẹn của sổ sách. Để cập nhật số dư theo tài khoản ngân hàng thực tế, vui lòng sử dụng tính năng ",
+    lockedInitialBalanceHelperHighlight: "Điều chỉnh số dư thực tế",
+    lockedInitialBalanceHelperSuffix: " bên dưới.",
+    unlockedInitialBalanceHelper: "Ví chưa có giao dịch nào, bạn có thể tự do điều chỉnh số dư ban đầu.",
+    closeButton: "Đóng",
+    saveChangesButton: "Lưu thay đổi",
+
+    // F3: Manage Wallet - Reconcile Box
+    reconcileCardTitle: "Khớp số dư thực tế",
+    reconcileCurrentBookPrefix: "Số dư sổ sách hiện tại: ",
+    reconcileCurrentBookSuffix: ". Nếu không khớp với thực tế ngoài đời, hãy nhập số dư thực tế để hệ thống tự động bù trừ.",
+    reconcileTriggerButton: "Điều chỉnh số dư thực tế",
+    reconcileActualBalanceLabel: (curr: string) => `Số dư thực tế trong ví / tài khoản ngân hàng (${curr})`,
+    reconcileActualBalancePlaceholder: "Nhập số dư thực tế hiện tại",
+    cancelButton: "Hủy",
+    confirmAdjustmentButton: "Xác nhận điều chỉnh",
+    reconcileTxTitleIncrease: "Điều chỉnh tăng số dư thực tế",
+    reconcileTxTitleDecrease: "Điều chỉnh giảm số dư thực tế",
+    reconcileTxCategory: "Điều chỉnh số dư",
+    reconcileTxNoteTemplate: (fromBal: string, toBal: string) => `Khớp số dư thực tế từ ${fromBal} sang ${toBal}`,
+
+    // F3: Manage Wallet - Danger Zone
+    dangerZoneHeader: "Thao tác bảo mật ví",
+    dangerZoneDescArchived: "Ví này hiện đang bị hủy liên kết. Bạn có thể khôi phục để tiếp tục ghi chép giao dịch.",
+    dangerZoneDescHasTxs: (count: number) => `Ví này đã ghi nhận ${count} giao dịch. Hệ thống sẽ áp dụng chính sách xóa mềm (Hủy liên kết): ví sẽ bị ẩn nhưng ${count} giao dịch lịch sử vẫn được bảo toàn nguyên vẹn.`,
+    dangerZoneDescNoTxs: "Ví này chưa có giao dịch nào. Bạn có thể xóa vĩnh viễn ví khỏi hệ thống.",
+    reactivateWalletBtn: "Kích hoạt lại ví này",
+    unlinkWalletBtn: "Hủy liên kết ví (Lưu trữ)",
+    deleteWalletPermanentBtn: "Xóa vĩnh viễn ví này",
+    minOneActiveWalletAlert: "Hệ thống cần ít nhất 1 ví hoạt động. Bạn không thể hủy liên kết ví duy nhất này.",
+    deleteWalletConfirmNoTxs: (name: string) => `Ví "${name}" chưa có giao dịch nào. Bạn có chắc chắn muốn xóa vĩnh viễn ví này?`,
+    archiveWalletConfirmHasTxs: (name: string, count: number) => `Ví "${name}" đã có ${count} giao dịch. Ví sẽ được chuyển sang trạng thái "Đã hủy liên kết" và ẩn khỏi màn hình thêm giao dịch. Tất cả ${count} giao dịch trước đây vẫn được lưu trữ an toàn. Bạn có muốn tiếp tục?`,
+
+    // F3: Manage Wallet - Category Manager
+    catTabExpense: "Danh mục Chi phí",
+    catTabIncome: "Danh mục Thu nhập",
+    catChooseIconTooltip: "Bấm để chọn biểu tượng cho danh mục",
+    catInputPlaceholderExpense: "Nhập tên danh mục chi tiêu mới...",
+    catInputPlaceholderIncome: "Nhập tên danh mục thu nhập mới...",
+    catAddButton: "Thêm",
+    emojiPickerHeaderFor: (targetName: string) => `Chọn biểu tượng cho "${targetName}"`,
+    emojiPickerHeaderNewCategory: "Chọn biểu tượng cho danh mục mới",
+    emojiPickerCloseAriaLabel: "Đóng bảng icon",
+    emojiGroupNames: {
+      "Nhà & Hóa đơn": "Nhà & Hóa đơn",
+      "Đồ ăn & Đồ uống": "Đồ ăn & Đồ uống",
+      "Giao thông vận tải & Du lịch": "Giao thông vận tải & Du lịch",
+      "Sức khỏe & Chăm sóc cá nhân": "Sức khỏe & Chăm sóc cá nhân",
+      "Điện tử & Công nghệ": "Điện tử & Công nghệ",
+      "Tiền bạc và công việc": "Tiền bạc và công việc",
+      "Vui chơi & Giải trí": "Vui chơi & Giải trí",
+      "Gia đình & Giáo dục": "Gia đình & Giáo dục",
+      "Khác": "Khác",
+    },
+    catEditIconTitle: "Chọn biểu tượng",
+    catEditSaveTitle: "Lưu thay đổi",
+    catEditCancelTitle: "Hủy",
+    catTxCountBadge: (count: number) => `${count} giao dịch`,
+    catArchivedTag: "Đã ẩn",
+    catEditTooltip: (name: string) => `Sửa danh mục ${name}`,
+    catDeleteTooltip: (name: string) => `Xóa hoặc ẩn danh mục ${name}`,
+    catRestoreTooltip: (name: string) => `Khôi phục danh mục ${name}`,
+    catRestoreBtnText: "Khôi phục",
+    catReassignDeleteTooltip: (count: number) => `Chuyển ${count} giao dịch về "Chưa được phân loại" và xóa vĩnh viễn`,
+    uncategorizedCategory: "Chưa được phân loại",
+    catNameExistsAlert: "Tên danh mục này đã tồn tại.",
+    catCannotDeleteSystemDefaultAlert: "Không thể xóa danh mục mặc định của hệ thống.",
+    catReactivateConfirm: (name: string) => `Bạn muốn kích hoạt lại danh mục "${name}"?`,
+    catDeleteConfirmNoTxs: (name: string) => `Danh mục "${name}" chưa có giao dịch nào. Bạn có chắc chắn muốn xóa vĩnh viễn?`,
+    catSoftDeleteConfirmHasTxs: (name: string, count: number) => `Danh mục "${name}" đang được ghi nhận trong ${count} giao dịch.\n\n• Chọn [OK]: Ẩn danh mục (Xóa mềm - ẩn khỏi danh sách chọn khi tạo giao dịch mới nhưng bảo toàn 100% dữ liệu lịch sử).\n• Chọn [Cancel]: Giữ nguyên danh mục.`,
+    catReassignDeleteConfirm: (name: string, count: number) => `Chuyển tất cả ${count} giao dịch của danh mục "${name}" về danh mục "Chưa được phân loại" và xóa vĩnh viễn "${name}" khỏi hệ thống?`,
+
+    // F5: Date Pickers & Period Selection
+    formatDayPeriod: (dayStr: string) => `ngày ${dayStr}`,
+    formatWeekPeriod: (fromStr: string, toStr: string) => `tuần ${fromStr} – ${toStr}`,
+    allTimePeriod: "toàn thời gian",
+    selectDetailedTimeAria: "Chọn thời gian chi tiết",
+    periodModalTitle: "Chọn khoảng thời gian",
+    pickDayModalTitle: "Chọn ngày",
+    pickDayDesc: "Chọn ngày để theo dõi thu chi trong ngày cụ thể.",
+    pickDayLabel: "Chọn ngày",
+    today: "Hôm nay",
+    yesterday: "Hôm qua",
+    selectedDayLabel: "Ngày được chọn:",
+    confirmButton: "Xác nhận",
+    pickWeekModalTitle: "Chọn tuần",
+    pickWeekDesc: "Chọn tuần để theo dõi dòng tiền trong chu kỳ 7 ngày (Thứ 2 – Chủ nhật).",
+    pickWeekOrChooseDate: "Hoặc chọn một ngày bất kỳ trong tuần",
+    thisWeek: "Tuần này",
+    previousYearAria: "Năm trước",
+    nextYearAria: "Năm sau",
+    pickMonthModalTitle: "Chọn tháng",
+    monthNamesShort: ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"],
+    selectedMonthLabel: "Tháng đã chọn:",
+    pickYearModalTitle: "Chọn năm",
+    pickYearDesc: "Chọn năm để xem tổng kết tài chính cả năm.",
+    pickCustomRangeModalTitle: "Chọn khoảng thời gian",
+    pickCustomRangeDesc: "Tùy chọn khoảng thời gian từ ngày đến ngày.",
+    period7dPast: "7 ngày qua",
+    period30dPast: "30 ngày qua",
+    thisMonth: "Tháng này",
+    rangePreviewLabel: "Khoảng thời gian:",
+    applyButton: "Áp dụng",
+
+    // F5: Flow Analysis Modals & SvgDonut
+    flowIncomeModalTitle: "Chi tiết các khoản thu",
+    flowExpenseModalTitle: "Chi tiết các khoản chi",
+    flowComparisonModalTitle: "Phân tích Thu & Chi trong kỳ",
+    periodPrefix: "Kỳ: ",
+    emptyIncomeTitle: "Chưa có khoản thu nào trong kỳ này",
+    emptyIncomeDesc: (period: string) => `Các giao dịch thu nhập trong ${period} sẽ hiển thị tại đây.`,
+    addIncomeTxBtn: "Thêm giao dịch thu",
+    emptyExpenseTitle: "Chưa có khoản chi nào trong kỳ này",
+    emptyExpenseDesc: (period: string) => `Các giao dịch chi tiêu trong ${period} sẽ hiển thị tại đây.`,
+    addExpenseTxBtn: "Thêm giao dịch chi",
+    totalIncomeWithPeriod: (period: string) => `Tổng thu (${period})`,
+    totalExpenseWithPeriod: (period: string) => `Tổng chi (${period})`,
+    donutCurrencySwitcherLabel: "Đơn vị tiền tệ hiển thị biểu đồ:",
+    donutIncomeBreakdown: "Cơ cấu Thu nhập",
+    donutExpenseBreakdown: "Cơ cấu Chi tiêu",
+    donutTotalIncome: "Tổng thu",
+    donutTotalExpense: "Tổng chi",
+    donutNoIncomeTx: "Chưa có giao dịch thu trong kỳ này",
+    donutNoExpenseTx: "Chưa có giao dịch chi trong kỳ này",
+    unlinkedTag: " (Đã hủy liên kết)",
+
+    // F5 & F6: Quick Search, Workspace & Overviews
+    transactionsHeading: "Giao dịch",
+    searchTransactionsAria: "Tìm kiếm giao dịch",
+    calendarAria: "Lịch giao dịch",
+    searchModalTitle: "Tìm kiếm giao dịch",
+    searchPlaceholder: "Tìm kiếm giao dịch...",
+    searchButton: "Tìm kiếm",
+    clearSearchButton: "Xóa tìm kiếm",
+    noMatchingTransactions: "Không tìm thấy giao dịch",
+    noMatchingTransactionsHint: "Không có giao dịch nào khớp với từ khóa tìm kiếm.",
+    emptyTransactionsPeriodTitle: "Chưa có giao dịch trong kỳ này.",
+    emptyTransactionsPeriodText: "Nhấn + để thêm giao dịch.",
+    noExpensesThisPeriod: "Chưa có khoản chi trong kỳ này",
+    noIncomesThisPeriod: "Chưa có khoản thu trong kỳ này",
+    recordTxToTrackFlow: "Ghi lại một giao dịch để bắt đầu theo dõi dòng tiền.",
+    archivedWalletSuffix: " (Đã hủy liên kết)",
+    homeTotalsModalTitle: "Tổng dòng tiền",
+    totalAllWalletsBalance: "Tổng số dư tất cả ví",
+    totalExpenseFromWallets: "Tổng chi từ các ví",
+    totalIncomeFromWallets: "Tổng thu từ các ví",
+    totalsModalTitle: "Tổng quan thu chi",
+    transfer: "Chuyển khoản",
+    totalSum: "Tổng cộng",
+    viewCashFlowDetailsAria: "Xem chi tiết dòng tiền",
   },
   en: {
     overviewEyebrow: "OVERVIEW",
@@ -228,6 +430,207 @@ export const DASHBOARD_I18N = {
     tableColExpense: "Expense",
     tableColNet: "Net",
     tableColCount: "Count",
+
+    // F2: Add Wallet Modal
+    addWalletModalTitle: "Add New Wallet",
+    addWalletDesc: "Create a wallet to allocate funds and manage detailed cash flow.",
+    walletTypeLabel: "Wallet type",
+    walletTypeCash: "Cash",
+    walletTypeCredit: "Credit Card",
+    walletNameLabel: "Wallet name",
+    walletNamePlaceholder: "E.g., Daily spending, Techcombank, Savings...",
+    walletCurrencyLabel: "Currency",
+    initialBalanceLabel: "Initial balance",
+    unsettledBalanceLabel: "Unsettled balance",
+    creditLimitLabel: "Credit limit",
+    creditLimitPlaceholder: "E.g., 50,000,000",
+    cancel: "Cancel",
+    saveWallet: "Save wallet",
+    currencyOptions: {
+      VND: "VND (Vietnamese Dong)",
+      USD: "USD (US Dollar)",
+      EUR: "EUR (Euro)",
+      JPY: "JPY (Japanese Yen)",
+      SGD: "SGD (Singapore Dollar)",
+      GBP: "GBP (British Pound)",
+      AUD: "AUD (Australian Dollar)",
+    },
+    currencyOptionsList: [
+      { code: "VND", label: "VND (Vietnamese Dong)" },
+      { code: "USD", label: "USD (US Dollar)" },
+      { code: "EUR", label: "EUR (Euro)" },
+      { code: "JPY", label: "JPY (Japanese Yen)" },
+      { code: "SGD", label: "SGD (Singapore Dollar)" },
+      { code: "GBP", label: "GBP (British Pound)" },
+      { code: "AUD", label: "AUD (Australian Dollar)" },
+    ],
+
+    // F4: Wallet Selectors & Action Aria-labels
+    selectWalletModalTitle: "Select Wallet",
+    selectWalletAria: (name: string) => `Select wallet ${name}`,
+    manageWalletAria: (name: string) => `Manage wallet ${name}`,
+
+    // F3: Manage Wallet - Details Tab
+    manageWalletModalTitle: (name: string) => `Manage wallet: ${name}`,
+    walletInfoTab: "Wallet info",
+    categoryManagerTab: "Manage categories",
+    walletArchivedBannerTitle: "This wallet is currently unlinked (archived)",
+    walletArchivedBannerDesc: "This wallet is hidden when creating new transactions, but all transaction history is preserved.",
+    currencyUnitLabel: "Currency unit",
+    lockedBadge: "Locked (transactions exist)",
+    lockedCurrencyHelper: "Currency cannot be changed once transactions exist to prevent exchange rate conflicts and historical data issues.",
+    initialBalanceLabelCredit: "Initial outstanding balance",
+    initialBalanceLabelCash: "Initial balance",
+    lockedInitialBalanceHelperPrefix: "Initial balance is fixed to preserve bookkeeping integrity. To update balance according to your actual bank account, please use ",
+    lockedInitialBalanceHelperHighlight: "Reconcile actual balance",
+    lockedInitialBalanceHelperSuffix: " below.",
+    unlockedInitialBalanceHelper: "No transactions in this wallet yet; you can freely adjust the initial balance.",
+    closeButton: "Close",
+    saveChangesButton: "Save changes",
+
+    // F3: Manage Wallet - Reconcile Box
+    reconcileCardTitle: "Reconcile actual balance",
+    reconcileCurrentBookPrefix: "Current book balance: ",
+    reconcileCurrentBookSuffix: ". If this does not match your real-world balance, enter your actual balance for automatic adjustment.",
+    reconcileTriggerButton: "Adjust actual balance",
+    reconcileActualBalanceLabel: (curr: string) => `Actual balance in wallet / bank account (${curr})`,
+    reconcileActualBalancePlaceholder: "Enter current actual balance",
+    cancelButton: "Cancel",
+    confirmAdjustmentButton: "Confirm adjustment",
+    reconcileTxTitleIncrease: "Actual balance upward adjustment",
+    reconcileTxTitleDecrease: "Actual balance downward adjustment",
+    reconcileTxCategory: "Balance Adjustment",
+    reconcileTxNoteTemplate: (fromBal: string, toBal: string) => `Reconcile actual balance from ${fromBal} to ${toBal}`,
+
+    // F3: Manage Wallet - Danger Zone
+    dangerZoneHeader: "Wallet security operations",
+    dangerZoneDescArchived: "This wallet is currently unlinked. You can restore it to continue recording transactions.",
+    dangerZoneDescHasTxs: (count: number) => `This wallet has recorded ${count} transactions. The system applies a soft-delete (unlink) policy: the wallet will be hidden, but all ${count} historical transactions will be safely preserved.`,
+    dangerZoneDescNoTxs: "This wallet has no transactions. You can permanently delete it from the system.",
+    reactivateWalletBtn: "Reactivate this wallet",
+    unlinkWalletBtn: "Unlink wallet (Archive)",
+    deleteWalletPermanentBtn: "Permanently delete this wallet",
+    minOneActiveWalletAlert: "The system requires at least 1 active wallet. You cannot unlink this only remaining wallet.",
+    deleteWalletConfirmNoTxs: (name: string) => `Wallet "${name}" has no transactions. Are you sure you want to permanently delete this wallet?`,
+    archiveWalletConfirmHasTxs: (name: string, count: number) => `Wallet "${name}" has ${count} transactions. The wallet will be set to "Unlinked" and hidden from transaction creation. All ${count} previous transactions remain safely stored. Do you want to continue?`,
+
+    // F3: Manage Wallet - Category Manager
+    catTabExpense: "Expense Categories",
+    catTabIncome: "Income Categories",
+    catChooseIconTooltip: "Click to choose an icon for category",
+    catInputPlaceholderExpense: "Enter new expense category name...",
+    catInputPlaceholderIncome: "Enter new income category name...",
+    catAddButton: "Add",
+    emojiPickerHeaderFor: (targetName: string) => `Choose icon for "${targetName}"`,
+    emojiPickerHeaderNewCategory: "Choose icon for new category",
+    emojiPickerCloseAriaLabel: "Close icon picker",
+    emojiGroupNames: {
+      "Nhà & Hóa đơn": "Housing & Bills",
+      "Đồ ăn & Đồ uống": "Food & Dining",
+      "Giao thông vận tải & Du lịch": "Transportation & Travel",
+      "Sức khỏe & Chăm sóc cá nhân": "Health & Personal Care",
+      "Điện tử & Công nghệ": "Electronics & Tech",
+      "Tiền bạc và công việc": "Money & Work",
+      "Vui chơi & Giải trí": "Entertainment & Leisure",
+      "Gia đình & Giáo dục": "Family & Education",
+      "Khác": "Other",
+    },
+    catEditIconTitle: "Choose icon",
+    catEditSaveTitle: "Save changes",
+    catEditCancelTitle: "Cancel",
+    catTxCountBadge: (count: number) => `${count} ${count === 1 ? "transaction" : "transactions"}`,
+    catArchivedTag: "Hidden",
+    catEditTooltip: (name: string) => `Edit category ${name}`,
+    catDeleteTooltip: (name: string) => `Delete or hide category ${name}`,
+    catRestoreTooltip: (name: string) => `Restore category ${name}`,
+    catRestoreBtnText: "Restore",
+    catReassignDeleteTooltip: (count: number) => `Move ${count} transactions to "Uncategorized" and permanently delete`,
+    uncategorizedCategory: "Uncategorized",
+    catNameExistsAlert: "This category name already exists.",
+    catCannotDeleteSystemDefaultAlert: "Cannot delete system default category.",
+    catReactivateConfirm: (name: string) => `Do you want to reactivate category "${name}"?`,
+    catDeleteConfirmNoTxs: (name: string) => `Category "${name}" has no transactions. Are you sure you want to permanently delete it?`,
+    catSoftDeleteConfirmHasTxs: (name: string, count: number) => `Category "${name}" is recorded in ${count} transactions.\n\n• Choose [OK]: Hide category (Soft delete - hidden from selection when creating new transactions, but 100% history is preserved).\n• Choose [Cancel]: Keep category.`,
+    catReassignDeleteConfirm: (name: string, count: number) => `Move all ${count} transactions of category "${name}" to "Uncategorized" and permanently delete "${name}" from the system?`,
+
+    // F5: Date Pickers & Period Selection
+    formatDayPeriod: (dayStr: string) => `Day ${dayStr}`,
+    formatWeekPeriod: (fromStr: string, toStr: string) => `Week ${fromStr} – ${toStr}`,
+    allTimePeriod: "all time",
+    selectDetailedTimeAria: "Select detailed time period",
+    periodModalTitle: "Select time period",
+    pickDayModalTitle: "Select date",
+    pickDayDesc: "Select a date to track income and expenses for that specific day.",
+    pickDayLabel: "Select date",
+    today: "Today",
+    yesterday: "Yesterday",
+    selectedDayLabel: "Selected date:",
+    confirmButton: "Confirm",
+    pickWeekModalTitle: "Select week",
+    pickWeekDesc: "Select a week to track cash flow over a 7-day cycle (Monday – Sunday).",
+    pickWeekOrChooseDate: "Or choose any day of the week",
+    thisWeek: "This week",
+    previousYearAria: "Previous year",
+    nextYearAria: "Next year",
+    pickMonthModalTitle: "Select month",
+    monthNamesShort: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    selectedMonthLabel: "Selected month:",
+    pickYearModalTitle: "Select year",
+    pickYearDesc: "Select a year to view full-year financial summary.",
+    pickCustomRangeModalTitle: "Select custom range",
+    pickCustomRangeDesc: "Customize time range from date to date.",
+    period7dPast: "Past 7 days",
+    period30dPast: "Past 30 days",
+    thisMonth: "This month",
+    rangePreviewLabel: "Time range:",
+    applyButton: "Apply",
+
+    // F5: Flow Analysis Modals & SvgDonut
+    flowIncomeModalTitle: "Income details",
+    flowExpenseModalTitle: "Expense details",
+    flowComparisonModalTitle: "Income & Expense analysis this period",
+    periodPrefix: "Period: ",
+    emptyIncomeTitle: "No income recorded for this period",
+    emptyIncomeDesc: (period: string) => `Income transactions in ${period} will appear here.`,
+    addIncomeTxBtn: "Add income transaction",
+    emptyExpenseTitle: "No expenses recorded for this period",
+    emptyExpenseDesc: (period: string) => `Expense transactions in ${period} will appear here.`,
+    addExpenseTxBtn: "Add expense transaction",
+    totalIncomeWithPeriod: (period: string) => `Total income (${period})`,
+    totalExpenseWithPeriod: (period: string) => `Total expense (${period})`,
+    donutCurrencySwitcherLabel: "Chart display currency:",
+    donutIncomeBreakdown: "Income Breakdown",
+    donutExpenseBreakdown: "Expense Breakdown",
+    donutTotalIncome: "Total income",
+    donutTotalExpense: "Total expense",
+    donutNoIncomeTx: "No income transactions this period",
+    donutNoExpenseTx: "No expense transactions this period",
+    unlinkedTag: " (Unlinked)",
+
+    // F5 & F6: Quick Search, Workspace & Overviews
+    transactionsHeading: "Transactions",
+    searchTransactionsAria: "Search transactions",
+    calendarAria: "Transaction calendar",
+    searchModalTitle: "Search Transactions",
+    searchPlaceholder: "Search transactions...",
+    searchButton: "Search",
+    clearSearchButton: "Clear",
+    noMatchingTransactions: "No matching transactions",
+    noMatchingTransactionsHint: "No transactions match your search keywords.",
+    emptyTransactionsPeriodTitle: "No transactions this period.",
+    emptyTransactionsPeriodText: "Tap + to add a transaction.",
+    noExpensesThisPeriod: "No expenses in this period",
+    noIncomesThisPeriod: "No income in this period",
+    recordTxToTrackFlow: "Record a transaction to start tracking your cash flow.",
+    archivedWalletSuffix: " (Unlinked)",
+    homeTotalsModalTitle: "Total cash flow",
+    totalAllWalletsBalance: "Total balance across all wallets",
+    totalExpenseFromWallets: "Total expenses from all wallets",
+    totalIncomeFromWallets: "Total income from all wallets",
+    totalsModalTitle: "Income & Expense summary",
+    transfer: "Transfer",
+    totalSum: "Total",
+    viewCashFlowDetailsAria: "View cash flow details",
   },
   zh: {
     overviewEyebrow: "总览",
@@ -309,14 +712,212 @@ export const DASHBOARD_I18N = {
     tableColExpense: "支出",
     tableColNet: "净额",
     tableColCount: "笔数",
+
+    // F2: Add Wallet Modal
+    addWalletModalTitle: "添加新钱包",
+    addWalletDesc: "创建钱包以分配财务并详细管理现金流。",
+    walletTypeLabel: "钱包类型",
+    walletTypeCash: "现金",
+    walletTypeCredit: "信用卡",
+    walletNameLabel: "钱包名称",
+    walletNamePlaceholder: "例如：日常消费、招商银行、储蓄卡...",
+    walletCurrencyLabel: "货币单位",
+    initialBalanceLabel: "初始余额",
+    unsettledBalanceLabel: "未结算余额",
+    creditLimitLabel: "信用额度",
+    creditLimitPlaceholder: "例如：50,000,000",
+    cancel: "取消",
+    saveWallet: "保存钱包",
+    currencyOptions: {
+      VND: "VND (越南盾)",
+      USD: "USD (美元)",
+      EUR: "EUR (欧元)",
+      JPY: "JPY (日元)",
+      SGD: "SGD (新加坡元)",
+      GBP: "GBP (英镑)",
+      AUD: "AUD (澳大利亚元)",
+    },
+    currencyOptionsList: [
+      { code: "VND", label: "VND (越南盾)" },
+      { code: "USD", label: "USD (美元)" },
+      { code: "EUR", label: "EUR (欧元)" },
+      { code: "JPY", label: "JPY (日元)" },
+      { code: "SGD", label: "SGD (新加坡元)" },
+      { code: "GBP", label: "GBP (英镑)" },
+      { code: "AUD", label: "AUD (澳大利亚元)" },
+    ],
+
+    // F4: Wallet Selectors & Action Aria-labels
+    selectWalletModalTitle: "选择钱包",
+    selectWalletAria: (name: string) => `选择钱包 ${name}`,
+    manageWalletAria: (name: string) => `管理钱包 ${name}`,
+
+    // F3: Manage Wallet - Details Tab
+    manageWalletModalTitle: (name: string) => `管理钱包: ${name}`,
+    walletInfoTab: "钱包信息",
+    categoryManagerTab: "分类管理",
+    walletArchivedBannerTitle: "此钱包处于已解绑状态（已归档）",
+    walletArchivedBannerDesc: "创建新交易时此钱包将被隐藏，但所有交易历史记录仍会完整保留。",
+    currencyUnitLabel: "货币单位",
+    lockedBadge: "已锁定（已发生交易）",
+    lockedCurrencyHelper: "已有交易记录时无法更改货币，以避免汇率冲突和历史数据问题。",
+    initialBalanceLabelCredit: "初始未还余额",
+    initialBalanceLabelCash: "初始余额",
+    lockedInitialBalanceHelperPrefix: "初始余额已锁定以维护账目完整性。如需根据实际银行账户更新余额，请使用下方的",
+    lockedInitialBalanceHelperHighlight: "核对实际余额",
+    lockedInitialBalanceHelperSuffix: "功能。",
+    unlockedInitialBalanceHelper: "此钱包尚无交易记录，您可以自由调整初始余额。",
+    closeButton: "关闭",
+    saveChangesButton: "保存更改",
+
+    // F3: Manage Wallet - Reconcile Box
+    reconcileCardTitle: "核对实际余额",
+    reconcileCurrentBookPrefix: "当前账面余额：",
+    reconcileCurrentBookSuffix: "。如果与实际不符，请输入实际余额，系统将自动补齐差额。",
+    reconcileTriggerButton: "调整实际余额",
+    reconcileActualBalanceLabel: (curr: string) => `钱包/银行账户中的实际余额 (${curr})`,
+    reconcileActualBalancePlaceholder: "输入当前实际余额",
+    cancelButton: "取消",
+    confirmAdjustmentButton: "确认调整",
+    reconcileTxTitleIncrease: "实际余额上调",
+    reconcileTxTitleDecrease: "实际余额下调",
+    reconcileTxCategory: "余额调整",
+    reconcileTxNoteTemplate: (fromBal: string, toBal: string) => `将实际余额从 ${fromBal} 调整为 ${toBal}`,
+
+    // F3: Manage Wallet - Danger Zone
+    dangerZoneHeader: "钱包安全操作",
+    dangerZoneDescArchived: "此钱包当前已解绑。您可以恢复它以继续记录交易。",
+    dangerZoneDescHasTxs: (count: number) => `此钱包已记录 ${count} 笔交易。系统将应用软删除（解绑）策略：钱包将被隐藏，但全部 ${count} 笔历史交易将完整保留。`,
+    dangerZoneDescNoTxs: "此钱包尚无交易记录。您可以将其从系统中永久删除。",
+    reactivateWalletBtn: "重新激活此钱包",
+    unlinkWalletBtn: "解绑钱包（归档）",
+    deleteWalletPermanentBtn: "永久删除此钱包",
+    minOneActiveWalletAlert: "系统至少需要一个活跃钱包。您不能解绑这唯一的钱包。",
+    deleteWalletConfirmNoTxs: (name: string) => `钱包 "${name}" 尚无交易记录。确定要永久删除此钱包吗？`,
+    archiveWalletConfirmHasTxs: (name: string, count: number) => `钱包 "${name}" 已有 ${count} 笔交易。该钱包将转为“已解绑”状态并在创建交易时隐藏。之前所有的 ${count} 笔交易仍会安全保存。是否继续？`,
+
+    // F3: Manage Wallet - Category Manager
+    catTabExpense: "支出分类",
+    catTabIncome: "收入分类",
+    catChooseIconTooltip: "点击为分类选择图标",
+    catInputPlaceholderExpense: "输入新支出分类名称...",
+    catInputPlaceholderIncome: "输入新收入分类名称...",
+    catAddButton: "添加",
+    emojiPickerHeaderFor: (targetName: string) => `为 "${targetName}" 选择图标`,
+    emojiPickerHeaderNewCategory: "为新分类选择图标",
+    emojiPickerCloseAriaLabel: "关闭图标面板",
+    emojiGroupNames: {
+      "Nhà & Hóa đơn": "住房与账单",
+      "Đồ ăn & Đồ uống": "餐饮美食",
+      "Giao thông vận tải & Du lịch": "交通出行与旅游",
+      "Sức khỏe & Chăm sóc cá nhân": "健康与个人护理",
+      "Điện tử & Công nghệ": "数码与科技",
+      "Tiền bạc và công việc": "财务与工作",
+      "Vui chơi & Giải trí": "休闲与娱乐",
+      "Gia đình & Giáo dục": "家庭与教育",
+      "Khác": "其他",
+    },
+    catEditIconTitle: "选择图标",
+    catEditSaveTitle: "保存更改",
+    catEditCancelTitle: "取消",
+    catTxCountBadge: (count: number) => `${count} 笔交易`,
+    catArchivedTag: "已隐藏",
+    catEditTooltip: (name: string) => `编辑分类 ${name}`,
+    catDeleteTooltip: (name: string) => `删除或隐藏分类 ${name}`,
+    catRestoreTooltip: (name: string) => `恢复分类 ${name}`,
+    catRestoreBtnText: "恢复",
+    catReassignDeleteTooltip: (count: number) => `将 ${count} 笔交易归入“未分类”并永久删除`,
+    uncategorizedCategory: "未分类",
+    catNameExistsAlert: "此分类名称已存在。",
+    catCannotDeleteSystemDefaultAlert: "无法删除系统默认分类。",
+    catReactivateConfirm: (name: string) => `是否重新激活分类 "${name}"？`,
+    catDeleteConfirmNoTxs: (name: string) => `分类 "${name}" 尚无交易记录。确定要永久删除吗？`,
+    catSoftDeleteConfirmHasTxs: (name: string, count: number) => `分类 "${name}" 已记录在 ${count} 笔交易中。\n\n• 选择 [确定]：隐藏分类（软删除 - 创建新交易时隐藏，但100%保留历史数据）。\n• 选择 [取消]：保留分类。`,
+    catReassignDeleteConfirm: (name: string, count: number) => `将分类 "${name}" 的全部 ${count} 笔交易转移至“未分类”并从系统中永久删除 "${name}"？`,
+
+    // F5: Date Pickers & Period Selection
+    formatDayPeriod: (dayStr: string) => `${dayStr}`,
+    formatWeekPeriod: (fromStr: string, toStr: string) => `周 ${fromStr} – ${toStr}`,
+    allTimePeriod: "全部时间",
+    selectDetailedTimeAria: "选择详细时间",
+    periodModalTitle: "选择时间范围",
+    pickDayModalTitle: "选择日期",
+    pickDayDesc: "选择日期以追踪该特定日期的收支。",
+    pickDayLabel: "选择日期",
+    today: "今天",
+    yesterday: "昨天",
+    selectedDayLabel: "已选日期：",
+    confirmButton: "确认",
+    pickWeekModalTitle: "选择周",
+    pickWeekDesc: "选择周以追踪7天周期（周一至周日）的现金流。",
+    pickWeekOrChooseDate: "或选择周内的任意一天",
+    thisWeek: "本周",
+    previousYearAria: "上一年",
+    nextYearAria: "下一年",
+    pickMonthModalTitle: "选择月份",
+    monthNamesShort: ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"],
+    selectedMonthLabel: "已选月份：",
+    pickYearModalTitle: "选择年份",
+    pickYearDesc: "选择年份以查看全年财务汇总。",
+    pickCustomRangeModalTitle: "选择自定义范围",
+    pickCustomRangeDesc: "自定义从起始日期到结束日期的时间范围。",
+    period7dPast: "过去7天",
+    period30dPast: "过去30天",
+    thisMonth: "本月",
+    rangePreviewLabel: "时间范围：",
+    applyButton: "应用",
+
+    // F5: Flow Analysis Modals & SvgDonut
+    flowIncomeModalTitle: "收入明细",
+    flowExpenseModalTitle: "支出明细",
+    flowComparisonModalTitle: "本期收支对比分析",
+    periodPrefix: "期间：",
+    emptyIncomeTitle: "本期尚无收入记录",
+    emptyIncomeDesc: (period: string) => `${period}的收入交易将显示在此处。`,
+    addIncomeTxBtn: "添加收入交易",
+    emptyExpenseTitle: "本期尚无支出记录",
+    emptyExpenseDesc: (period: string) => `${period}的支出交易将显示在此处。`,
+    addExpenseTxBtn: "添加支出交易",
+    totalIncomeWithPeriod: (period: string) => `总收入 (${period})`,
+    totalExpenseWithPeriod: (period: string) => `总支出 (${period})`,
+    donutCurrencySwitcherLabel: "图表显示货币：",
+    donutIncomeBreakdown: "收入结构",
+    donutExpenseBreakdown: "支出结构",
+    donutTotalIncome: "总收入",
+    donutTotalExpense: "总支出",
+    donutNoIncomeTx: "本期尚无收入交易",
+    donutNoExpenseTx: "本期尚无支出交易",
+    unlinkedTag: " (已解绑)",
+
+    // F5 & F6: Quick Search, Workspace & Overviews
+    transactionsHeading: "交易",
+    searchTransactionsAria: "搜索交易",
+    calendarAria: "交易日历",
+    searchModalTitle: "搜索交易",
+    searchPlaceholder: "搜索交易...",
+    searchButton: "搜索",
+    clearSearchButton: "清除",
+    noMatchingTransactions: "没有符合条件的交易",
+    noMatchingTransactionsHint: "没有找到与搜索词匹配的交易记录。",
+    emptyTransactionsPeriodTitle: "本期暂无交易记录。",
+    emptyTransactionsPeriodText: "点击 + 添加交易。",
+    noExpensesThisPeriod: "本期暂无支出记录",
+    noIncomesThisPeriod: "本期暂无收入记录",
+    recordTxToTrackFlow: "记录一笔交易以开始追踪现金流。",
+    archivedWalletSuffix: " (已解绑)",
+    homeTotalsModalTitle: "现金流总览",
+    totalAllWalletsBalance: "全部钱包总余额",
+    totalExpenseFromWallets: "各钱包总支出",
+    totalIncomeFromWallets: "各钱包总收入",
+    totalsModalTitle: "收支总览",
+    transfer: "转账",
+    totalSum: "总计",
+    viewCashFlowDetailsAria: "查看现金流详情",
   },
 };
 
 function getLanguage(langSetting: unknown): "vi" | "en" | "zh" {
-  const str = String(langSetting || "").toLowerCase();
-  if (str.includes("zh") || str.includes("chinese") || str.includes("trung") || str.includes("中文")) return "zh";
-  if (str.includes("en") || str.includes("english") || str.includes("anh")) return "en";
-  return "vi";
+  return resolveLanguage(langSetting);
 }
 
 function getNiceScale(maxValue: number, tickCount = 4) {
@@ -407,12 +1008,15 @@ function SvgDonut({
   items,
   total,
   currency,
+  lang = "vi",
 }: {
   type: "income" | "expense";
   items: { category: string; amount: number; percent: number; color: string }[];
   total: number;
   currency: string;
+  lang?: "vi" | "en" | "zh";
 }) {
+  const t = DASHBOARD_I18N[lang];
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
   let accumulated = 0;
@@ -422,7 +1026,7 @@ function SvgDonut({
       <div className="fb-donut-header">
         <span className={"fb-donut-badge " + (type === "income" ? "r-income" : "r-expense")}>
           {type === "income" ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-          <span>{type === "income" ? "Cơ cấu Thu nhập" : "Cơ cấu Chi tiêu"}</span>
+          <span>{type === "income" ? t.donutIncomeBreakdown : t.donutExpenseBreakdown}</span>
         </span>
       </div>
 
@@ -470,7 +1074,7 @@ function SvgDonut({
           )}
         </svg>
         <div className="fb-donut-center-info">
-          <span className="fb-donut-center-label">{type === "income" ? "Tổng thu" : "Tổng chi"}</span>
+          <span className="fb-donut-center-label">{type === "income" ? t.donutTotalIncome : t.donutTotalExpense}</span>
           <b className={"fb-donut-center-value " + (type === "income" ? "r-income" : "r-expense")}>
             {total === 0 ? `0 ${currency}` : (type === "income" ? "+" : "−") + formatHomeMoney(total, currency)}
           </b>
@@ -479,20 +1083,23 @@ function SvgDonut({
 
       <div className="fb-donut-legend">
         {items.length === 0 ? (
-          <p className="fb-donut-empty-text">Chưa có giao dịch {type === "income" ? "thu" : "chi"} trong kỳ này</p>
+          <p className="fb-donut-empty-text">{type === "income" ? t.donutNoIncomeTx : t.donutNoExpenseTx}</p>
         ) : (
-          items.map((item) => (
-            <div key={item.category} className="fb-donut-legend-item">
-              <div className="fb-donut-legend-left">
-                <i className="fb-donut-dot" style={{ backgroundColor: item.color }} />
-                <span className="fb-donut-cat-name" title={item.category}>{item.category}</span>
+          items.map((item) => {
+            const localizedCat = resolveCategoryDisplayName(item.category, lang);
+            return (
+              <div key={item.category} className="fb-donut-legend-item">
+                <div className="fb-donut-legend-left">
+                  <i className="fb-donut-dot" style={{ backgroundColor: item.color }} />
+                  <span className="fb-donut-cat-name" title={localizedCat}>{localizedCat}</span>
+                </div>
+                <div className="fb-donut-legend-right">
+                  <span className="fb-donut-pct">{item.percent.toFixed(1)}%</span>
+                  <b className="fb-donut-val">{formatHomeMoney(item.amount, currency)}</b>
+                </div>
               </div>
-              <div className="fb-donut-legend-right">
-                <span className="fb-donut-pct">{item.percent.toFixed(1)}%</span>
-                <b className="fb-donut-val">{formatHomeMoney(item.amount, currency)}</b>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>
@@ -604,7 +1211,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
   const openManageWalletModal = (targetWalletId: string) => {
     const target = state.wallets.find((w) => w.id === targetWalletId) || wallet;
     setEditingWalletId(target.id);
-    setEditWalletName(target.name === "." ? "Ví chính" : target.name);
+    setEditWalletName(isSentinelWalletName(target.name) ? t.mainWallet : target.name);
     setEditWalletType(target.type === "credit" ? "credit" : "cash");
     setEditWalletCurrency(target.currency || "VND");
     setEditWalletInitial(String(target.initial || 0));
@@ -625,9 +1232,14 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
     if (!target) return;
     const txCount = state.transactions.filter((t) => t.wallet === target.id || t.targetWallet === target.id).length;
     const hasTxs = txCount > 0;
+    const trimmed = editWalletName.trim();
+    const isTargetSentinel = isSentinelWalletName(target.name);
+    const persistentName = isTargetSentinel
+      ? (!trimmed || isSentinelWalletName(trimmed) || trimmed === t.mainWallet ? "." : trimmed)
+      : (trimmed || target.name);
     const updated: WalletType = {
       ...target,
-      name: editWalletName.trim() || target.name,
+      name: persistentName,
       type: editWalletType,
       limit: editWalletType === "credit" ? Number(editWalletLimit) || undefined : undefined,
       currency: hasTxs ? target.currency : editWalletCurrency,
@@ -652,12 +1264,12 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
       const adjTx: Transaction = {
         id: crypto.randomUUID(),
         date: localDateKey(new Date()),
-        title: diff > 0 ? "Điều chỉnh tăng số dư thực tế" : "Điều chỉnh giảm số dư thực tế",
+        title: diff > 0 ? t.reconcileTxTitleIncrease : t.reconcileTxTitleDecrease,
         amount: Math.abs(diff),
         type: diff > 0 ? "income" : "expense",
-        category: "Điều chỉnh số dư",
+        category: t.reconcileTxCategory,
         wallet: target.id,
-        note: `Khớp số dư thực tế từ ${formatHomeMoney(currentBal, target.currency)} sang ${formatHomeMoney(targetBal, target.currency)}`,
+        note: t.reconcileTxNoteTemplate(formatHomeMoney(currentBal, target.currency), formatHomeMoney(targetBal, target.currency)),
       };
       updateState((s) => ({
         ...s,
@@ -675,7 +1287,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
     const activeCount = state.wallets.filter((w) => !w.archived).length;
 
     if (activeCount <= 1 && !target.archived) {
-      alert("Hệ thống cần ít nhất 1 ví hoạt động. Bạn không thể hủy liên kết ví duy nhất này.");
+      alert(t.minOneActiveWalletAlert);
       return;
     }
 
@@ -689,7 +1301,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
     }
 
     if (txCount === 0) {
-      if (confirm(`Ví "${walletName(target.name)}" chưa có giao dịch nào. Bạn có chắc chắn muốn xóa vĩnh viễn ví này?`)) {
+      if (confirm(t.deleteWalletConfirmNoTxs(walletName(target.name)))) {
         updateState((s) => ({
           ...s,
           wallets: s.wallets.filter((w) => w.id !== target.id),
@@ -701,7 +1313,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
         close();
       }
     } else {
-      if (confirm(`Ví "${walletName(target.name)}" đã có ${txCount} giao dịch. Ví sẽ được chuyển sang trạng thái "Đã hủy liên kết" và ẩn khỏi màn hình thêm giao dịch. Tất cả ${txCount} giao dịch trước đây vẫn được lưu trữ an toàn. Bạn có muốn tiếp tục?`)) {
+      if (confirm(t.archiveWalletConfirmHasTxs(walletName(target.name), txCount))) {
         updateState((s) => ({
           ...s,
           wallets: s.wallets.map((w) => (w.id === target.id ? { ...w, archived: true } : w)),
@@ -761,7 +1373,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
     const newName = editCatTitle.trim();
     if (!newName) return;
     if (newName !== oldName && state.categories.includes(newName)) {
-      alert("Tên danh mục này đã tồn tại.");
+      alert(t.catNameExistsAlert);
       return;
     }
     const currentMeta = state.categoryMeta[oldName] || { type: catType, icon: editCatIcon, children: [] };
@@ -794,15 +1406,16 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
 
   const handleDeleteCategory = (cat: string) => {
     if (cat === "Chưa được phân loại") {
-      alert("Không thể xóa danh mục mặc định của hệ thống.");
+      alert(t.catCannotDeleteSystemDefaultAlert);
       return;
     }
 
     const txCount = state.transactions.filter((t) => t.category === cat).length;
     const meta = state.categoryMeta[cat];
+    const displayCatName = cat === "Chưa được phân loại" ? t.uncategorizedCategory : cat;
 
     if (meta?.archived) {
-      if (confirm(`Bạn muốn kích hoạt lại danh mục "${cat}"?`)) {
+      if (confirm(t.catReactivateConfirm(displayCatName))) {
         updateState((s) => ({
           ...s,
           categoryMeta: {
@@ -815,7 +1428,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
     }
 
     if (txCount === 0) {
-      if (confirm(`Danh mục "${cat}" chưa có giao dịch nào. Bạn có chắc chắn muốn xóa vĩnh viễn?`)) {
+      if (confirm(t.catDeleteConfirmNoTxs(displayCatName))) {
         updateState((s) => {
           const nextMeta = { ...s.categoryMeta };
           delete nextMeta[cat];
@@ -827,11 +1440,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
         });
       }
     } else {
-      const choice = confirm(
-        `Danh mục "${cat}" đang được ghi nhận trong ${txCount} giao dịch.\n\n` +
-        `• Chọn [OK]: Ẩn danh mục (Xóa mềm - ẩn khỏi danh sách chọn khi tạo giao dịch mới nhưng bảo toàn 100% dữ liệu lịch sử).\n` +
-        `• Chọn [Cancel]: Giữ nguyên danh mục.`
-      );
+      const choice = confirm(t.catSoftDeleteConfirmHasTxs(displayCatName, txCount));
       if (choice) {
         updateState((s) => ({
           ...s,
@@ -846,7 +1455,8 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
 
   const handleReassignAndDelete = (cat: string) => {
     const txCount = state.transactions.filter((t) => t.category === cat).length;
-    if (confirm(`Chuyển tất cả ${txCount} giao dịch của danh mục "${cat}" về danh mục "Chưa được phân loại" và xóa vĩnh viễn "${cat}" khỏi hệ thống?`)) {
+    const displayCatName = cat === "Chưa được phân loại" ? t.uncategorizedCategory : cat;
+    if (confirm(t.catReassignDeleteConfirm(displayCatName, txCount))) {
       updateState((s) => {
         const nextMeta = { ...s.categoryMeta };
         delete nextMeta[cat];
@@ -1015,34 +1625,37 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
   const donutIncomeTotal = currencyIncomeList.reduce((sum, t) => sum + t.amount, 0);
   const donutExpenseTotal = currencyExpenseList.reduce((sum, t) => sum + t.amount, 0);
 
-  const formatVnDate = (isoDate: string) => {
+  const formatLocalizedDate = (isoDate: string) => {
     if (!isoDate || !isoDate.includes("-")) return isoDate;
     const parts = isoDate.split("-");
+    if (parts.length !== 3) return isoDate;
+    if (lang === "zh") return `${parts[0]}年${parseInt(parts[1], 10)}月${parseInt(parts[2], 10)}日`;
+    if (lang === "en") return `${parseInt(parts[1], 10)}/${parseInt(parts[2], 10)}/${parts[0]}`;
     return `${parts[2]}/${parts[1]}/${parts[0]}`;
   };
 
   const selectedPeriodText = period === "Tháng"
-    ? `tháng ${month + 1} năm ${year}`
+    ? t.formatMonthYear(month, year)
     : period === "Năm"
-      ? `năm ${year}`
+      ? t.formatYearOnly(year)
       : period === "Ngày"
-        ? `ngày ${formatVnDate(day)}`
+        ? t.formatDayPeriod(formatLocalizedDate(day))
         : period === "Tuần"
-          ? `tuần ${formatVnDate(from)} – ${formatVnDate(to)}`
+          ? t.formatWeekPeriod(formatLocalizedDate(from), formatLocalizedDate(to))
           : period === "Mọi thời gian"
-            ? "toàn thời gian"
-            : `${formatVnDate(from)} – ${formatVnDate(to)}`;
+            ? t.allTimePeriod
+            : `${formatLocalizedDate(from)} – ${formatLocalizedDate(to)}`;
 
   const periodDateLabel = period === "Tháng"
     ? t.formatMonthYear(month, year)
     : period === "Năm"
       ? t.formatYearOnly(year)
       : period === "Ngày"
-        ? formatVnDate(day)
+        ? formatLocalizedDate(day)
         : period === "Tuần"
-          ? `${formatVnDate(from)} – ${formatVnDate(to)}`
+          ? `${formatLocalizedDate(from)} – ${formatLocalizedDate(to)}`
           : period === "Phạm vi tùy chỉnh"
-            ? `${formatVnDate(from)} – ${formatVnDate(to)}`
+            ? `${formatLocalizedDate(from)} – ${formatLocalizedDate(to)}`
             : "";
 
   const setWeekFromDate = (dateStr: string) => {
@@ -1102,7 +1715,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
   const list = transactionsTab ? records : records.filter((t) => t.type === type);
   const close = useCallback(() => setModal(""), []);
   const addTransaction = () => navigate(state.settings.manual ? "addTransaction" : "addTransactionChatMode");
-  const walletName = (name: string) => (!name || name === "." || name === "Ví chính" || name === "Main wallet" || name === "主钱包") ? t.mainWallet : name;
+  const walletName = (name: string) => resolveWalletDisplayName(name, lang);
   const periodDisplay = (p: string) => {
     if (p === "Ngày") return t.periodDay;
     if (p === "Tuần") return t.periodWeek;
@@ -1124,7 +1737,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
           type="button"
           onClick={openPeriodDateModal}
           className="r-period-date"
-          aria-label="Chọn thời gian chi tiết"
+          aria-label={t.selectDetailedTimeAria}
         >
           {periodDateLabel}
           <ChevronDown size={15} />
@@ -1134,19 +1747,20 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
   );
   const transactionRows = (
     <div className="r-record-list">
-      {list.map((t) => {
-        const txW = state.wallets.find((item) => item.id === t.wallet);
+      {list.map((tx) => {
+        const txW = state.wallets.find((item) => item.id === tx.wallet);
+        const localizedCat = resolveCategoryDisplayName(tx.category, lang);
         return (
-          <button key={t.id} type="button" className="r-record" onClick={() => navigate("editTransaction?id=" + t.id)}>
+          <button key={tx.id} type="button" className="r-record" onClick={() => navigate("editTransaction?id=" + tx.id)}>
             <span className="r-category-symbol">
-              {transactionsTab ? (t.category === "Thức ăn & Đồ uống" ? "🍔" : t.type === "income" ? "💰" : "🛍️") : t.type === "income" ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
+              {transactionsTab ? (tx.category === "Thức ăn & Đồ uống" ? "🍔" : tx.type === "income" ? "💰" : "🛍️") : tx.type === "income" ? <ArrowUpRight size={20} /> : <ArrowDownRight size={20} />}
             </span>
             <span>
-              <b>{t.category}</b>
-              <small>{t.title}{txW?.archived ? " (Đã hủy liên kết)" : ""} · {t.date}</small>
+              <b>{localizedCat}</b>
+              <small>{tx.title || localizedCat}{txW?.archived ? t.archivedWalletSuffix : ""} · {formatLocalizedDate(tx.date)}</small>
             </span>
-            <b className={t.type === "income" ? "r-income" : "r-expense"}>
-              {t.type === "income" ? "+" : "−"}{money(t.amount, wallet.currency)}
+            <b className={tx.type === "income" ? "r-income" : "r-expense"}>
+              {tx.type === "income" ? "+" : "−"}{money(tx.amount, wallet.currency)}
             </b>
           </button>
         );
@@ -1158,12 +1772,21 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
 
   return <div className={walletSettingsMode ? "fb-wallet-management-host" : "r-dashboard " + (transactionsTab ? "r-transactions" : "r-home fb-home")}>
     {walletSettingsMode ? <WalletSettingsDirectory state={state} navigate={navigate} onManage={openManageWalletModal} onAddWallet={openAddWalletModal} /> : transactionsTab ? <>
-      <div className="r-transactions-heading"><h1>Giao dịch</h1><div><button type="button" className="r-icon-button" onClick={() => setModal("search")} aria-label="Tìm kiếm giao dịch"><Search size={22} /></button><button type="button" className="r-icon-button" onClick={() => navigate("calendar")} aria-label="Lịch giao dịch"><CalendarDays size={22} /></button></div></div>
-      <button type="button" className="r-wallet-chip" onClick={() => setModal("wallet")}><Icon code="f555" />{wallet.name}<ChevronDown size={13} /></button>
+      <div className="r-transactions-heading"><h1>{t.transactionsHeading}</h1><div><button type="button" className="r-icon-button" onClick={() => setModal("search")} aria-label={t.searchTransactionsAria}><Search size={22} /></button><button type="button" className="r-icon-button" onClick={() => navigate("calendar")} aria-label={t.calendarAria}><CalendarDays size={22} /></button></div></div>
+      <button
+        type="button"
+        className="r-wallet-chip"
+        onClick={() => setModal("wallet")}
+        aria-label={t.selectWalletAria(walletName(wallet.name))}
+      >
+        <Icon code="f555" />
+        {walletName(wallet.name)}
+        <ChevronDown size={13} />
+      </button>
       {periodControls}
       <button type="button" className="r-totals-strip" onClick={() => setModal("totals")}><span className="r-expense">▼ {money(expense, wallet.currency)}</span><span className="r-income">▲ {money(income, wallet.currency)}</span><span>∑ {money(income - expense, wallet.currency)}</span></button>
-      {list.length === 0 ? <EmptyState title="Chưa có giao dịch trong kỳ này." text="Nhấn + để thêm giao dịch." className="r-dashboard-empty" /> : transactionRows}
-      <button type="button" className="r-fab" aria-label="Thêm giao dịch" onClick={addTransaction}><Plus size={32} /></button>
+      {list.length === 0 ? <EmptyState title={t.emptyTransactionsPeriodTitle} text={t.emptyTransactionsPeriodText} className="r-dashboard-empty" /> : transactionRows}
+      <button type="button" className="r-fab" aria-label={t.addTransaction} onClick={addTransaction}><Plus size={32} /></button>
     </> : <>
       <FinBridgeHeader
         lang={lang}
@@ -1209,18 +1832,32 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
           )}
         </div>
         <div className="r-wallets">
-          {activeWallets.map((w) => (
-            <div key={w.id} className={"r-wallet-card " + (w.id === wallet.id ? "is-selected" : "")}>
-              <button type="button" onClick={() => setWalletId(w.id)} className="r-wallet-content" aria-label={"Chọn ví " + w.name} aria-pressed={w.id === wallet.id}>
-                <Wallet size={19} />
-                <span>{walletName(w.name)}</span>
-                <b>{formatHomeMoney(w.initial + state.transactions.reduce((a, t) => a + (t.wallet === w.id ? (t.type === "income" ? t.amount : -t.amount) : t.targetWallet === w.id ? t.amount : 0), 0), w.currency)}</b>
-              </button>
-              <button type="button" className="r-wallet-edit" aria-label={"Quản lý ví " + w.name} onClick={() => openManageWalletModal(w.id)}>
-                <Pencil size={14} />
-              </button>
-            </div>
-          ))}
+          {activeWallets.map((w) => {
+            const localizedName = walletName(w.name);
+            return (
+              <div key={w.id} className={"r-wallet-card " + (w.id === wallet.id ? "is-selected" : "")}>
+                <button
+                  type="button"
+                  onClick={() => setWalletId(w.id)}
+                  className="r-wallet-content"
+                  aria-label={t.selectWalletAria(localizedName)}
+                  aria-pressed={w.id === wallet.id}
+                >
+                  <Wallet size={19} />
+                  <span>{localizedName}</span>
+                  <b>{formatHomeMoney(w.initial + state.transactions.reduce((a, t) => a + (t.wallet === w.id ? (t.type === "income" ? t.amount : -t.amount) : t.targetWallet === w.id ? t.amount : 0), 0), w.currency)}</b>
+                </button>
+                <button
+                  type="button"
+                  className="r-wallet-edit"
+                  aria-label={t.manageWalletAria(localizedName)}
+                  onClick={() => openManageWalletModal(w.id)}
+                >
+                  <Pencil size={14} />
+                </button>
+              </div>
+            );
+          })}
           <button type="button" className="r-new-wallet" onClick={openAddWalletModal}>
             <Plus size={20} />
             <span>{t.addWallet}</span>
@@ -1574,31 +2211,31 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
       </section>
       <div className="fb-workspace"><div className="fb-main-column">
         <section className="fb-overview"><div className="fb-section-heading"><h2>{t.flowThisPeriod}</h2>{periodControls}</div>
-          <button type="button" className="r-summary" onClick={() => setModal("totals")} aria-label="Xem chi tiết dòng tiền"><div className="r-summary-top"><span><small>{t.netChange}</small><b>{formatHomeMoney(income - expense, wallet.currency, true)}</b></span><span className="fb-detail-label">{t.details}<Info size={16} /></span></div><div className="r-summary-cards"><div className="r-expense"><span><ArrowDownRight size={18} />{t.cost}</span><b>{formatHomeMoney(expense, wallet.currency)}</b></div><div className="r-income"><span><ArrowUpRight size={18} />{t.income}</span><b>{formatHomeMoney(income, wallet.currency)}</b></div></div></button>
+          <button type="button" className="r-summary" onClick={() => setModal("totals")} aria-label={t.viewCashFlowDetailsAria}><div className="r-summary-top"><span><small>{t.netChange}</small><b>{formatHomeMoney(income - expense, wallet.currency, true)}</b></span><span className="fb-detail-label">{t.details}<Info size={16} /></span></div><div className="r-summary-cards"><div className="r-expense"><span><ArrowDownRight size={18} />{t.cost}</span><b>{formatHomeMoney(expense, wallet.currency)}</b></div><div className="r-income"><span><ArrowUpRight size={18} />{t.income}</span><b>{formatHomeMoney(income, wallet.currency)}</b></div></div></button>
         </section>
         <section className="fb-activity"><div className="fb-section-heading"><h2>{t.txThisPeriod}</h2><div className="r-type-pills"><button type="button" className={type === "expense" ? "active" : ""} onClick={() => setType("expense")}>{t.cost}</button><button type="button" className={type === "income" ? "active" : ""} onClick={() => setType("income")}>{t.income}</button></div></div>
-          {list.length === 0 ? <div className="fb-empty"><span className="fb-empty-icon"><ReceiptText size={26} /></span><h3>Chưa có {type === "expense" ? "khoản chi" : "khoản thu"} trong kỳ này</h3><p>Ghi lại một giao dịch để bắt đầu theo dõi dòng tiền.</p><button type="button" className="fb-empty-action" onClick={addTransaction}><Plus size={16} />{t.addTransaction}</button></div> : transactionRows}
+          {list.length === 0 ? <div className="fb-empty"><span className="fb-empty-icon"><ReceiptText size={26} /></span><h3>{type === "expense" ? t.noExpensesThisPeriod : t.noIncomesThisPeriod}</h3><p>{t.recordTxToTrackFlow}</p><button type="button" className="fb-empty-action" onClick={addTransaction}><Plus size={16} />{t.addTransaction}</button></div> : transactionRows}
         </section>
       </div><aside className="fb-side-column">{state.settings.totalBalance && <section className="fb-balance-card"><span className="fb-balance-icon"><Wallet size={20} /></span><p>{t.selectedWalletBalance}</p><h2>{formatHomeMoney(allBalance, wallet.currency)}</h2><small>{walletName(wallet.name)} · {wallet.currency}</small><div className="fb-balance-decor" aria-hidden="true"><span /><span /><span /><span /><span /></div><button type="button" onClick={() => openManageWalletModal(wallet.id)}>{t.manageWallets}<ArrowRight size={16} /></button></section>}
         <section className="fb-habit-card"><p className="fb-eyebrow">{t.habitEyebrow}</p><h3>{t.habitTitle}</h3><p>{t.habitSub}</p><button type="button" onClick={() => navigate("?tab=transactions")}>{t.viewTransactionsAction}<ArrowRight size={16} /></button></section>
       </aside></div>
-      <button type="button" className="r-fab fb-mobile-add" aria-label="Thêm giao dịch" onClick={addTransaction}><Plus size={26} /></button>
+      <button type="button" className="r-fab fb-mobile-add" aria-label={t.addTransaction} onClick={addTransaction}><Plus size={26} /></button>
     </>}
     {modal && <Modal
-      title={modal === "period" ? "Chọn khoảng thời gian"
-        : modal === "search" ? "Tìm kiếm giao dịch"
-        : modal === "wallet" ? "Chọn ví"
-        : modal === "homeTotals" ? "Tổng dòng tiền"
-        : modal === "addWallet" ? "Thêm ví mới"
-        : modal === "flowIncomeDetails" ? "Chi tiết các khoản thu"
-        : modal === "flowExpenseDetails" ? "Chi tiết các khoản chi"
-        : modal === "flowComparisonChart" ? "Phân tích Thu & Chi trong kỳ"
-        : modal === "manageWallet" ? `Quản lý ví: ${walletName(state.wallets.find((w) => w.id === editingWalletId)?.name || wallet.name)}`
-        : modal === "pickDay" ? "Chọn ngày"
-        : modal === "pickWeek" ? "Chọn tuần"
-        : modal === "pickMonth" ? "Chọn tháng"
-        : modal === "pickYear" ? "Chọn năm"
-        : modal === "pickCustomRange" ? "Chọn khoảng thời gian"
+      title={modal === "period" ? t.periodModalTitle
+        : modal === "search" ? t.searchModalTitle
+        : modal === "wallet" ? t.selectWalletModalTitle
+        : modal === "homeTotals" ? t.homeTotalsModalTitle
+        : modal === "addWallet" ? t.addWalletModalTitle
+        : modal === "flowIncomeDetails" ? t.flowIncomeModalTitle
+        : modal === "flowExpenseDetails" ? t.flowExpenseModalTitle
+        : modal === "flowComparisonChart" ? t.flowComparisonModalTitle
+        : modal === "manageWallet" ? t.manageWalletModalTitle(walletName(state.wallets.find((w) => w.id === editingWalletId)?.name || wallet.name))
+        : modal === "pickDay" ? t.pickDayModalTitle
+        : modal === "pickWeek" ? t.pickWeekModalTitle
+        : modal === "pickMonth" ? t.pickMonthModalTitle
+        : modal === "pickYear" ? t.pickYearModalTitle
+        : modal === "pickCustomRange" ? t.pickCustomRangeModalTitle
         : undefined}
       onClose={close}
       sheet={["period", "search", "wallet"].includes(modal)}
@@ -1625,7 +2262,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
               }}
             >
               <CalendarDays size={22} />
-              {p}
+              {periodDisplay(p)}
             </button>
           ))}
         </div>
@@ -1633,9 +2270,9 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
 
       {modal === "pickDay" && (
         <div className="fb-date-picker-modal">
-          <p className="fb-picker-subheading">Chọn ngày để theo dõi thu chi trong ngày cụ thể.</p>
+          <p className="fb-picker-subheading">{t.pickDayDesc}</p>
           <div className="fb-picker-field">
-            <label className="fb-picker-label" htmlFor="pick-day-input">Chọn ngày</label>
+            <label className="fb-picker-label" htmlFor="pick-day-input">{t.pickDayLabel}</label>
             <input
               id="pick-day-input"
               type="date"
@@ -1650,54 +2287,54 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
               className={"fb-quick-date-btn " + (day === "2026-10-12" ? "active" : "")}
               onClick={() => setDay("2026-10-12")}
             >
-              Hôm nay
+              {t.today}
             </button>
             <button
               type="button"
               className={"fb-quick-date-btn " + (day === "2026-10-11" ? "active" : "")}
               onClick={() => setDay("2026-10-11")}
             >
-              Hôm qua
+              {t.yesterday}
             </button>
           </div>
           <div className="fb-picker-selected-preview">
-            <span>Ngày được chọn:</span>
-            <b>{formatVnDate(day)}</b>
+            <span>{t.selectedDayLabel}</span>
+            <b>{formatLocalizedDate(day)}</b>
           </div>
           <div className="fb-modal-actions">
-            <button type="button" className="r-secondary" onClick={close}>Đóng</button>
-            <button type="button" className="r-primary" onClick={close}>Xác nhận</button>
+            <button type="button" className="r-secondary" onClick={close}>{t.closeButton}</button>
+            <button type="button" className="r-primary" onClick={close}>{t.confirmButton}</button>
           </div>
         </div>
       )}
 
       {modal === "pickWeek" && (
         <div className="fb-date-picker-modal">
-          <p className="fb-picker-subheading">Chọn tuần để theo dõi dòng tiền trong chu kỳ 7 ngày (Thứ 2 – Chủ nhật).</p>
+          <p className="fb-picker-subheading">{t.pickWeekDesc}</p>
           <div className="fb-week-stepper">
             <button
               type="button"
               className="fb-stepper-btn"
               onClick={() => shiftWeek(-1)}
-              aria-label="Tuần trước"
+              aria-label={t.previousWeek}
             >
               ‹
             </button>
             <div className="fb-week-stepper-display">
-              <span className="fb-week-stepper-label">Tuần hiện tại</span>
-              <b>{formatVnDate(from)} – {formatVnDate(to)}</b>
+              <span className="fb-week-stepper-label">{t.currentWeek}</span>
+              <b>{formatLocalizedDate(from)} – {formatLocalizedDate(to)}</b>
             </div>
             <button
               type="button"
               className="fb-stepper-btn"
               onClick={() => shiftWeek(1)}
-              aria-label="Tuần sau"
+              aria-label={t.nextWeek}
             >
               ›
             </button>
           </div>
           <div className="fb-picker-field">
-            <label className="fb-picker-label" htmlFor="pick-week-date">Hoặc chọn một ngày bất kỳ trong tuần</label>
+            <label className="fb-picker-label" htmlFor="pick-week-date">{t.pickWeekOrChooseDate}</label>
             <input
               id="pick-week-date"
               type="date"
@@ -1718,7 +2355,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                 setWeekFromDate("2026-10-12");
               }}
             >
-              Tuần này
+              {t.thisWeek}
             </button>
             <button
               type="button"
@@ -1728,12 +2365,12 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                 setWeekFromDate("2026-10-05");
               }}
             >
-              Tuần trước
+              {t.previousWeek}
             </button>
           </div>
           <div className="fb-modal-actions">
-            <button type="button" className="r-secondary" onClick={close}>Đóng</button>
-            <button type="button" className="r-primary" onClick={close}>Xác nhận</button>
+            <button type="button" className="r-secondary" onClick={close}>{t.closeButton}</button>
+            <button type="button" className="r-primary" onClick={close}>{t.confirmButton}</button>
           </div>
         </div>
       )}
@@ -1745,16 +2382,16 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
               type="button"
               className="fb-stepper-btn"
               onClick={() => setYear(year - 1)}
-              aria-label="Năm trước"
+              aria-label={t.previousYearAria}
             >
               ‹
             </button>
-            <span className="fb-year-display">Năm {year}</span>
+            <span className="fb-year-display">{t.formatYearOnly(year)}</span>
             <button
               type="button"
               className="fb-stepper-btn"
               onClick={() => setYear(year + 1)}
-              aria-label="Năm sau"
+              aria-label={t.nextYearAria}
             >
               ›
             </button>
@@ -1767,30 +2404,30 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                 className={"fb-month-cell " + (i === month ? "active" : "")}
                 onClick={() => setMonth(i)}
               >
-                Tháng {i + 1}
+                {t.monthNamesShort[i]}
               </button>
             ))}
           </div>
           <div className="fb-picker-selected-preview">
-            <span>Tháng đã chọn:</span>
-            <b>Tháng {month + 1} năm {year}</b>
+            <span>{t.selectedMonthLabel}</span>
+            <b>{t.formatMonthYear(month, year)}</b>
           </div>
           <div className="fb-modal-actions">
-            <button type="button" className="r-secondary" onClick={close}>Đóng</button>
-            <button type="button" className="r-primary" onClick={close}>Xác nhận</button>
+            <button type="button" className="r-secondary" onClick={close}>{t.closeButton}</button>
+            <button type="button" className="r-primary" onClick={close}>{t.confirmButton}</button>
           </div>
         </div>
       )}
 
       {modal === "pickYear" && (
         <div className="fb-date-picker-modal">
-          <p className="fb-picker-subheading">Chọn năm để xem tổng kết tài chính cả năm.</p>
+          <p className="fb-picker-subheading">{t.pickYearDesc}</p>
           <div className="fb-year-stepper">
             <button
               type="button"
               className="fb-stepper-btn"
               onClick={() => setYear(year - 1)}
-              aria-label="Năm trước"
+              aria-label={t.previousYearAria}
             >
               ‹
             </button>
@@ -1799,7 +2436,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
               type="button"
               className="fb-stepper-btn"
               onClick={() => setYear(year + 1)}
-              aria-label="Năm sau"
+              aria-label={t.nextYearAria}
             >
               ›
             </button>
@@ -1817,18 +2454,18 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
             ))}
           </div>
           <div className="fb-modal-actions">
-            <button type="button" className="r-secondary" onClick={close}>Đóng</button>
-            <button type="button" className="r-primary" onClick={close}>Xác nhận</button>
+            <button type="button" className="r-secondary" onClick={close}>{t.closeButton}</button>
+            <button type="button" className="r-primary" onClick={close}>{t.confirmButton}</button>
           </div>
         </div>
       )}
 
       {modal === "pickCustomRange" && (
         <div className="fb-date-picker-modal">
-          <p className="fb-picker-subheading">Tùy chọn khoảng thời gian từ ngày đến ngày.</p>
+          <p className="fb-picker-subheading">{t.pickCustomRangeDesc}</p>
           <div className="fb-range-inputs">
             <div className="fb-picker-field">
-              <label className="fb-picker-label" htmlFor="custom-from-date">Từ ngày</label>
+              <label className="fb-picker-label" htmlFor="custom-from-date">{t.fromDate}</label>
               <input
                 id="custom-from-date"
                 type="date"
@@ -1838,7 +2475,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
               />
             </div>
             <div className="fb-picker-field">
-              <label className="fb-picker-label" htmlFor="custom-to-date">Đến ngày</label>
+              <label className="fb-picker-label" htmlFor="custom-to-date">{t.toDate}</label>
               <input
                 id="custom-to-date"
                 type="date"
@@ -1857,7 +2494,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                 setTo("2026-10-12");
               }}
             >
-              7 ngày qua
+              {t.period7dPast}
             </button>
             <button
               type="button"
@@ -1867,7 +2504,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                 setTo("2026-10-12");
               }}
             >
-              30 ngày qua
+              {t.period30dPast}
             </button>
             <button
               type="button"
@@ -1877,31 +2514,71 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                 setTo("2026-10-31");
               }}
             >
-              Tháng này
+              {t.thisMonth}
             </button>
           </div>
           <div className="fb-picker-selected-preview">
-            <span>Khoảng thời gian:</span>
-            <b>{formatVnDate(from)} – {formatVnDate(to)}</b>
+            <span>{t.rangePreviewLabel}</span>
+            <b>{formatLocalizedDate(from)} – {formatLocalizedDate(to)}</b>
           </div>
           <div className="fb-modal-actions">
-            <button type="button" className="r-secondary" onClick={close}>Hủy</button>
-            <button type="button" className="r-primary" onClick={close}>Áp dụng</button>
+            <button type="button" className="r-secondary" onClick={close}>{t.cancel}</button>
+            <button type="button" className="r-primary" onClick={close}>{t.applyButton}</button>
           </div>
         </div>
       )}
 
-      {modal === "search" && <div className="r-form"><input aria-label="Tìm kiếm giao dịch" placeholder="Tìm kiếm giao dịch..." value={search} onChange={(e) => setSearch(e.target.value)} /><button type="button" className="r-primary" onClick={close}>Tìm kiếm</button>{search && <button type="button" className="r-secondary" onClick={() => { setSearch(""); close(); }}><X size={16} />Xóa tìm kiếm</button>}</div>}
-      {modal === "wallet" && <div className="r-wallet-options">{state.wallets.map((w) => <button key={w.id} type="button" onClick={() => { setWalletId(w.id); close(); }} className={w.id === wallet.id ? "active" : ""}><Icon code="f555" />{w.name}<span>{formatHomeMoney(w.initial, w.currency)}</span></button>)}</div>}
-      {modal === "homeTotals" && <div className="r-breakdown"><p><span>Tổng số dư tất cả ví</span>{walletBalanceTotals}</p><p className="r-expense"><span>Tổng chi từ các ví</span>{formatTotals("expense")}</p><p className="r-income"><span>Tổng thu từ các ví</span>{formatTotals("income")}</p><p className="r-breakdown-total"><span>Thay đổi ròng</span>{formatTotals("net")}</p><small className="fb-modal-note">Các tiền tệ được tách riêng, không quy đổi tỷ giá.</small></div>}
-      {modal === "totals" && <div className="r-breakdown"><p className="r-expense"><span>Chi phí</span>{formatHomeMoney(expense, wallet.currency)}</p><p className="r-income"><span>Thu nhập</span>{formatHomeMoney(income, wallet.currency)}</p><p><span>Chuyển khoản</span>{formatHomeMoney(records.filter((r) => r.type === "transfer").reduce((a, r) => a + r.amount, 0), wallet.currency)}</p><p className="r-breakdown-total"><span>Tổng cộng</span>{formatHomeMoney(income - expense, wallet.currency, true)}</p></div>}
+      {modal === "search" && (
+        <div className="r-form">
+          <input
+            aria-label={t.searchModalTitle}
+            placeholder={t.searchPlaceholder}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <button type="button" className="r-primary" onClick={close}>
+            {t.searchButton}
+          </button>
+          {search && (
+            <button
+              type="button"
+              className="r-secondary"
+              onClick={() => {
+                setSearch("");
+                close();
+              }}
+            >
+              <X size={16} />
+              {t.clearSearchButton}
+            </button>
+          )}
+        </div>
+      )}
+      {modal === "wallet" && <div className="r-wallet-options">{state.wallets.map((w) => <button key={w.id} type="button" onClick={() => { setWalletId(w.id); close(); }} className={w.id === wallet.id ? "active" : ""}><Icon code="f555" />{walletName(w.name)}<span>{formatHomeMoney(w.initial, w.currency)}</span></button>)}</div>}
+      {modal === "homeTotals" && (
+        <div className="r-breakdown">
+          <p><span>{t.totalAllWalletsBalance}</span>{walletBalanceTotals}</p>
+          <p className="r-expense"><span>{t.totalExpenseFromWallets}</span>{formatTotals("expense")}</p>
+          <p className="r-income"><span>{t.totalIncomeFromWallets}</span>{formatTotals("income")}</p>
+          <p className="r-breakdown-total"><span>{t.netChange}</span>{formatTotals("net")}</p>
+          <small className="fb-modal-note">{t.currencyNote}</small>
+        </div>
+      )}
+      {modal === "totals" && (
+        <div className="r-breakdown">
+          <p className="r-expense"><span>{t.cost}</span>{formatHomeMoney(expense, wallet.currency)}</p>
+          <p className="r-income"><span>{t.income}</span>{formatHomeMoney(income, wallet.currency)}</p>
+          <p><span>{t.transfer}</span>{formatHomeMoney(records.filter((r) => r.type === "transfer").reduce((a, r) => a + r.amount, 0), wallet.currency)}</p>
+          <p className="r-breakdown-total"><span>{t.totalSum}</span>{formatHomeMoney(income - expense, wallet.currency, true)}</p>
+        </div>
+      )}
 
       {modal === "addWallet" && (
         <form className="fb-add-wallet-form" onSubmit={handleCreateWallet}>
-          <p className="fb-modal-subheading">Tạo ví để phân bổ tài chính và quản lý dòng tiền chi tiết.</p>
+          <p className="fb-modal-subheading">{t.addWalletDesc}</p>
 
           <div className="fb-form-group">
-            <label className="fb-form-label">Loại ví</label>
+            <label className="fb-form-label">{t.walletTypeLabel}</label>
             <div className="r-two-options">
               <button
                 type="button"
@@ -1909,7 +2586,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                 onClick={() => setNewWalletType("cash")}
               >
                 <Wallet size={16} />
-                <span>Tiền mặt</span>
+                <span>{t.walletTypeCash}</span>
               </button>
               <button
                 type="button"
@@ -1917,18 +2594,18 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                 onClick={() => setNewWalletType("credit")}
               >
                 <ReceiptText size={16} />
-                <span>Thẻ tín dụng</span>
+                <span>{t.walletTypeCredit}</span>
               </button>
             </div>
           </div>
 
           <div className="fb-form-group">
-            <label className="fb-form-label" htmlFor="new-wallet-name">Tên ví</label>
+            <label className="fb-form-label" htmlFor="new-wallet-name">{t.walletNameLabel}</label>
             <input
               id="new-wallet-name"
               type="text"
               required
-              placeholder="Ví dụ: Ví tiêu dùng, Techcombank, VIB..."
+              placeholder={t.walletNamePlaceholder}
               value={newWalletName}
               onChange={(e) => setNewWalletName(e.target.value)}
               className="fb-input"
@@ -1936,26 +2613,24 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
           </div>
 
           <div className="fb-form-group">
-            <label className="fb-form-label" htmlFor="new-wallet-currency">Đơn vị tiền tệ</label>
+            <label className="fb-form-label" htmlFor="new-wallet-currency">{t.walletCurrencyLabel}</label>
             <select
               id="new-wallet-currency"
               value={newWalletCurrency}
               onChange={(e) => setNewWalletCurrency(e.target.value)}
               className="fb-select"
             >
-              <option value="VND">VND (Việt Nam Đồng)</option>
-              <option value="USD">USD (Đô la Mỹ)</option>
-              <option value="EUR">EUR (Euro)</option>
-              <option value="JPY">JPY (Yên Nhật)</option>
-              <option value="SGD">SGD (Đô la Singapore)</option>
-              <option value="GBP">GBP (Bảng Anh)</option>
-              <option value="AUD">AUD (Đô la Úc)</option>
+              {t.currencyOptionsList.map((opt) => (
+                <option key={opt.code} value={opt.code}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
           </div>
 
           <div className="fb-form-group">
             <label className="fb-form-label" htmlFor="new-wallet-initial">
-              {newWalletType === "credit" ? "Số dư chưa thanh toán" : "Số dư ban đầu"}
+              {newWalletType === "credit" ? t.unsettledBalanceLabel : t.initialBalanceLabel}
             </label>
             <input
               id="new-wallet-initial"
@@ -1970,13 +2645,13 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
 
           {newWalletType === "credit" && (
             <div className="fb-form-group">
-              <label className="fb-form-label" htmlFor="new-wallet-limit">Hạn mức tín dụng</label>
+              <label className="fb-form-label" htmlFor="new-wallet-limit">{t.creditLimitLabel}</label>
               <input
                 id="new-wallet-limit"
                 type="number"
                 step="any"
                 required
-                placeholder="Ví dụ: 50,000,000"
+                placeholder={t.creditLimitPlaceholder}
                 value={newWalletLimit}
                 onChange={(e) => setNewWalletLimit(e.target.value)}
                 className="fb-input"
@@ -1985,8 +2660,8 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
           )}
 
           <div className="fb-modal-actions">
-            <button type="button" className="r-secondary" onClick={close}>Hủy</button>
-            <button type="submit" className="r-primary">Lưu ví</button>
+            <button type="button" className="r-secondary" onClick={close}>{t.cancel}</button>
+            <button type="submit" className="r-primary">{t.saveWallet}</button>
           </div>
         </form>
       )}
@@ -1994,7 +2669,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
       {modal === "flowIncomeDetails" && (
         <div className="fb-flow-details-modal">
           <div className="fb-tx-modal-summary-pill">
-            <span>Kỳ: <b>{selectedPeriodText}</b></span>
+            <span>{t.periodPrefix}<b>{selectedPeriodText}</b></span>
             <div className="fb-tx-modal-totals">
               {incomeTotals.length === 0 ? (
                 <b className="r-income">+0 {wallet.currency || "VND"}</b>
@@ -2010,33 +2685,34 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
           {incomeList.length === 0 ? (
             <div className="fb-modal-empty-state">
               <ReceiptText size={38} />
-              <h4>Chưa có khoản thu nào trong kỳ này</h4>
-              <p>Các giao dịch thu nhập trong {selectedPeriodText} sẽ hiển thị tại đây.</p>
+              <h4>{t.emptyIncomeTitle}</h4>
+              <p>{t.emptyIncomeDesc(selectedPeriodText)}</p>
               <button type="button" className="r-primary fb-modal-cta" onClick={addTransaction}>
-                <Plus size={16} />Thêm giao dịch thu
+                <Plus size={16} />{t.addIncomeTxBtn}
               </button>
             </div>
           ) : (
             <div className="fb-tx-modal-list">
-              {incomeList.map((t) => {
-                const w = state.wallets.find((item) => item.id === t.wallet);
+              {incomeList.map((tx) => {
+                const w = state.wallets.find((item) => item.id === tx.wallet);
                 const curr = w?.currency || wallet.currency || "VND";
+                const localizedCat = resolveCategoryDisplayName(tx.category, lang);
                 return (
                   <button
-                    key={t.id}
+                    key={tx.id}
                     type="button"
                     className="fb-tx-modal-item"
-                    onClick={() => navigate("editTransaction?id=" + t.id)}
+                    onClick={() => navigate("editTransaction?id=" + tx.id)}
                   >
                     <span className="fb-tx-modal-icon r-income">
                       <ArrowUpRight size={18} />
                     </span>
                     <div className="fb-tx-modal-info">
-                      <b>{t.title || t.category}</b>
-                      <small>{t.category} · {w ? walletName(w.name) : ""}{w?.archived ? " (Đã hủy liên kết)" : ""} · {t.date}</small>
+                      <b>{tx.title || localizedCat}</b>
+                      <small>{localizedCat} · {w ? walletName(w.name) : ""}{w?.archived ? t.archivedWalletSuffix : ""} · {formatLocalizedDate(tx.date)}</small>
                     </div>
                     <b className="fb-tx-modal-amount r-income">
-                      +{formatHomeMoney(t.amount, curr)}
+                      +{formatHomeMoney(tx.amount, curr)}
                     </b>
                   </button>
                 );
@@ -2049,7 +2725,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
       {modal === "flowExpenseDetails" && (
         <div className="fb-flow-details-modal">
           <div className="fb-tx-modal-summary-pill">
-            <span>Kỳ: <b>{selectedPeriodText}</b></span>
+            <span>{t.periodPrefix}<b>{selectedPeriodText}</b></span>
             <div className="fb-tx-modal-totals">
               {expenseTotals.length === 0 ? (
                 <b className="r-expense">−0 {wallet.currency || "VND"}</b>
@@ -2065,33 +2741,34 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
           {expenseList.length === 0 ? (
             <div className="fb-modal-empty-state">
               <ReceiptText size={38} />
-              <h4>Chưa có khoản chi nào trong kỳ này</h4>
-              <p>Các giao dịch chi tiêu trong {selectedPeriodText} sẽ hiển thị tại đây.</p>
+              <h4>{t.emptyExpenseTitle}</h4>
+              <p>{t.emptyExpenseDesc(selectedPeriodText)}</p>
               <button type="button" className="r-primary fb-modal-cta" onClick={addTransaction}>
-                <Plus size={16} />Thêm giao dịch chi
+                <Plus size={16} />{t.addExpenseTxBtn}
               </button>
             </div>
           ) : (
             <div className="fb-tx-modal-list">
-              {expenseList.map((t) => {
-                const w = state.wallets.find((item) => item.id === t.wallet);
+              {expenseList.map((tx) => {
+                const w = state.wallets.find((item) => item.id === tx.wallet);
                 const curr = w?.currency || wallet.currency || "VND";
+                const localizedCat = resolveCategoryDisplayName(tx.category, lang);
                 return (
                   <button
-                    key={t.id}
+                    key={tx.id}
                     type="button"
                     className="fb-tx-modal-item"
-                    onClick={() => navigate("editTransaction?id=" + t.id)}
+                    onClick={() => navigate("editTransaction?id=" + tx.id)}
                   >
                     <span className="fb-tx-modal-icon r-expense">
                       <ArrowDownRight size={18} />
                     </span>
                     <div className="fb-tx-modal-info">
-                      <b>{t.title || t.category}</b>
-                      <small>{t.category} · {w ? walletName(w.name) : ""}{w?.archived ? " (Đã hủy liên kết)" : ""} · {t.date}</small>
+                      <b>{tx.title || localizedCat}</b>
+                      <small>{localizedCat} · {w ? walletName(w.name) : ""}{w?.archived ? t.archivedWalletSuffix : ""} · {formatLocalizedDate(tx.date)}</small>
                     </div>
                     <b className="fb-tx-modal-amount r-expense">
-                      −{formatHomeMoney(t.amount, curr)}
+                      −{formatHomeMoney(tx.amount, curr)}
                     </b>
                   </button>
                 );
@@ -2105,7 +2782,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
         <div className="fb-flow-chart-modal">
           <div className="fb-donut-summary-bar">
             <div>
-              <span>Tổng thu ({selectedPeriodText})</span>
+              <span>{t.totalIncomeWithPeriod(selectedPeriodText)}</span>
               <div className="fb-flow-amounts-wrap">
                 {incomeTotals.length === 0 ? (
                   <b className="r-income">+0 {wallet.currency || "VND"}</b>
@@ -2117,7 +2794,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
               </div>
             </div>
             <div>
-              <span>Tổng chi ({selectedPeriodText})</span>
+              <span>{t.totalExpenseWithPeriod(selectedPeriodText)}</span>
               <div className="fb-flow-amounts-wrap">
                 {expenseTotals.length === 0 ? (
                   <b className="r-expense">−0 {wallet.currency || "VND"}</b>
@@ -2132,7 +2809,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
 
           {currencies.length > 1 && (
             <div className="fb-donut-currency-switcher">
-              <span>Đơn vị tiền tệ hiển thị biểu đồ:</span>
+              <span>{t.donutCurrencySwitcherLabel}</span>
               <div className="r-type-pills">
                 {currencies.map((curr) => (
                   <button
@@ -2154,12 +2831,14 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
               items={donutIncomeBreakdown.items}
               total={donutIncomeTotal}
               currency={activeDonutCurrency}
+              lang={lang}
             />
             <SvgDonut
               type="expense"
               items={donutExpenseBreakdown.items}
               total={donutExpenseTotal}
               currency={activeDonutCurrency}
+              lang={lang}
             />
           </div>
         </div>
@@ -2180,7 +2859,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                 onClick={() => setManageWalletTab("details")}
               >
                 <Settings size={15} />
-                <span>Thông tin ví</span>
+                <span>{t.walletInfoTab}</span>
               </button>
               <button
                 type="button"
@@ -2188,7 +2867,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                 onClick={() => setManageWalletTab("categories")}
               >
                 <FolderTree size={15} />
-                <span>Quản lý danh mục</span>
+                <span>{t.categoryManagerTab}</span>
               </button>
             </div>
 
@@ -2196,8 +2875,8 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
               <div className="fb-wallet-archived-banner">
                 <Ban size={16} />
                 <div>
-                  <b>Ví đang ở trạng thái hủy liên kết (đã lưu trữ)</b>
-                  <p>Ví này bị ẩn khỏi mục chọn khi tạo giao dịch mới, nhưng tất cả lịch sử giao dịch vẫn được giữ nguyên.</p>
+                  <b>{t.walletArchivedBannerTitle}</b>
+                  <p>{t.walletArchivedBannerDesc}</p>
                 </div>
               </div>
             )}
@@ -2205,19 +2884,19 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
             {manageWalletTab === "details" && (
               <form className="fb-wallet-edit-form" onSubmit={handleSaveWalletInfo}>
                 <div className="fb-form-group">
-                  <label className="fb-form-label" htmlFor="edit-wallet-name">Tên ví</label>
+                  <label className="fb-form-label" htmlFor="edit-wallet-name">{t.walletNameLabel}</label>
                   <input
                     id="edit-wallet-name"
                     type="text"
-                    required
                     className="fb-input"
+                    placeholder={isSentinelWalletName(targetWallet.name) ? t.mainWallet : targetWallet.name}
                     value={editWalletName}
                     onChange={(e) => setEditWalletName(e.target.value)}
                   />
                 </div>
 
                 <div className="fb-form-group">
-                  <label className="fb-form-label">Loại ví</label>
+                  <label className="fb-form-label">{t.walletTypeLabel}</label>
                   <div className="r-two-options">
                     <button
                       type="button"
@@ -2225,7 +2904,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                       onClick={() => setEditWalletType("cash")}
                     >
                       <Wallet size={16} />
-                      <span>Tiền mặt</span>
+                      <span>{t.walletTypeCash}</span>
                     </button>
                     <button
                       type="button"
@@ -2233,20 +2912,20 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                       onClick={() => setEditWalletType("credit")}
                     >
                       <ReceiptText size={16} />
-                      <span>Thẻ tín dụng</span>
+                      <span>{t.walletTypeCredit}</span>
                     </button>
                   </div>
                 </div>
 
                 {editWalletType === "credit" && (
                   <div className="fb-form-group">
-                    <label className="fb-form-label" htmlFor="edit-wallet-limit">Hạn mức tín dụng</label>
+                    <label className="fb-form-label" htmlFor="edit-wallet-limit">{t.creditLimitLabel}</label>
                     <input
                       id="edit-wallet-limit"
                       type="number"
                       step="any"
                       required
-                      placeholder="Ví dụ: 50,000,000"
+                      placeholder={t.creditLimitPlaceholder}
                       className="fb-input"
                       value={editWalletLimit}
                       onChange={(e) => setEditWalletLimit(e.target.value)}
@@ -2256,10 +2935,10 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
 
                 <div className="fb-form-group">
                   <div className="fb-form-label-row">
-                    <label className="fb-form-label" htmlFor="edit-wallet-currency">Đơn vị tiền tệ</label>
+                    <label className="fb-form-label" htmlFor="edit-wallet-currency">{t.currencyUnitLabel}</label>
                     {hasTxs && (
                       <span className="fb-locked-badge">
-                        <Lock size={12} /> Đã khóa (đã phát sinh giao dịch)
+                        <Lock size={12} /> {t.lockedBadge}
                       </span>
                     )}
                   </div>
@@ -2278,18 +2957,16 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                       onChange={(e) => setEditWalletCurrency(e.target.value)}
                       className="fb-select"
                     >
-                      <option value="VND">VND (Việt Nam Đồng)</option>
-                      <option value="USD">USD (Đô la Mỹ)</option>
-                      <option value="EUR">EUR (Euro)</option>
-                      <option value="JPY">JPY (Yên Nhật)</option>
-                      <option value="SGD">SGD (Đô la Singapore)</option>
-                      <option value="GBP">GBP (Bảng Anh)</option>
-                      <option value="AUD">AUD (Đô la Úc)</option>
+                      {t.currencyOptionsList.map((opt) => (
+                        <option key={opt.code} value={opt.code}>
+                          {opt.label}
+                        </option>
+                      ))}
                     </select>
                   )}
                   {hasTxs && (
                     <p className="fb-helper-text">
-                      Không thể đổi tiền tệ khi đã có giao dịch để tránh xung đột tỷ giá và dữ liệu lịch sử.
+                      {t.lockedCurrencyHelper}
                     </p>
                   )}
                 </div>
@@ -2297,11 +2974,11 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                 <div className="fb-form-group">
                   <div className="fb-form-label-row">
                     <label className="fb-form-label" htmlFor="edit-wallet-initial">
-                      {editWalletType === "credit" ? "Số dư chưa thanh toán ban đầu" : "Số dư ban đầu"}
+                      {editWalletType === "credit" ? t.initialBalanceLabelCredit : t.initialBalanceLabelCash}
                     </label>
                     {hasTxs && (
                       <span className="fb-locked-badge">
-                        <Lock size={12} /> Đã khóa (đã phát sinh giao dịch)
+                        <Lock size={12} /> {t.lockedBadge}
                       </span>
                     )}
                   </div>
@@ -2316,10 +2993,10 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                   />
                   {hasTxs ? (
                     <p className="fb-helper-text">
-                      Số dư ban đầu được cố định để bảo toàn tính toàn vẹn của sổ sách. Để cập nhật số dư theo tài khoản ngân hàng thực tế, vui lòng sử dụng tính năng <b>Điều chỉnh số dư thực tế</b> bên dưới.
+                      {t.lockedInitialBalanceHelperPrefix}<b>{t.lockedInitialBalanceHelperHighlight}</b>{t.lockedInitialBalanceHelperSuffix}
                     </p>
                   ) : (
-                    <p className="fb-helper-text">Ví chưa có giao dịch nào, bạn có thể tự do điều chỉnh số dư ban đầu.</p>
+                    <p className="fb-helper-text">{t.unlockedInitialBalanceHelper}</p>
                   )}
                 </div>
 
@@ -2328,10 +3005,10 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                     <div className="fb-reconcile-info">
                       <div className="fb-reconcile-header">
                         <SlidersHorizontal size={16} />
-                        <b>Khớp số dư thực tế</b>
+                        <b>{t.reconcileCardTitle}</b>
                       </div>
                       <p>
-                        Số dư sổ sách hiện tại: <strong>{formatHomeMoney(currentBal, targetWallet.currency)}</strong>. Nếu không khớp với thực tế ngoài đời, hãy nhập số dư thực tế để hệ thống tự động bù trừ.
+                        {t.reconcileCurrentBookPrefix}<strong>{formatHomeMoney(currentBal, targetWallet.currency)}</strong>{t.reconcileCurrentBookSuffix}
                       </p>
                     </div>
 
@@ -2345,13 +3022,13 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                         }}
                       >
                         <SlidersHorizontal size={14} />
-                        <span>Điều chỉnh số dư thực tế</span>
+                        <span>{t.reconcileTriggerButton}</span>
                       </button>
                     ) : (
                       <div className="fb-reconcile-form-box">
                         <div className="fb-form-group">
                           <label className="fb-form-label" htmlFor="actual-balance-input">
-                            Số dư thực tế trong ví / tài khoản ngân hàng ({targetWallet.currency})
+                            {t.reconcileActualBalanceLabel(targetWallet.currency)}
                           </label>
                           <input
                             id="actual-balance-input"
@@ -2361,7 +3038,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                             className="fb-input"
                             value={newActualBalance}
                             onChange={(e) => setNewActualBalance(e.target.value)}
-                            placeholder="Nhập số dư thực tế hiện tại"
+                            placeholder={t.reconcileActualBalancePlaceholder}
                           />
                         </div>
                         <div className="fb-reconcile-actions">
@@ -2373,14 +3050,14 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                               setNewActualBalance("");
                             }}
                           >
-                            Hủy
+                            {t.cancelButton}
                           </button>
                           <button
                             type="button"
                             className="r-primary"
                             onClick={handleConfirmAdjustment}
                           >
-                            Xác nhận điều chỉnh
+                            {t.confirmAdjustmentButton}
                           </button>
                         </div>
                       </div>
@@ -2389,21 +3066,21 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                 )}
 
                 <div className="fb-modal-actions">
-                  <button type="button" className="r-secondary" onClick={close}>Đóng</button>
-                  <button type="submit" className="r-primary">Lưu thay đổi</button>
+                  <button type="button" className="r-secondary" onClick={close}>{t.closeButton}</button>
+                  <button type="submit" className="r-primary">{t.saveChangesButton}</button>
                 </div>
 
                 <div className="fb-wallet-danger-zone">
                   <div className="fb-danger-zone-header">
                     <AlertTriangle size={15} />
-                    <span>Thao tác bảo mật ví</span>
+                    <span>{t.dangerZoneHeader}</span>
                   </div>
                   <p className="fb-danger-zone-desc">
                     {hasTxs
                       ? targetWallet.archived
-                        ? "Ví này hiện đang bị hủy liên kết. Bạn có thể khôi phục để tiếp tục ghi chép giao dịch."
-                        : `Ví này đã ghi nhận ${targetTxs.length} giao dịch. Hệ thống sẽ áp dụng chính sách xóa mềm (Hủy liên kết): ví sẽ bị ẩn nhưng ${targetTxs.length} giao dịch lịch sử vẫn được bảo toàn nguyên vẹn.`
-                      : "Ví này chưa có giao dịch nào. Bạn có thể xóa vĩnh viễn ví khỏi hệ thống."}
+                        ? t.dangerZoneDescArchived
+                        : t.dangerZoneDescHasTxs(targetTxs.length)
+                      : t.dangerZoneDescNoTxs}
                   </p>
                   <button
                     type="button"
@@ -2413,17 +3090,17 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                     {targetWallet.archived ? (
                       <>
                         <RotateCcw size={15} />
-                        <span>Kích hoạt lại ví này</span>
+                        <span>{t.reactivateWalletBtn}</span>
                       </>
                     ) : hasTxs ? (
                       <>
                         <Ban size={15} />
-                        <span>Hủy liên kết ví (Lưu trữ)</span>
+                        <span>{t.unlinkWalletBtn}</span>
                       </>
                     ) : (
                       <>
                         <Trash2 size={15} />
-                        <span>Xóa vĩnh viễn ví này</span>
+                        <span>{t.deleteWalletPermanentBtn}</span>
                       </>
                     )}
                   </button>
@@ -2440,7 +3117,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                     onClick={() => handleSwitchCatType("expense")}
                   >
                     <ArrowDownRight size={14} />
-                    <span>Danh mục Chi phí</span>
+                    <span>{t.catTabExpense}</span>
                   </button>
                   <button
                     type="button"
@@ -2448,7 +3125,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                     onClick={() => handleSwitchCatType("income")}
                   >
                     <ArrowUpRight size={14} />
-                    <span>Danh mục Thu nhập</span>
+                    <span>{t.catTabIncome}</span>
                   </button>
                 </div>
 
@@ -2456,7 +3133,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                   <button
                     type="button"
                     className="fb-cat-icon-select-btn"
-                    title="Bấm để chọn biểu tượng cho danh mục"
+                    title={t.catChooseIconTooltip}
                     onClick={() => {
                       setIconPickerTarget("new");
                       setIsPickingIcon(isPickingIcon && iconPickerTarget === "new" ? false : true);
@@ -2467,29 +3144,29 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                   <input
                     type="text"
                     required
-                    placeholder={`Nhập tên danh mục ${catType === "income" ? "thu nhập" : "chi tiêu"} mới...`}
+                    placeholder={catType === "income" ? t.catInputPlaceholderIncome : t.catInputPlaceholderExpense}
                     className="fb-input fb-cat-add-input"
                     value={newCatName}
                     onChange={(e) => setNewCatName(e.target.value)}
                   />
                   <button type="submit" className="r-primary fb-cat-add-btn">
                     <Plus size={15} />
-                    <span>Thêm</span>
+                    <span>{t.catAddButton}</span>
                   </button>
                 </form>
 
                 {isPickingIcon && (
                   <div className="fb-emoji-picker-box">
                     <div className="fb-emoji-picker-header">
-                      <span>Chọn biểu tượng cho {iconPickerTarget === "new" ? (newCatName ? `"${newCatName}"` : "danh mục mới") : `"${editCatTitle || editingCatName}"`}</span>
-                      <button type="button" className="fb-emoji-close-btn" onClick={() => setIsPickingIcon(false)} aria-label="Đóng bảng icon">
+                      <span>{iconPickerTarget === "new" ? (newCatName ? t.emojiPickerHeaderFor(newCatName) : t.emojiPickerHeaderNewCategory) : t.emojiPickerHeaderFor(editCatTitle || editingCatName || "")}</span>
+                      <button type="button" className="fb-emoji-close-btn" onClick={() => setIsPickingIcon(false)} aria-label={t.emojiPickerCloseAriaLabel}>
                         <X size={14} />
                       </button>
                     </div>
                     <div className="fb-emoji-groups-scroll">
                       {iconGroups.map(([groupName, emojis]) => (
                         <div key={groupName} className="fb-emoji-group">
-                          <span className="fb-emoji-group-title">{groupName}</span>
+                          <span className="fb-emoji-group-title">{(t.emojiGroupNames as Record<string, string>)[groupName] || groupName}</span>
                           <div className="fb-emoji-grid">
                             {emojis.map((emoji) => (
                               <button
@@ -2526,6 +3203,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                       const isArchived = meta?.archived;
                       const isEditing = editingCatName === cat;
                       const txCount = state.transactions.filter((t) => t.category === cat).length;
+                      const localizedCatName = cat === "Chưa được phân loại" ? t.uncategorizedCategory : cat;
 
                       if (isEditing) {
                         return (
@@ -2533,7 +3211,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                             <button
                               type="button"
                               className="fb-cat-icon-select-btn"
-                              title="Chọn biểu tượng"
+                              title={t.catEditIconTitle}
                               onClick={() => {
                                 setIconPickerTarget("edit");
                                 setIsPickingIcon(isPickingIcon && iconPickerTarget === "edit" ? false : true);
@@ -2548,10 +3226,10 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                               value={editCatTitle}
                               onChange={(e) => setEditCatTitle(e.target.value)}
                             />
-                            <button type="submit" className="fb-cat-action-btn fb-cat-save-btn" title="Lưu thay đổi">
+                            <button type="submit" className="fb-cat-action-btn fb-cat-save-btn" title={t.catEditSaveTitle}>
                               <Check size={15} />
                             </button>
-                            <button type="button" className="fb-cat-action-btn fb-cat-cancel-btn" title="Hủy" onClick={handleCancelEditCat}>
+                            <button type="button" className="fb-cat-action-btn fb-cat-cancel-btn" title={t.catEditCancelTitle} onClick={handleCancelEditCat}>
                               <X size={15} />
                             </button>
                           </form>
@@ -2565,9 +3243,9 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                               {categoryIcon(cat, state.categoryMeta)}
                             </span>
                             <div className="fb-cat-name-wrap">
-                              <span className="fb-cat-name">{cat}</span>
-                              {txCount > 0 && <small className="fb-cat-tx-badge">{txCount} giao dịch</small>}
-                              {isArchived && <span className="fb-cat-archived-tag">Đã ẩn</span>}
+                              <span className="fb-cat-name">{localizedCatName}</span>
+                              {txCount > 0 && <small className="fb-cat-tx-badge">{t.catTxCountBadge(txCount)}</small>}
+                              {isArchived && <span className="fb-cat-archived-tag">{t.catArchivedTag}</span>}
                             </div>
                           </div>
                           <div className="fb-cat-item-actions">
@@ -2576,7 +3254,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                                 <button
                                   type="button"
                                   className="fb-cat-edit-btn"
-                                  title={`Sửa danh mục ${cat}`}
+                                  title={t.catEditTooltip(localizedCatName)}
                                   onClick={() => handleStartEditCat(cat)}
                                 >
                                   <Pencil size={14} />
@@ -2585,7 +3263,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                                   <button
                                     type="button"
                                     className="fb-cat-delete-btn"
-                                    title={`Xóa hoặc ẩn danh mục ${cat}`}
+                                    title={t.catDeleteTooltip(localizedCatName)}
                                     onClick={() => handleDeleteCategory(cat)}
                                   >
                                     <Trash2 size={14} />
@@ -2597,16 +3275,16 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                                 <button
                                   type="button"
                                   className="fb-cat-restore-btn"
-                                  title={`Khôi phục danh mục ${cat}`}
+                                  title={t.catRestoreTooltip(localizedCatName)}
                                   onClick={() => handleDeleteCategory(cat)}
                                 >
                                   <RotateCcw size={14} />
-                                  <span>Khôi phục</span>
+                                  <span>{t.catRestoreBtnText}</span>
                                 </button>
                                 <button
                                   type="button"
                                   className="fb-cat-delete-btn"
-                                  title={`Chuyển ${txCount} giao dịch về "Chưa được phân loại" và xóa vĩnh viễn`}
+                                  title={t.catReassignDeleteTooltip(txCount)}
                                   onClick={() => handleReassignAndDelete(cat)}
                                 >
                                   <Trash2 size={14} />
