@@ -270,4 +270,96 @@ test("reset link for a deleted account cannot change a replacement account with 
   assert.equal((await request("/reset-password", { method: "POST", body: { token: newToken, newPassword: "Fresh-link-password-456" } })).status, 200);
 });
 
+async function verifiedEmailFixture(email) {
+  const body = { name: "Synthetic acceptance user", email, password: "Synthetic-password-123", callbackURL: "/login" };
+  assert.equal((await request("/sign-up/email", { method: "POST", body })).status, 200);
+  const link = new URL(mail.at(-1).url);
+  assert.equal((await request(link.pathname.replace("/api/auth", "") + link.search)).status, 302);
+  const login = await request("/sign-in/email", { method: "POST", body });
+  assert.equal(login.status, 200);
+  return { body, cookie: cookies(login) };
+}
+
+test("logout revokes only the current session while another device remains signed in", async () => {
+  const fixture = await verifiedEmailFixture("multi-device-logout@example.invalid");
+  const second = await request("/sign-in/email", { method: "POST", body: fixture.body });
+  const secondCookie = cookies(second);
+  assert.notEqual((await session(fixture.cookie)).session.id, (await session(secondCookie)).session.id);
+  assert.equal((await request("/sign-out", { method: "POST", cookie: fixture.cookie, body: {} })).status, 200);
+  assert.equal(await session(fixture.cookie), null);
+  assert.equal((await session(secondCookie)).user.email, fixture.body.email);
+});
+
+test("password reset revokes sessions on every device and preserves the user identity", async () => {
+  const fixture = await verifiedEmailFixture("multi-device-reset@example.invalid");
+  const first = await session(fixture.cookie);
+  const second = await request("/sign-in/email", { method: "POST", body: fixture.body });
+  const secondCookie = cookies(second);
+  await request("/request-password-reset", { method: "POST", body: { email: fixture.body.email, redirectTo: "/reset-password?lang=vi" } });
+  const link = new URL(mail.at(-1).url), callback = await request(link.pathname.replace("/api/auth", "") + link.search);
+  const token = new URL(callback.headers.get("location")).searchParams.get("token");
+  assert.equal((await request("/reset-password", { method: "POST", body: { token, newPassword: "New-synthetic-password-456" } })).status, 200);
+  assert.equal(await session(fixture.cookie), null); assert.equal(await session(secondCookie), null);
+  const login = await request("/sign-in/email", { method: "POST", body: { ...fixture.body, password: "New-synthetic-password-456" } });
+  assert.equal(login.status, 200); assert.equal((await session(cookies(login))).user.id, first.user.id);
+});
+
+test("two concurrent saves using one reset token yield one success and one rejection", async () => {
+  const fixture = await verifiedEmailFixture("concurrent-reset@example.invalid");
+  await request("/request-password-reset", { method: "POST", body: { email: fixture.body.email, redirectTo: "/reset-password" } });
+  const token = new URL(mail.at(-1).url).pathname.split("/").at(-1);
+  const passwords = ["Concurrent-password-A-123", "Concurrent-password-B-456"];
+  const responses = await Promise.all(passwords.map(newPassword => request("/reset-password", { method: "POST", body: { token, newPassword } })));
+  assert.deepEqual(responses.map(r => r.status).sort(), [200, 400]);
+  const winner = responses.findIndex(r => r.status === 200), loser = 1 - winner;
+  assert.equal((await request("/sign-in/email", { method: "POST", body: { ...fixture.body, password: passwords[winner] } })).status, 200);
+  assert.equal((await request("/sign-in/email", { method: "POST", body: { ...fixture.body, password: passwords[loser] } })).status, 401);
+});
+
+test("expired verification links and forged tokens cannot activate an account", async () => {
+  const email = "expired-verification@example.invalid";
+  await request("/sign-up/email", { method: "POST", body: { ...emailBody, email } });
+  const expired = await new SignJWT({ email }).setProtectedHeader({ alg: "HS256" }).setIssuedAt(Math.floor(Date.now()/1000)-7200).setExpirationTime(Math.floor(Date.now()/1000)-3600).sign(new TextEncoder().encode(config.secret));
+  for (const token of ["forged", expired]) {
+    const response = await request("/verify-email?token=" + token);
+    assert.notEqual(response.status, 200);
+    assert.equal((await pool.query('SELECT "emailVerified" FROM "user" WHERE email=$1', [email])).rows[0].emailVerified, false);
+  }
+});
+
+test("foreign recovery and verification redirects are rejected without sending mail", async () => {
+  const sent = mail.length, before = await counts();
+  for (const [path, body] of [
+    ["/request-password-reset", { email: emailBody.email, redirectTo: "https://attacker.invalid/reset" }],
+    ["/send-verification-email", { email: emailBody.email, callbackURL: "https://attacker.invalid/verify" }],
+  ]) assert.equal((await request(path, { method: "POST", body })).status, 403);
+  assert.equal(mail.length, sent); assert.deepEqual(await counts(), before);
+});
+
+test("email login and recovery rate limits reject bursts for a stable client address", async () => {
+  const limited = betterAuth(productionOptions);
+  const send = (path, body) => handleAuthRequest(limited, new Request(baseURL + "/api/auth" + path, { method: "POST", headers: { origin: baseURL, "content-type": "application/json", "x-forwarded-for": "192.0.2.80" }, body: JSON.stringify(body) }), baseURL);
+  for (const [path, body, allowedStatus] of [
+    ["/sign-in/email", { email: "unknown-limit@example.invalid", password: "Wrong-password-123" }, 401],
+    ["/request-password-reset", { email: "unknown-limit@example.invalid", redirectTo: "/reset-password" }, 200],
+  ]) {
+    const statuses = [];
+    for (let i=0; i<4; i++) statuses.push((await send(path, body)).status);
+    assert.deepEqual(statuses, [allowedStatus, allowedStatus, allowedStatus, 429]);
+  }
+});
+
+test("Google cannot silently take over an existing email account when linking is disabled", async () => {
+  const before = await counts();
+  subject = "email-user";
+  const flow = await start();
+  const response = await request("/callback/google?code=synthetic-code&state=" + flow.url.searchParams.get("state"), { cookie: flow.cookie });
+  assert.equal(response.status, 302);
+  assert.equal(new URL(response.headers.get("location"), baseURL).pathname, "/login");
+  assert.deepEqual(await counts(), before);
+  assert.equal(await session(cookies(response)), null);
+  const login = await request("/sign-in/email", { method: "POST", body: { ...emailBody, password: "New-synthetic-password-456" } });
+  assert.equal(login.status, 200);
+});
+
 after(async () => { globalThis.fetch = originalFetch; for (const table of tables) await pool.query('DELETE FROM "' + table + '"'); await pool.end(); });

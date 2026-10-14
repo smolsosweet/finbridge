@@ -6,6 +6,7 @@ import { Modal } from "./Ui";
 import { DASHBOARD_SAMPLE, formatHomeMoney } from "./Dashboard";
 import { categoryIcon } from "./Categories";
 import { useAppState } from "./store";
+import { resolveLanguage, resolveWalletDisplayName } from "@/lib/i18n";
 
 interface CalendarLedgerModalProps {
   onClose: () => void;
@@ -95,8 +96,7 @@ function toLocalDateString(d: Date): string {
 
 export function CalendarLedgerModal({ onClose, navigate, initialDate }: CalendarLedgerModalProps) {
   const state = useAppState();
-  const rawLang = String(state.settings.language || "Tiếng Việt");
-  const lang: "vi" | "en" | "zh" = rawLang.includes("English") ? "en" : rawLang.includes("中文") ? "zh" : "vi";
+  const lang = resolveLanguage(state.settings.language);
   const t = COPY[lang];
   const locale = lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US";
 
@@ -477,7 +477,7 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
             <div className="fb-cal-tx-list">
               {selectedDayRecords.map((record) => {
                 const w = record.wallet ? walletMap.get(record.wallet) : undefined;
-                const wName = w ? (w.name === "." ? (lang === "vi" ? "Ví chính" : lang === "zh" ? "主钱包" : "Main wallet") : w.name) : (record.wallet || "");
+                const wName = w ? resolveWalletDisplayName(w.name, lang) : (record.wallet || "");
                 const isInc = record.type === "income";
                 const isExp = record.type === "expense";
                 const sign = isInc ? "+" : isExp ? "−" : "";
