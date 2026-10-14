@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { signOutGoogle } from "@/lib/sign-out";
+import { deleteAccount } from "@/lib/delete-account";
 import { useAuthenticatedUser } from "@/components/auth/AuthenticatedUser";
 import {
   Bell,
@@ -52,7 +53,16 @@ const COPY_ACCOUNT = {
     switchAccount: "Đổi tài khoản",
     switchAccountSub: "Chuyển đổi sang tài khoản khác hoặc đăng nhập mới",
     delete: "Xóa tài khoản",
-    deleteSub: "Xóa vĩnh viễn dữ liệu tài khoản và thiết lập trên thiết bị này",
+    deleteSub: "Xóa tài khoản FinBridge và thu hồi mọi phiên đăng nhập",
+    deleteTitle: "Xóa vĩnh viễn tài khoản?",
+    deleteNote: "Tài khoản FinBridge, thông tin thiết lập trên server và dữ liệu của tài khoản trên trình duyệt này sẽ bị xóa. Không thể hoàn tác. Dữ liệu trên thiết bị khác hoặc bản sao lưu đã tải xuống không tự bị xóa.",
+    deleteAuth: "Cần đăng nhập trong vòng 5 phút hoặc nhập mật khẩu FinBridge để xác nhận. Với Google, hãy đăng xuất rồi đăng nhập lại nếu phiên đã cũ.",
+    deletePassword: "Mật khẩu FinBridge (nếu có)",
+    deleteConfirm: "Xác nhận xóa tài khoản",
+    deleteBusy: "Đang xóa tài khoản…",
+    deleteError: "Chưa thể xóa tài khoản. Vui lòng thử lại.",
+    deleteStale: "Phiên đăng nhập đã cũ. Nhập mật khẩu FinBridge hoặc đăng xuất rồi đăng nhập lại trước khi xóa.",
+    deleteWrongPassword: "Mật khẩu không đúng hoặc tài khoản này chưa có mật khẩu FinBridge.",
     save: "Lưu thay đổi",
     cancel: "Hủy",
     langLabel: "Ngôn ngữ hiển thị",
@@ -83,7 +93,16 @@ const COPY_ACCOUNT = {
     switchAccount: "Switch account",
     switchAccountSub: "Switch to another account or sign in",
     delete: "Delete account",
-    deleteSub: "Permanently erase account data and settings on this device",
+    deleteSub: "Delete your FinBridge account and revoke all sessions",
+    deleteTitle: "Permanently delete your account?",
+    deleteNote: "Your FinBridge account, server setup and this account's data in this browser will be deleted. This cannot be undone. Data on other devices and downloaded backups are not automatically erased.",
+    deleteAuth: "Sign in within the last 5 minutes or enter your FinBridge password to confirm. For Google, sign out and sign in again if your session is older.",
+    deletePassword: "FinBridge password (if you have one)",
+    deleteConfirm: "Confirm account deletion",
+    deleteBusy: "Deleting account…",
+    deleteError: "Could not delete your account. Please try again.",
+    deleteStale: "Your session is too old. Enter your FinBridge password or sign out and sign in again before deleting.",
+    deleteWrongPassword: "Incorrect password, or this account does not have a FinBridge password.",
     save: "Save changes",
     cancel: "Cancel",
     langLabel: "Display language",
@@ -114,7 +133,16 @@ const COPY_ACCOUNT = {
     switchAccount: "切换账户",
     switchAccountSub: "切换至其他账户或登录新账户",
     delete: "注销账户",
-    deleteSub: "永久清除此设备上的账户数据和偏好设置",
+    deleteSub: "删除 FinBridge 账户并撤销所有登录会话",
+    deleteTitle: "永久删除账户？",
+    deleteNote: "您的 FinBridge 账户、服务器上的设置和此浏览器中的账户数据将被删除，且无法恢复。其他设备上的数据和已下载的备份不会自动删除。",
+    deleteAuth: "请在登录后 5 分钟内操作，或输入 FinBridge 密码确认。Google 用户如会话较旧，请退出后重新登录。",
+    deletePassword: "FinBridge 密码（如已设置）",
+    deleteConfirm: "确认删除账户",
+    deleteBusy: "正在删除账户…",
+    deleteError: "无法删除账户，请重试。",
+    deleteStale: "登录时间过久。请输入 FinBridge 密码，或退出后重新登录再删除。",
+    deleteWrongPassword: "密码不正确，或此账户尚未设置 FinBridge 密码。",
     save: "保存更改",
     cancel: "取消",
     langLabel: "显示语言",
@@ -142,6 +170,10 @@ export function AccountSettings({
   const router = useRouter();
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [logoutError, setLogoutError] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<"deleteError" | "deleteStale" | "deleteWrongPassword" | "">("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const deleting = useRef(false);
 
   const [option, setOption] = useState(initialOption);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -154,9 +186,24 @@ export function AccountSettings({
   const [nameInput, setNameInput] = useState(displayName);
 
   const close = () => {
+    if (deleting.current) return;
     setOption("");
     setLogoutError(false);
+    setDeleteError(""); setDeletePassword("");
   };
+
+  async function removeAccount(event: FormEvent) {
+    event.preventDefault();
+    if (deleting.current || !authenticatedUser) return;
+    deleting.current = true; setDeleteBusy(true); setDeleteError("");
+    try {
+      await deleteAccount(authenticatedUser.id, deletePassword || undefined);
+      router.replace("/?lang=" + lang); router.refresh();
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "";
+      setDeleteError(code === "SESSION_EXPIRED" || code === "UNAUTHORIZED" ? "deleteStale" : code === "INVALID_PASSWORD" || code === "CREDENTIAL_ACCOUNT_NOT_FOUND" ? "deleteWrongPassword" : "deleteError");
+    } finally { deleting.current = false; setDeleteBusy(false); setDeletePassword(""); }
+  }
 
   function openEditProfile() {
     setNameInput(displayName);
@@ -463,40 +510,28 @@ export function AccountSettings({
           )}
 
           {option === "delete" && (
-            <div className="fb-dialog-confirm">
-              <h2 style={{ color: "#ef4444" }}>Xóa vĩnh viễn tài khoản?</h2>
+            <form className="fb-dialog-confirm r-form" onSubmit={removeAccount}>
+              <h2 style={{ color: "#ef4444" }}>{t.deleteTitle}</h2>
               <p className="r-dialog-note" style={{ color: "#b91c1c" }}>
-                CẢNH BÁO: Thao tác này sẽ xóa toàn bộ số dư, ví, giao dịch, mục tiêu và dữ liệu đã lưu của bạn trên thiết bị này.
-                Hành động này không thể hoàn tác!
+                {t.deleteNote}
               </p>
+              <p className="r-dialog-note">{t.deleteAuth}</p>
+              <label>{t.deletePassword}<input type="password" autoComplete="current-password" maxLength={128} value={deletePassword} disabled={deleteBusy} onChange={(event) => setDeletePassword(event.target.value)} /></label>
+              {deleteError && <p role="alert">{t[deleteError]}</p>}
               <div className="fb-modal-actions">
-                <button type="button" className="r-button" onClick={close}>
+                <button type="button" className="r-button" disabled={deleteBusy} onClick={close}>
                   {t.cancel}
                 </button>
                 <button
-                  type="button"
+                  type="submit"
                   className="r-danger"
-                  onClick={() => {
-                    updateState((s) => ({
-                      ...s,
-                      wallets: [{ id: "default", name: "Ví chính", currency: "VND", initial: 0, type: "cash" }],
-                      transactions: [],
-                      goals: [],
-                      recurring: [],
-                      rules: [],
-                      settings: {
-                        ...s.settings,
-                        name: "cincin",
-                        email: "",
-                      },
-                    }));
-                    close();
-                  }}
+                  disabled={deleteBusy || !authenticatedUser}
+                  aria-busy={deleteBusy}
                 >
-                  Xác nhận xóa tài khoản
+                  {deleteBusy ? t.deleteBusy : t.deleteConfirm}
                 </button>
               </div>
-            </div>
+            </form>
           )}
         </Modal>
       )}

@@ -194,4 +194,80 @@ test("SMTP failure creates no authenticated session", async () => {
   assert.equal(mail.at(-1).to, "mail-failure@example.invalid");
 });
 
+test("unverified duplicate signup sends no additional mail; explicit resend recovers verification", async () => {
+  const body = { ...emailBody, email: "resend-user@example.invalid" };
+  assert.equal((await request("/sign-up/email", { method: "POST", body })).status, 200);
+  const sent = mail.length, before = await counts();
+  assert.equal((await request("/sign-up/email", { method: "POST", body })).status, 200);
+  assert.equal(mail.length, sent); assert.deepEqual(await counts(), before);
+  assert.equal((await request("/send-verification-email", { method: "POST", body: { email: body.email, callbackURL: "/login?lang=vi&verified=1" } })).status, 200);
+  assert.equal(mail.length, sent + 1); assert.equal(mail.at(-1).to, body.email);
+});
+
+test("deletion requires authentication and trusted origin; stale Google session is rejected", async () => {
+  const before = await counts();
+  assert.equal((await request("/delete-user", { method: "POST", body: {} })).status, 401);
+  assert.deepEqual(await counts(), before);
+  const user = await signInAs("delete-google");
+  const data = await session(user.cookie);
+  const protectedCounts = await counts();
+  assert.equal((await request("/delete-user", { method: "POST", cookie: user.cookie, origin: "https://attacker.invalid", body: {} })).status, 403);
+  assert.deepEqual(await counts(), protectedCounts);
+  await pool.query('UPDATE "session" SET "createdAt" = $1 WHERE id = $2', [new Date(Date.now() - 360000), data.session.id]);
+  const refused = await request("/delete-user", { method: "POST", cookie: user.cookie, body: {} });
+  assert.equal(refused.status, 400); assert.equal((await refused.json()).code, "SESSION_EXPIRED");
+  assert.deepEqual(await counts(), protectedCounts);
+});
+
+test("fresh Google deletion removes only its own identity and revokes all of its sessions", async () => {
+  const prior = await counts(), user = await signInAs("delete-google");
+  const data = await session(user.cookie);
+  const other = (await pool.query('SELECT id FROM "user" WHERE email = $1', [emailBody.email])).rows[0].id;
+  const response = await request("/delete-user", { method: "POST", cookie: user.cookie, body: { userId: other } });
+  assert.equal(response.status, 200); assert.equal((await response.json()).message, "User deleted");
+  assert.equal(await session(user.cookie), null);
+  for (const table of ["session", "account"]) assert.equal(Number((await pool.query('SELECT COUNT(*) AS n FROM "' + table + '" WHERE "userId" = $1', [data.user.id])).rows[0].n), 0);
+  assert.equal((await pool.query('SELECT id FROM "user" WHERE id = $1', [other])).rowCount, 1);
+  assert.equal((await counts())[0], prior[0] - 1);
+});
+
+test("email deletion checks the password, removes server setup, and allows signup with the same email", async () => {
+  const body = { ...emailBody, email: "delete-email@example.invalid" };
+  await request("/sign-up/email", { method: "POST", body });
+  const link = new URL(mail.at(-1).url); await request(link.pathname.replace("/api/auth", "") + link.search);
+  const login = await request("/sign-in/email", { method: "POST", body });
+  const cookie = cookies(login), data = await session(cookie);
+  await pool.query('CREATE TABLE IF NOT EXISTS finbridge_onboarding (user_id TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE, data JSONB NOT NULL, completed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)');
+  await pool.query("INSERT INTO finbridge_onboarding (user_id, data) VALUES ($1, $2)", [data.user.id, JSON.stringify({ synthetic: true })]);
+  await pool.query('UPDATE "session" SET "createdAt" = $1 WHERE id = $2', [new Date(Date.now() - 360000), data.session.id]);
+  const before = await counts();
+  assert.equal((await request("/delete-user", { method: "POST", cookie, body: { password: "Wrong-password-123" } })).status, 400);
+  assert.deepEqual(await counts(), before);
+  assert.equal((await request("/delete-user", { method: "POST", cookie, body: { password: body.password } })).status, 200);
+  assert.equal(await session(cookie), null);
+  assert.equal((await pool.query('SELECT id FROM "user" WHERE id = $1', [data.user.id])).rowCount, 0);
+  assert.equal((await pool.query('SELECT user_id FROM finbridge_onboarding WHERE user_id = $1', [data.user.id])).rowCount, 0);
+  const sent = mail.length;
+  assert.equal((await request("/sign-up/email", { method: "POST", body })).status, 200);
+  assert.equal(mail.length, sent + 1);
+  assert.notEqual((await pool.query('SELECT id FROM "user" WHERE email = $1', [body.email])).rows[0].id, data.user.id);
+});
+
+test("reset link for a deleted account cannot change a replacement account with the same email", async () => {
+  const body = { ...emailBody, email: "replacement-reset@example.invalid" };
+  await request("/sign-up/email", { method: "POST", body });
+  const verify = new URL(mail.at(-1).url); await request(verify.pathname.replace("/api/auth", "") + verify.search);
+  const login = await request("/sign-in/email", { method: "POST", body });
+  await request("/request-password-reset", { method: "POST", body: { email: body.email, redirectTo: "/reset-password?lang=vi" } });
+  const oldToken = new URL(mail.at(-1).url).pathname.split("/").at(-1);
+  assert.equal((await request("/delete-user", { method: "POST", cookie: cookies(login), body: {} })).status, 200);
+  await request("/sign-up/email", { method: "POST", body });
+  const oldAttempt = await request("/reset-password", { method: "POST", body: { token: oldToken, newPassword: "Invalid-old-link-password-789" } });
+  assert.equal(oldAttempt.status, 400);
+  assert.ok(["INVALID_TOKEN", "USER_NOT_FOUND"].includes((await oldAttempt.json()).code));
+  await request("/request-password-reset", { method: "POST", body: { email: body.email, redirectTo: "/reset-password?lang=vi" } });
+  const newToken = new URL(mail.at(-1).url).pathname.split("/").at(-1);
+  assert.equal((await request("/reset-password", { method: "POST", body: { token: newToken, newPassword: "Fresh-link-password-456" } })).status, 200);
+});
+
 after(async () => { globalThis.fetch = originalFetch; for (const table of tables) await pool.query('DELETE FROM "' + table + '"'); await pool.end(); });

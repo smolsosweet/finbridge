@@ -45,6 +45,7 @@ let state = {
 
 let writes = 0, cursor = 0, slots = [], destination = "";
 let signOutCalls = 0, signOutFails = false, route = "", refreshes = 0;
+let deleteCalls = [], deleteFailure = "";
 let authenticatedUser = { id: "google-user-A", name: "Google User A", email: "signed-in-google@example.invalid" };
 const testReact = {
   ...React,
@@ -92,6 +93,7 @@ function resolve(name) {
   if (name === "./Ui") return ui;
   if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams(), useRouter: () => ({ replace: (next) => { route = next; }, refresh: () => { refreshes++; } }) };
   if (name === "@/lib/sign-out") return { async signOutGoogle() { signOutCalls++; if (signOutFails) throw new Error("SIGN_OUT_FAILED"); } };
+  if (name === "@/lib/delete-account") return { async deleteAccount(userId, password) { deleteCalls.push({ userId, password }); if (deleteFailure) throw new Error(deleteFailure); } };
   if (name === "@/components/auth/AuthenticatedUser") return { useAuthenticatedUser: () => authenticatedUser };
   if (name === "./Tools") return { CurrencySelect: () => null };
   return localRequire(name);
@@ -263,4 +265,28 @@ async function verifyAccountIdentity() {
   process.stdout.write("PASS: authenticated account email in EN/VI/ZH; stale and forged local identity ignored; read-only profile email; account switching signs out without local identity or financial writes.\n");
 }
 
-verifyAccountIdentity().then(verifyLogout).catch((error) => { console.error(error); process.exitCode = 1; });
+async function verifyDeleteAccount() {
+  const writesBefore = writes;
+  for (const [language, label] of [["English", "Delete account"], ["Tiếng Việt", "Xóa tài khoản"], ["中文", "删除账户"]]) {
+    state.settings.language = language; slots = []; cursor = 0; route = "";
+    const renderAccount = () => { cursor = 0; return settings.AccountSettings({ navigate }); };
+    const row = find(renderAccount(), (node) => node.type === "button" && node.props.className === "fb-account-opt-row is-danger");
+    assert.ok(row, `Delete row in ${language}`);
+    const before = deleteCalls.length;
+    row.props.onClick(); assert.equal(deleteCalls.length, before, "Opening confirmation cannot delete");
+    const form = () => find(renderAccount(), (node) => node.type === "form" && node.props.className === "fb-dialog-confirm r-form");
+    assert.ok(form());
+    deleteFailure = "SESSION_EXPIRED";
+    await form().props.onSubmit({ preventDefault() {} });
+    assert.equal(route, ""); assert.ok(find(renderAccount(), (node) => node.props.role === "alert"));
+    find(renderAccount(), (node) => node.type === "input" && node.props.type === "password").props.onChange({ target: { value: "Synthetic-password-123" } });
+    deleteFailure = "";
+    await form().props.onSubmit({ preventDefault() {} });
+    assert.deepEqual(deleteCalls.at(-1), { userId: authenticatedUser.id, password: "Synthetic-password-123" });
+    assert.match(route, /^\/\?lang=(en|vi|zh)$/);
+  }
+  assert.equal(writes, writesBefore, "Delete must use authenticated server deletion, not reset local financial data");
+  process.stdout.write("PASS: EN/VI/ZH delete confirmation, stale-session error, authenticated deletion and welcome redirect.\n");
+}
+
+verifyAccountIdentity().then(verifyLogout).then(verifyDeleteAccount).catch((error) => { console.error(error); process.exitCode = 1; });

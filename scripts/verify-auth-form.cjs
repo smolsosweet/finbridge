@@ -30,6 +30,7 @@ let props;
 function tree() { cursor = 0; return AuthCard(props); }
 function reset(mode, lang = "en", overrides = {}) { slots = []; cursor = 0; calls = []; destination = ""; apiError = null; props = { mode, lang, configured: true, mailMode: "local", onBack() {}, ...overrides }; }
 function fill(autoComplete, value) { find(tree(), (node) => node.type === "input" && node.props.autoComplete === autoComplete).props.onChange({ target: { value } }); }
+function switchLanguage(value) { find(tree(), (node) => typeof node.type === "function" && typeof node.props.onChange === "function" && ["en", "vi", "zh"].includes(node.props.value)).props.onChange(value); }
 async function submit() { find(tree(), (node) => node.type === "form").props.onSubmit({ preventDefault() {} }); await new Promise((resolve) => setImmediate(resolve)); }
 async function main() {
   for (const lang of ["en", "vi", "zh"]) {
@@ -53,12 +54,35 @@ async function main() {
   const confirmInput = find(tree(), (node) => node.type === "input" && node.props.autoComplete === "new-password" && node.props.value === "");
   confirmInput.props.onChange({ target: { value: "Different-password-123" } }); await submit(); assert.equal(calls.length, 0);
   confirmInput.props.onChange({ target: { value: "Synthetic-password-123" } }); await submit(); assert.equal(calls[0].kind, "signup"); assert.equal(destination, ""); assert.ok(find(tree(), (node) => node.props.role === "status"));
+  for (const language of ["vi", "zh", "en"]) {
+    switchLanguage(language);
+    assert.equal(find(tree(), (node) => node.props.role === "status").props.children, forms.AUTH_FORM_COPY[language].checkVerification);
+  }
+  find(tree(), (node) => node.type === "button" && node.props.children === forms.AUTH_FORM_COPY.en.resend).props.onClick();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls.at(-1).kind, "resend"); assert.equal(calls.at(-1).body.email, "fixture@example.invalid");
+  assert.equal(calls.at(-1).body.callbackURL, "/login?lang=en&verified=1");
+  reset("login"); fill("email", "fixture@example.invalid"); fill("current-password", "Wrong-password-123"); apiError = { code: "INVALID_EMAIL_OR_PASSWORD", status: 401 }; await submit();
+  switchLanguage("vi"); assert.equal(find(tree(), (node) => node.props.role === "alert").props.children, forms.AUTH_FORM_COPY.vi.invalid);
+  reset("login", "en", { verified: true }); switchLanguage("zh");
+  assert.equal(find(tree(), (node) => node.props.role === "status").props.children, forms.AUTH_FORM_COPY.zh.verified);
   reset("forgot"); fill("email", "fixture@example.invalid"); await submit(); assert.equal(calls[0].kind, "forgot"); assert.equal(calls[0].body.redirectTo, "/reset-password?lang=en");
   reset("reset", "en", { token: "synthetic-token" }); fill("new-password", "Synthetic-password-456");
   find(tree(), (node) => node.type === "input" && node.props.autoComplete === "new-password" && node.props.value === "").props.onChange({ target: { value: "Synthetic-password-456" } });
   await submit(); assert.equal(calls[0].kind, "reset"); assert.equal(calls[0].body.token, "synthetic-token"); assert.equal(destination, "");
+  assert.equal(find(tree(), node => node.type === "form"), undefined, "Successful reset must close the form so its token cannot be submitted twice");
+  assert.equal(find(tree(), node => node.props.role === "status").props.children, forms.AUTH_FORM_COPY.en.resetDone);
+  assert.ok(find(tree(), node => node.props.href === "/login?lang=en"));
+  reset("reset", "vi", { token: "used-token" }); fill("new-password", "Synthetic-password-456");
+  find(tree(), node => node.type === "input" && node.props.autoComplete === "new-password" && node.props.value === "").props.onChange({ target: { value: "Synthetic-password-456" } });
+  apiError = { code: "INVALID_TOKEN", status: 400 }; await submit();
+  assert.equal(find(tree(), node => node.type === "form"), undefined);
+  assert.equal(find(tree(), node => node.props.role === "alert").props.children, forms.AUTH_FORM_COPY.vi.invalidToken);
+  assert.ok(find(tree(), node => node.props.href === "/forgot-password?lang=vi"));
+  switchLanguage("zh"); assert.equal(find(tree(), node => node.props.role === "alert").props.children, forms.AUTH_FORM_COPY.zh.invalidToken);
   reset("forgot", "en", { mailMode: "unavailable" }); await submit(); assert.equal(calls.length, 0);
-  reset("reset"); await submit(); assert.equal(calls.length, 0);
+  reset("reset"); assert.equal(find(tree(), node => node.type === "form"), undefined); assert.equal(calls.length, 0);
+  assert.ok(find(tree(), node => node.props.href === "/forgot-password?lang=en"));
   process.stdout.write("PASS: EN/VI/ZH auth forms; email login, signup confirmation, reset, failure handling, and unavailable delivery/token gates.\n");
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

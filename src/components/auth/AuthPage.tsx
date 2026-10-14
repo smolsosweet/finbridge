@@ -13,5 +13,5 @@ export async function AuthPage({ searchParams, mode }: { searchParams: AuthSearc
   let configured = false;
   let mailMode: "local" | "smtp" | "brevo" | "unavailable" = "unavailable";
   try { configured = !!readAuthConfig(); mailMode = readMailConfig()?.mode || "unavailable"; } catch { configured = false; }
-  return <LoginEntry lang={authLanguage(params.lang)} configured={configured} error={!!params.error} mode={mode} mailMode={mailMode} token={mode === "reset" ? params.token || "" : ""} verified={mode === "login" && params.verified === "1"} />;
+  return <LoginEntry key={mode === "reset" ? `${params.token || "missing"}:${params.error || ""}` : mode} lang={authLanguage(params.lang)} configured={configured} error={!!params.error} mode={mode} mailMode={mailMode} token={mode === "reset" ? params.token || "" : ""} verified={mode === "login" && params.verified === "1"} />;
 }

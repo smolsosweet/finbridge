@@ -90,9 +90,17 @@
 }
 .page[data-mode="signup"] .content,
 .page[data-mode="reset"] .content {
+  flex: 0 0 auto;
+  min-height: auto;
   justify-content: flex-start;
   padding-top: clamp(32px, 4.8vh, 44px);
   padding-bottom: clamp(16px, 2.5vh, 28px);
+}
+.page[data-mode="signup"],
+.page[data-mode="reset"] {
+  height: auto;
+  min-height: 100svh;
+  overflow: visible;
 }
 .card {
   position: relative;
