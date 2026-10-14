@@ -30,13 +30,13 @@ export function WelcomeScreen({ onGetStarted, onLogIn, initialLang = "en" }: { o
     </header>
     <section className={styles.hero} aria-labelledby="welcome-title">
       <div className={styles.mascotStage}>
-        <Mascot directions="/mascots/lac-directions.webp" reactions="/mascots/lac-reactions.webp" size={140} label={t.jack} className={styles.mascot} />
+        <Mascot directions="/mascots/lac-directions.webp" reactions="/mascots/lac-reactions.webp" size={220} label={t.jack} className={styles.mascot} />
       </div>
       <p className={styles.greeting}>{t.greeting}</p>
       <h1 id="welcome-title" className={styles.headline}>{t.headline}</h1>
       <div className={styles.actions}>
         <button type="button" onClick={() => onGetStarted(lang)} className={styles.start}>
-          {t.start}<ArrowRight size={19} aria-hidden="true" />
+          {lang === "vi" ? "Tạo tài khoản" : lang === "zh" ? "创建账户" : "Create account"}<ArrowRight size={19} aria-hidden="true" />
         </button>
         <button type="button" onClick={() => onLogIn(lang)} className={styles.login}>{t.returning}</button>
       </div>

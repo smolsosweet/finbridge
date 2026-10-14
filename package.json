@@ -35,6 +35,7 @@
     "check": "npm run lint && npm run typecheck && npm run build",
     "auth:migrate": "node scripts/migrate-auth.mjs",
     "test:auth": "node --test scripts/verify-auth-unit.cjs",
+    "test:onboarding": "node --test scripts/verify-onboarding.cjs scripts/verify-onboarding-form.cjs",
     "test:auth:postgres": "node --test scripts/verify-auth-postgres.mjs",
     "test:transaction-ai": "node --experimental-strip-types --test scripts/verify-transaction-ai.mjs"
   },

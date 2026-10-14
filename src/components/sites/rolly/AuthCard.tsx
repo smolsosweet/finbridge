@@ -33,6 +33,7 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
   const loginCallback = route("/login") + "&verified=1";
   const title = mode === "signup" ? f.signupTitle : mode === "forgot" ? f.forgotTitle : mode === "reset" ? f.resetTitle : f.loginTitle;
   const label = mode === "signup" ? f.signup : mode === "forgot" ? f.sendReset : mode === "reset" ? f.savePassword : f.login;
+  const mascotSize = mode === "signup" ? 78 : 112;
   const disabled = !configured || loading || ((mode === "signup" || mode === "forgot") && !mailReady) || (mode === "reset" && (!token || initialError));
   function failure(code?: string, status?: number) {
     if (status === 429) return f.limited;
@@ -85,7 +86,7 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
     });
   }
   const inputClass = styles.input;
-  return <main lang={language} className={`${welcome.welcome} ${styles.page}`}>
+  return <main lang={language} data-mode={mode} className={`${welcome.welcome} ${styles.page}`}>
     <header className={welcome.header}>
       <button type="button" onClick={onBack} className={styles.back}><ArrowLeft size={18} aria-hidden="true" />{t.back}</button>
       <div className={welcome.brand}>
@@ -96,9 +97,9 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
       </div>
     </header>
     <div className={styles.content}>
-      <section className={styles.card} aria-labelledby="auth-title">
+      <section className={styles.card} data-mode={mode} aria-labelledby="auth-title">
         <div className={styles.mascotStage}>
-          <Mascot directions="/mascots/lac-directions.webp" reactions="/mascots/lac-reactions.webp" size={140} label={t.jack} className={welcome.mascot} />
+          <Mascot directions="/mascots/lac-directions.webp" reactions="/mascots/lac-reactions.webp" size={mascotSize} label={t.jack} className={welcome.mascot} />
         </div>
         <h1 id="auth-title" className={styles.title}>{title}</h1>
         <p className={styles.intro}>{f.intro}</p>
@@ -116,7 +117,6 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
         {(mode === "login" || mode === "signup") && <><div className={styles.divider}><hr />{f.or}<hr /></div><button type="button" onClick={() => void signInGoogle()} disabled={!configured || loading} className={styles.google}><GoogleIcon />{t.google}</button></>}
         {!configured && <p role="status" className={styles.delivery}>{t.unavailable}</p>}
         {!mailReady && <p className={styles.delivery}>{f.mailUnavailable}</p>}
-        {mailMode === "local" && <p className={styles.delivery}>{f.localMail}</p>}
         <p className={styles.footer}>{mode === "login" ? f.noAccount : f.haveAccount} <Link className={styles.link} href={route(mode === "login" ? "/signup" : "/login")}>{mode === "login" ? f.signupLink : f.loginLink}</Link></p>
       </section>
     </div>

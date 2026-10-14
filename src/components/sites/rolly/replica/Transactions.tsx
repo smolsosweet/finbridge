@@ -6,6 +6,8 @@ import { EmptyState, Field, Mascot, Modal, PageHeader, Toggle } from "./Ui";
 import { currencySymbol, money, today, updateState, useAppState, workspaceOwner, type AppState, type ChatMessage, type Transaction } from "./store";
 import { createTimeoutTransactionDraft, editDraftById, inferDraftCategory, isNewTransactionMessage, matchDraftCategoryAnswer, normalizeVietnameseMessage, readyDrafts, removeDraftById, requestedDraftCategory, validateAndCommitDrafts, validateDraftForState, type TransactionDraft } from "@/lib/transaction-drafts";
 import { answerFinancialQuery, type FinancialAction } from "@/lib/financial-chat";
+import { localPlanReply, modelHistory } from "@/lib/chat-local-plan";
+import planStyles from "./FinancialOutlook.module.css";
 import { tools } from "./Tools";
 
 function clarificationQuestion(fields: string[]) {
@@ -249,7 +251,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           selectedWalletId: wallet,
           ...(activeDraft ? { pendingDraft: activeDraft } : {}),
-          history: [...messages, { role: "user" as const, text: message }].slice(-8).map(({ role, text }) => ({ role, text: text.slice(0, 600) })),
+          history: modelHistory([...messages, { role: "user" as const, text: message }]),
           wallets: state.wallets.filter((item) => !item.archived).map(({ id, name, currency }) => ({ id, name, currency })),
           categories: state.categories.filter((name) => !state.categoryMeta[name]?.archived).flatMap((name) => {
             const type = state.categoryMeta[name]?.type || "expense";
@@ -276,7 +278,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           searchTerm: ai.searchTerm || null, transactionType: ai.transactionType || null,
         }, state, wallet, today());
         setClarifyingDraftId(activeDraftId);
-        setMessages((previous) => [...previous, { role: "assistant", text: answer }]);
+        setMessages((previous) => [...previous, { role: "assistant", text: ai.action === "budget_status" ? localPlanReply(state, today(), ai.scope === "all" ? undefined : [ai.walletId || wallet]) : answer, localOnly: true }]);
         return;
       }
       if (ai.intent === "general" || ai.intent === "unclear") {
@@ -547,6 +549,10 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   }
   const editingDraft = drafts.find((draft) => draft.id === editingDraftId);
   return <div className="r-chat-page"><PageHeader onBack={() => navigate("?tab=transactions")}><button type="button" className="r-icon-button" aria-label="Xóa hội thoại" title="Xóa hội thoại" onClick={() => setModal("resetChat")}><Trash2 size={18} /></button><button type="button" className="r-icon-button" aria-label="Cài đặt chat" onClick={() => navigate("accountSettings")}><Settings size={20} /></button></PageHeader><Mascot greeting="Hôm nay bạn đã chi tiêu gì?" className="r-chat-mascot" /><div className="r-chat-messages" ref={messagesRef} role="log" aria-label="Lịch sử hội thoại" tabIndex={0}>
+      <div className={planStyles.chatIntroduction}>
+        <p>{String(state.settings.name || "")}, { /中文|zh/.test(String(state.settings.language)) ? "你好！我是 Jake。" : /Việt|vi/.test(String(state.settings.language)) ? "xin chào! Mình là Jake." : "hello! I'm Jake." }</p>
+        <button type="button" disabled={busy} onClick={() => setMessages(previous => [...previous, { role: "assistant", text: localPlanReply(state, today()), localOnly: true }])}>{/中文|zh/.test(String(state.settings.language)) ? "查看支出计划" : /Việt|vi/.test(String(state.settings.language)) ? "Xem kế hoạch chi tiêu" : "View spending plan"}</button>
+      </div>
       <span className="r-chat-date">Hôm nay</span>
       {messages.map((message, index) => <div key={index} className={"r-message " + message.role + (message.draftIds ? " r-ai-draft-message" : "")}>
         <p>{message.text}</p>

@@ -2,6 +2,7 @@
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { LegacyWorkspaceNotice } from "./LegacyWorkspaceNotice";
+import { FirstRunGate } from "./FirstRunGate";
 import { authClient } from "@/lib/auth-client";
 import { AuthenticatedUserContext, type AuthenticatedUser } from "./AuthenticatedUser";
 import { activateUserWorkspace, clearUserWorkspace, subscribeWorkspace, workspaceOwner } from "@/components/sites/rolly/replica/store";
@@ -40,5 +41,5 @@ function SessionWorkspace({ user, children }: { user: AuthenticatedUser; childre
   const currentUser = session?.user.id === user.id
     ? { id: session.user.id, name: session.user.name, email: session.user.email }
     : user;
-  return <AuthenticatedUserContext.Provider value={currentUser}><LegacyWorkspaceNotice />{children}</AuthenticatedUserContext.Provider>;
+  return <AuthenticatedUserContext.Provider value={currentUser}><LegacyWorkspaceNotice /><FirstRunGate>{children}</FirstRunGate></AuthenticatedUserContext.Provider>;
 }
