@@ -10,7 +10,7 @@ export function buildAuthOptions(config: NonNullable<ReturnType<typeof readAuthC
     secret: config.secret,
     trustedOrigins: [config.baseURL],
     database,
-    user: { additionalFields: { role: { type: "string" as const, defaultValue: "user", required: true, input: false } } },
+    user: { deleteUser: { enabled: true }, additionalFields: { role: { type: "string" as const, defaultValue: "user", required: true, input: false } } },
     emailAndPassword: {
       enabled: true, disableSignUp: !sendMail, requireEmailVerification: true,
       autoSignIn: false, minPasswordLength: 12, maxPasswordLength: 128,
@@ -23,7 +23,7 @@ export function buildAuthOptions(config: NonNullable<ReturnType<typeof readAuthC
     },
     socialProviders: { google: { clientId: config.clientId, clientSecret: config.clientSecret, prompt: "select_account" as const, includeGrantedScopes: false } },
     account: { encryptOAuthTokens: true, accountLinking: { enabled: false } },
-    session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24, cookieCache: { enabled: false } },
+    session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24, freshAge: 300, cookieCache: { enabled: false } },
     advanced: { cookiePrefix: "finbridge" },
     rateLimit: { enabled: true, window: 60, max: 30 },
     onAPIError: { errorURL: config.baseURL + "/login?error=oauth" },

@@ -13,6 +13,27 @@ const storage = compile("src/lib/workspace-storage.ts");
 const config = compile("src/lib/auth-config.ts");
 const copy = compile("src/lib/auth-copy.ts");
 const mail = compile("src/lib/auth-mail.ts");
+test("account deletion clears only the deleted owner's local data after server confirmation", async () => {
+  const previousStorage = global.localStorage;
+  const entries = new Map([[storage.userWorkspaceKey("A"), "A-data"], [storage.userWorkspaceKey("B"), "B-data"], [storage.LEGACY_WORKSPACE_KEY, "legacy"], ["finbridge-setup-draft:A", "A-draft"]]);
+  let owner = "A", cleared = false, requests = 0, response = { error: { code: "SESSION_EXPIRED" } };
+  global.localStorage = { removeItem: key => entries.delete(key) };
+  const helper = compile("src/lib/delete-account.ts", name => {
+    if (name === "./auth-client") return { authClient: { async deleteUser(body) { requests++; assert.equal(body.userId, undefined); return response; } } };
+    if (name === "./workspace-storage") return storage;
+    if (name === "@/components/sites/rolly/replica/store") return { workspaceOwner: () => owner, clearUserWorkspace: id => { assert.equal(id, "A"); cleared = true; } };
+    return require(name);
+  });
+  try {
+    await assert.rejects(() => helper.deleteAccount("B")); assert.equal(requests, 0);
+    await assert.rejects(() => helper.deleteAccount("A"), /SESSION_EXPIRED/); assert.equal(cleared, false); assert.equal(entries.get(storage.userWorkspaceKey("A")), "A-data");
+    response = { data: { success: true, message: "Verification email sent" } };
+    await assert.rejects(() => helper.deleteAccount("A")); assert.equal(cleared, false);
+    response = { data: { success: true, message: "User deleted" } };
+    await helper.deleteAccount("A"); assert.equal(cleared, true); assert.equal(entries.has(storage.userWorkspaceKey("A")), false); assert.equal(entries.has("finbridge-setup-draft:A"), false);
+    assert.equal(entries.get(storage.userWorkspaceKey("B")), "B-data"); assert.equal(entries.get(storage.LEGACY_WORKSPACE_KEY), "legacy");
+  } finally { global.localStorage = previousStorage; }
+});
 test("Brevo requires a key and a verified-sender address shape; unknown modes are rejected", () => {
   assert.throws(() => mail.readMailConfig({ AUTH_EMAIL_MODE: "brevo" }));
   assert.throws(() => mail.readMailConfig({ AUTH_EMAIL_MODE: "unknown" }));
@@ -29,11 +50,22 @@ test("Brevo sends only a transactional message over HTTPS and rejects provider e
       const body = JSON.parse(options.body);
       assert.deepEqual(body.to, [{ email: "recipient@example.invalid" }]);
       assert.equal(body.sender.email, "sender@example.invalid"); assert.ok(body.textContent.includes("https://finbridge.example/verify"));
+      assert.match(body.htmlContent, /Verify your email address/); assert.match(body.htmlContent, /Verify email/);
+      assert.match(body.htmlContent, /href="https:\/\/finbridge\.example\/verify"/);
       assert.equal(body.subject, "Verify your FinBridge email"); return new Response(null, { status: requests === 1 ? 201 : 429 });
     };
     const message = { to: "recipient@example.invalid", kind: "verify", url: "https://finbridge.example/verify" };
     await sender(message); await assert.rejects(() => sender(message), /AUTH_EMAIL_DELIVERY_FAILED/); assert.equal(requests, 2);
   } finally { global.fetch = originalFetch; }
+});
+test("authentication email gives a usable action, expiry and safe fallback link", () => {
+  const verify = mail.renderAuthEmail({ kind: "verify", url: "https://finbridge.example/verify?token=a&next=b" });
+  assert.match(verify.text, /expires in 1 hour/); assert.match(verify.html, /Verify your email address/);
+  assert.match(verify.html, /token=a&amp;next=b/); assert.match(verify.html, /Never share this link/);
+  const vietnamese = mail.renderAuthEmail({ kind: "verify", url: "https://finbridge.example/verify?callbackURL=%2Flogin%3Flang%3Dvi" });
+  assert.equal(vietnamese.subject, "Xác minh email FinBridge của bạn"); assert.match(vietnamese.html, /Xác minh địa chỉ email/);
+  const reset = mail.renderAuthEmail({ kind: "reset", url: "https://finbridge.example/reset" });
+  assert.match(reset.text, /expires in 30 minutes/); assert.match(reset.html, /Reset your password/);
 });
 test("local auth mail is blocked in production and on non-local origins", () => {
   assert.equal(mail.readMailConfig({}), null);

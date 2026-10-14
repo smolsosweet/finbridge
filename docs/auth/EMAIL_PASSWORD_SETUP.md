@@ -6,23 +6,43 @@ at `5029ec7`. The local app now runs from `D:\ai-website-cloner-codex`.
 ## What is implemented
 
 - Login with email/password or Google; password visibility toggle.
-- Registration with display name, email, password and confirmation.
+- Registration with email, password and confirmation; the initial display name
+  is derived from the email and can be customized during account setup.
 - Passwords require 12–128 characters and are hashed by Better Auth (scrypt).
 - Email verification is required before credential login. Registration never
   automatically authenticates an unverified account. Verification links expire
-  after one hour; the login form offers resend after an unverified login attempt.
+  after one hour; signup offers an explicit resend button, and login offers it
+  after an unverified login attempt. Duplicate signup returns a generic response
+  without creating an account or sending another email. Already verified users
+  should log in or request a password reset.
 - Password recovery sends a link valid for 30 minutes. Successful reset consumes
   the token and revokes existing sessions; the user signs in with the new password.
+  Missing, expired or used links show a direct action to request a fresh link.
+  A successful reset closes the password form. Links issued before account
+  deletion cannot reset a replacement account registered with the same email.
 - Existing Google users can establish a password via recovery sent to their
   Google email. This retains their user ID and browser workspace. An ordinary
   duplicate signup cannot claim or overwrite their account. Automatic social
   account linking remains disabled.
 - Auth forms and messages are available in English, Vietnamese and Chinese.
+  Changing the language also updates notices and errors already on screen.
+- Account deletion now calls Better Auth's authenticated server endpoint. It
+  removes the user, provider accounts and all sessions; PostgreSQL cascades the
+  onboarding record. Deletion requires a session created within five minutes or
+  the correct FinBridge password. A Google-only user with an older session must
+  sign out and sign in again. Opening the confirmation dialog performs no writes.
+  Only confirmed server deletion clears this account's browser workspace and
+  setup draft, then returns to welcome. Other accounts and the unclaimed legacy
+  backup are retained. Data on other devices and downloaded backups is not
+  automatically removed.
 - PostgreSQL stores users, provider accounts/password hashes, sessions and
   verification records. A migration adds `user.role`, default `user`, with
   client input disabled. Full RBAC/admin management is a future task.
 - Wallets, transactions and budgets still live in per-account browser storage.
   This change does not add finance synchronization across devices.
+  The old-workspace import notice is no longer displayed when signing in. An
+  unclaimed legacy record remains on disk and is not automatically copied into
+  any authenticated account.
 
 ## Real email (recommended: Brevo HTTP API)
 
