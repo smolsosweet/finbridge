@@ -1,25 +1,25 @@
-.page { width: 100%; height: 100svh; min-height: 0; overflow: hidden; padding: clamp(12px, 2.4vh, 28px) clamp(16px, 4vw, 32px); }
-.shell { display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); width: 100%; max-width: 720px; height: 100%; }
+.page { width: 100%; min-height: 100svh; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; align-items: center; padding: clamp(14px, 2.8vh, 28px) clamp(16px, 4vw, 32px); }
+.shell { display: flex; flex-direction: column; width: 100%; max-width: 720px; margin: 0 auto; }
 .header { display: flex; justify-content: space-between; align-items: center; font-size: 14px; color: #64748b; }
 .header b { font-size: 23px; font-weight: 800; letter-spacing: -.7px; }
-.header select { min-height: 44px; padding: 6px 8px; border-radius: 10px; background: transparent; }
-.header select:focus-visible { outline: 2px solid #7b40f2; outline-offset: 2px; }
 .progress { display: block; width: 100%; height: 5px; margin-top: clamp(10px, 2vh, 18px); border: 0; border-radius: 8px; overflow: hidden; background: #e2e8f0; }
 .progress::-webkit-progress-bar { background: #e2e8f0; }
 .progress::-webkit-progress-value { background: linear-gradient(90deg,#ff1f8f,#7b40f2,#0084ff); }
 .progress::-moz-progress-bar { background: linear-gradient(90deg,#ff1f8f,#7b40f2,#0084ff); }
-.intro { display: flex; align-items: center; justify-content: center; gap: 14px; padding: clamp(10px, 2.3vh, 22px) 0; }
+.intro { display: flex; align-items: center; justify-content: center; gap: 14px; padding: clamp(12px, 2.4vh, 22px) 0; }
 .intro p { color: #5930b5; font-size: 12px; font-weight: 600; }
 .intro h1 { font-size: clamp(23px, 3.2vh, 30px); font-weight: 650; letter-spacing: -.8px; margin: 5px 0; }
 .intro small { color: #64748b; line-height: 1.6; }
-.card { min-height: 0; padding: clamp(18px, 3vh, 32px); border-radius: 24px; border: 1px solid #e2e8f0; background: white; display: flex; flex-direction: column; gap: clamp(10px, 2vh, 20px); box-shadow: 0 12px 48px #7b40f209; }
-.card label { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 8px; font-size: 13px; color: #526d78; }
+.card { width: 100%; height: auto; padding: clamp(20px, 3vh, 32px); border-radius: 24px; border: 1px solid #e2e8f0; background: white; display: flex; flex-direction: column; gap: clamp(14px, 2vh, 20px); box-shadow: 0 12px 48px #7b40f209; }
+.card fieldset { border: none; padding: 0; margin: 0; }
+.card label { display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: #526d78; }
 .card label, .bills li, .intro h1 { overflow-wrap: anywhere; }
 .card input, .card select { width: 100%; min-height: clamp(42px, 5.5vh, 50px); border: 1px solid #e2e8f0; border-radius: 12px; background: #f8fafc; padding: 9px 14px; font-size: 16px; color: #172f3c; }
 .card input:focus, .card select:focus { outline: 2px solid #7b40f2; outline-offset: 2px; }
 .card legend { margin-bottom: 10px; font-size: 14px; }
 .card p, .card small { font-size: 12px; line-height: 1.8; }
 .row { display: flex; align-items: flex-end; gap: 10px; }
+.row label { flex: 1; min-width: 0; }
 .options { display: flex; flex-wrap: wrap; gap: 7px; }
 .card button:not([type="submit"]) { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 8px 12px; border-radius: 12px; font-size: 13px; cursor: pointer; }
 .options button, .outline { border: 1px solid #e2e8f0; color: #172f3c; background: #fff; }
@@ -29,10 +29,10 @@
 .card button:focus-visible { outline: 2px solid #7b40f2; outline-offset: 3px; }
 .hint { padding: 12px; border-radius: 12px; background: #f8fafc; color: #64748b; }
 .error { color: #a33434; padding: 10px; border-radius: 12px; background: #fff0f0; }
-.footer { display: flex; justify-content: space-between; gap: 18px; border-top: 1px solid #e2e8f0; padding-top: clamp(12px, 2.2vh, 22px); margin-top: 2px; }
+.footer { display: flex; justify-content: space-between; align-items: center; gap: 18px; border-top: 1px solid #e2e8f0; padding-top: clamp(16px, 2.4vh, 22px); margin-top: clamp(6px, 1.2vh, 12px); }
 .footer button[type="submit"] { width: auto; min-width: 180px; }
 .bills { display: flex; flex-direction: column; gap: 10px; }
 .bills li { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; border-radius: 12px; }
 .bills small { display: block; color: #64748b; }
-@media(max-width:480px) { .page { padding: 12px 16px; } .header b { font-size: 20px; } .header select { min-height: 38px; } .intro { gap: 10px; padding: 10px 0; } .intro h1 { font-size: 22px; } .intro small { font-size: 11px; } .card { padding: 16px; gap: 12px; border-radius: 20px; } .row { flex-wrap: nowrap; } .row label { flex-basis: auto; } .footer { gap: 8px; } .footer button[type="submit"] { min-width: 0; font-size: 13px; padding: 12px 14px; } }
+@media(max-width:480px) { .page { padding: 12px 16px; } .header b { font-size: 20px; } .intro { gap: 10px; padding: 10px 0; } .intro h1 { font-size: 22px; } .intro small { font-size: 11px; } .card { padding: 16px; gap: 12px; border-radius: 20px; } .row { flex-wrap: nowrap; } .row label { flex-basis: auto; } .footer { gap: 8px; } .footer button[type="submit"] { min-width: 0; font-size: 13px; padding: 12px 14px; } }
 @media(max-height:680px) { .page { padding-top: 8px; padding-bottom: 8px; } .intro { padding: 4px 0; } .intro > :first-child, .intro p, .intro small { display: none; } .intro h1 { margin: 0; } .card { padding-top: 12px; padding-bottom: 12px; } }

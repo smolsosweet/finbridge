@@ -12,6 +12,7 @@ const { OnboardingWizard } = compile("src/components/auth/OnboardingWizard.tsx",
   if (name === "@/lib/onboarding") return setup;
   if (name === "@/lib/setup-copy") return copy;
   if (name === "@/lib/auth-copy") return authCopy;
+  if (name.includes("LanguageSelector")) return { LanguageSelector: ({ value, onChange }) => React.createElement("button", { "data-lang": value, type: "button", onClick: () => onChange?.("en") }, value) };
   if (name.endsWith(".module.css")) return { default: new Proxy({}, { get: (_, key) => String(key) }) };
   return require(name);
 });
