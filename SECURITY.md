@@ -1,52 +1,17 @@
-# Security Policy
+# FinBridge security
 
-## Supported versions
+Security fixes apply to the latest main.
 
-This project is a template rather than a versioned library. Security fixes are
-applied to the latest version of the `master` branch.
+## Reporting
 
-Projects created from this template do not receive fixes automatically. Their
-maintainers are responsible for reviewing relevant changes and updating their
-own copies.
+Use GitHub's private [Report a vulnerability](https://github.com/smolsosweet/finbridge/security/advisories/new) form if enabled. Otherwise ask the maintainer for a private contact channel without publishing credentials, personal data or exploit details. Include the affected commit, impact and a synthetic reproduction.
 
-## Reporting a vulnerability
+## Current boundaries
 
-Please do not disclose vulnerability details in a public issue, pull request,
-discussion, or Discord message.
+Better Auth and PostgreSQL store accounts and sessions. Email accounts require verification. Deletion requires recent authentication or the correct password; reset revokes sessions.
 
-Use GitHub's private
-[Report a vulnerability](https://github.com/JCodesMore/ai-website-cloner-template/security/advisories/new)
-form instead. Include, when available:
+Financial workspaces currently use account-scoped browser storage, without complete cross-device synchronization. Provider keys stay server-side.
 
-- A clear description of the vulnerability and its potential impact
-- The affected files, dependencies, configuration, or commit
-- Steps to reproduce the issue or a minimal proof of concept
-- Any suggested mitigation or fix
+Forwarded-IP trust in auth rate limiting remains a deployment concern. See [acceptance findings](docs/auth/AUTH_FLOW_ACCEPTANCE_2026-10-14.md). Live providers, production proxy behavior, restore and multi-instance operation require separate checks.
 
-We will acknowledge the report as soon as practical, investigate it, and
-coordinate with you before any public disclosure.
-
-If the private form is unavailable, you may use the
-[Discord community](https://discord.gg/hrTSX5yTpB) only to ask a maintainer for
-a private contact method. Do not post vulnerability details there.
-
-## Scope
-
-Security reports may cover:
-
-- Code and dependencies shipped on the `master` branch
-- Helper and synchronization scripts under `scripts/`
-- Repository configuration or defaults that could make generated projects
-  insecure
-- AI-agent instructions that introduce a concrete security vulnerability
-
-Generated website code, third-party services, vulnerabilities in unrelated
-websites, and automated audit output without a demonstrated impact on this
-template are outside this project's security scope.
-
-## Responsible use
-
-This template is intended for authorized development, migration, recovery, and
-learning. See [Not Intended For](README.md#not-intended-for) for prohibited
-uses. Reports about abuse or copied content should not include sensitive
-security details in public channels.
+Do not run disposable database tests on user/production data or publish environment files, mail outboxes or backups.

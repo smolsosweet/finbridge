@@ -1,25 +1,25 @@
 {
-  "name": "ai-website-clone-template",
+  "name": "finbridge",
   "version": "0.6.1",
   "private": true,
-  "description": "Clone any website into a clean, modern Next.js codebase using AI coding agents",
-  "author": "JCodesMore",
+  "description": "Multilingual personal finance workspace with wallets, budgets and AI-assisted planning",
+  "author": "smolsosweet",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/JCodesMore/ai-website-cloner-template.git"
+    "url": "https://github.com/smolsosweet/finbridge.git"
   },
-  "homepage": "https://github.com/JCodesMore/ai-website-cloner-template",
+  "homepage": "https://github.com/smolsosweet/finbridge",
   "bugs": {
-    "url": "https://github.com/JCodesMore/ai-website-cloner-template/issues"
+    "url": "https://github.com/smolsosweet/finbridge/issues"
   },
   "keywords": [
-    "claude-code",
-    "website-clone",
-    "reverse-engineering",
+    "personal-finance",
+    "budgeting",
+    "multilingual",
     "nextjs",
     "ai",
-    "template",
+    "fintech",
     "tailwindcss",
     "shadcn-ui"
   ],

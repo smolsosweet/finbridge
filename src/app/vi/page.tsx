@@ -1,14 +1,5 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { LandingPageVi } from "@/components/sites/rolly/LandingPageVi";
+import { redirect } from "next/navigation";
 
 export default function ViLandingPage() {
-  const router = useRouter();
-
-  return (
-    <main className="min-h-screen w-full bg-[#f8faf9]">
-      <LandingPageVi onGoToWeb={() => router.push("/app")} />
-    </main>
-  );
+  redirect("/?lang=vi");
 }
