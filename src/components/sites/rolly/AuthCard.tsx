@@ -14,7 +14,7 @@ import styles from "./AuthCard.module.css";
 
 type FormMessage = keyof typeof AUTH_FORM_COPY.en;
 
-export function AuthCard({ onBack, lang = "en", configured = false, initialError = false, mode = "login", mailMode = "unavailable", token = "", verified = false }: {
+export function AuthCard({ onBack, lang = "en", configured = false, initialError = false, mode = "login", mailMode = "unavailable", token = "", verified: _verified = false }: {
   onBack: () => void; lang?: string; configured?: boolean; initialError?: boolean;
   mode?: AuthMode; mailMode?: "local" | "smtp" | "brevo" | "unavailable"; token?: string; verified?: boolean;
 }) {
@@ -23,11 +23,12 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<FormMessage | "googleFailure" | "">(initialError ? (mode === "reset" ? "invalidToken" : "googleFailure") : "");
-  const [notice, setNotice] = useState<FormMessage | "">(verified ? "verified" : "");
+  const [notice, setNotice] = useState<FormMessage | "">("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
-  const [visible, setVisible] = useState(false);
+  const [visiblePassword, setVisiblePassword] = useState(false);
+  const [visibleConfirm, setVisibleConfirm] = useState(false);
   const [needsVerification, setNeedsVerification] = useState(false);
   const inFlight = useRef(false);
   const mailReady = mailMode !== "unavailable";
@@ -113,8 +114,8 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
         <p className={styles.intro}>{f.intro}</p>
         {!invalidReset && !resetDone && <form onSubmit={submit} className={styles.form}>
           {mode !== "reset" && <label className="block text-sm text-[#526d78]">{f.email}<input className={inputClass + " mt-1"} type="email" value={email} onChange={(e) => { setEmail(e.target.value); setNeedsVerification(false); }} required maxLength={254} autoComplete="email" disabled={loading} /></label>}
-          {mode !== "forgot" && <label className="block text-sm text-[#526d78]">{f.password}<span className="relative mt-1 block"><input className={`${inputClass} ${styles.passwordInput}`} type={visible ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={mode === "login" ? undefined : 12} maxLength={128} autoComplete={mode === "login" ? "current-password" : "new-password"} disabled={loading} /><button type="button" aria-label={visible ? f.hide : f.show} aria-pressed={visible} onClick={() => setVisible(!visible)} className="absolute inset-y-0 right-1 grid min-w-12 place-items-center text-[#6c7e87]">{visible ? <EyeOff size={21} /> : <Eye size={21} />}</button></span></label>}
-          {(mode === "signup" || mode === "reset") && <><label className="block text-sm text-[#526d78]">{f.confirm}<input className={inputClass + " mt-1"} type={visible ? "text" : "password"} value={confirmation} onChange={(e) => setConfirmation(e.target.value)} required minLength={12} maxLength={128} autoComplete="new-password" disabled={loading} /></label><p className="text-xs text-[#6c7e87]">{f.passwordHint}</p></>}
+          {mode !== "forgot" && <label className="block text-sm text-[#526d78]">{f.password}<span className="relative mt-1 block"><input className={`${inputClass} ${styles.passwordInput}`} type={visiblePassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} required minLength={mode === "login" ? undefined : 12} maxLength={128} autoComplete={mode === "login" ? "current-password" : "new-password"} disabled={loading} /><button type="button" aria-label={visiblePassword ? f.hide : f.show} aria-pressed={visiblePassword} onClick={() => setVisiblePassword(!visiblePassword)} className="absolute inset-y-0 right-1 grid min-w-12 place-items-center text-[#6c7e87]">{visiblePassword ? <EyeOff size={21} /> : <Eye size={21} />}</button></span></label>}
+          {(mode === "signup" || mode === "reset") && <><label className="block text-sm text-[#526d78]">{f.confirm}<span className="relative mt-1 block"><input className={`${inputClass} ${styles.passwordInput}`} type={visibleConfirm ? "text" : "password"} value={confirmation} onChange={(e) => setConfirmation(e.target.value)} required minLength={12} maxLength={128} autoComplete="new-password" disabled={loading} /><button type="button" aria-label={visibleConfirm ? f.hide : f.show} aria-pressed={visibleConfirm} onClick={() => setVisibleConfirm(!visibleConfirm)} className="absolute inset-y-0 right-1 grid min-w-12 place-items-center text-[#6c7e87]">{visibleConfirm ? <EyeOff size={21} /> : <Eye size={21} />}</button></span></label><p className="text-xs text-[#6c7e87]">{f.passwordHint}</p></>}
           <button disabled={disabled} aria-busy={loading} className={`${welcome.start} ${styles.submit}`}>{loading ? f.working : label}</button>
         </form>}
         {mode === "login" && <p className={styles.recovery}>{f.forgot} <Link className={styles.link} href={route("/forgot-password")}>{f.resetLink}</Link></p>}

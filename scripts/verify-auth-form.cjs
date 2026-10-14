@@ -64,8 +64,8 @@ async function main() {
   assert.equal(calls.at(-1).body.callbackURL, "/login?lang=en&verified=1");
   reset("login"); fill("email", "fixture@example.invalid"); fill("current-password", "Wrong-password-123"); apiError = { code: "INVALID_EMAIL_OR_PASSWORD", status: 401 }; await submit();
   switchLanguage("vi"); assert.equal(find(tree(), (node) => node.props.role === "alert").props.children, forms.AUTH_FORM_COPY.vi.invalid);
-  reset("login", "en", { verified: true }); switchLanguage("zh");
-  assert.equal(find(tree(), (node) => node.props.role === "status").props.children, forms.AUTH_FORM_COPY.zh.verified);
+  reset("login", "en", { verified: true });
+  assert.equal(find(tree(), (node) => node.props.role === "status"), undefined, "Verified query param must not render an extra status banner on login");
   reset("forgot"); fill("email", "fixture@example.invalid"); await submit(); assert.equal(calls[0].kind, "forgot"); assert.equal(calls[0].body.redirectTo, "/reset-password?lang=en");
   reset("reset", "en", { token: "synthetic-token" }); fill("new-password", "Synthetic-password-456");
   find(tree(), (node) => node.type === "input" && node.props.autoComplete === "new-password" && node.props.value === "").props.onChange({ target: { value: "Synthetic-password-456" } });
