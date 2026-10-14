@@ -554,6 +554,7 @@ test("Tier 1 & 2: Planning & Budgets Workspace Localization (F7)", async (t) => 
       const mockStore = {
         useAppState: () => state,
         updateState: () => {},
+        workspaceOwner: () => "synthetic-owner",
       };
 
       const customPlanning = compileFile(path.join(directory, "Planning.tsx"), (name) => {
