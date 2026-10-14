@@ -1,17 +1,7 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { OnboardingFlow } from "@/components/sites/rolly/OnboardingFlow";
-
-export default function OnboardingPage() {
-  const router = useRouter();
-
-  return (
-    <main className="min-h-screen w-full bg-[#f5f8f8]">
-      <OnboardingFlow
-        onComplete={() => router.push("/app")}
-        onBackToWelcome={() => router.push("/")}
-      />
-    </main>
-  );
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth-session";
+import { authLanguage } from "@/lib/auth-copy";
+export default async function OnboardingPage({ searchParams }: { searchParams: Promise<{ lang?: string }> }) {
+  const { lang } = await searchParams;
+  redirect(await getSession() ? "/app" : "/signup?lang=" + authLanguage(lang));
 }

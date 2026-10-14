@@ -1,0 +1,17 @@
+.panel { border: 1px solid var(--r-line,#e2e8f0); border-radius: 20px; background: var(--r-surface,#fff); padding: 22px; margin: 0 0 24px; color: var(--r-text,#172f3c); }
+.panel header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.panel h2, .panel h3 { display: flex; align-items: center; gap: 8px; font-size: 16px!important; font-weight: 600!important; }
+.panel h3 { font-size: 13px!important; }
+.panel p { font-size: 12px; line-height: 1.8; margin-top: 8px; }
+.panel small { display: block; font-size: 11px; line-height: 1.7; margin-top: 14px; color: var(--r-muted,#64748b); }
+.panel b { font-size: 12px; }
+.panel button { color: #5930b5; padding: 10px 12px; min-height: 44px; border-radius: 10px; background: #f5f3ff; font-size: 12px; cursor: pointer; }
+.panel button:focus-visible { outline: 2px solid #7b40f2; outline-offset: 3px; }
+.warning, .reminder { padding: 14px; border-radius: 12px; margin-top: 12px; background: #fff7ed; color: #8a4b17; }
+.reminder { background: #f5f3ff; color: #5930b5; }
+.form { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
+.chatIntroduction { text-align: center; padding: 10px; color: #5930b5; font-size: 13px; }
+.chatIntroduction button { display: block; margin: 10px auto; padding: 10px 16px; min-height: 44px; border: 1px solid #ddd6fe; border-radius: 12px; background: #f5f3ff; cursor: pointer; }
+.form label { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12px; }
+.form input { width: 180px!important; padding: 10px; min-height: 44px; border: 1px solid var(--r-line,#e2e8f0); border-radius: 10px; }
+@media(max-width:480px) { .panel { padding: 18px; } .form label { align-items: stretch; flex-direction: column; } .form input { width: 100%!important; } }

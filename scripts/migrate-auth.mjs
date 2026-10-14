@@ -13,5 +13,10 @@ try {
   const config = { baseURL: process.env.BETTER_AUTH_URL, secret: process.env.BETTER_AUTH_SECRET, clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET, databaseURL: process.env.DATABASE_URL };
   const migration = await getMigrations(buildAuthOptions(config, pool));
   await migration.runMigrations();
+  await pool.query(`CREATE TABLE IF NOT EXISTS finbridge_onboarding (
+    user_id TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+    data JSONB NOT NULL,
+    completed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
   console.log("Auth schema migrated. Existing data was not reset.");
 } finally { await pool.end(); }

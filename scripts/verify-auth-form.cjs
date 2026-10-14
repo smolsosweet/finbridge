@@ -37,6 +37,7 @@ async function main() {
       reset(mode, lang, { token: mode === "reset" ? "synthetic-token" : "" });
       const html = renderToStaticMarkup(tree());
       assert.doesNotMatch(html, /Apple|newsletter/);
+      assert.doesNotMatch(html, new RegExp(forms.AUTH_FORM_COPY[lang].localMail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
       assert.match(html, new RegExp('lang="' + lang + '"'));
       assert.match(html, /autocomplete="(email|new-password)"/i);
       assert.ok(html.includes(forms.AUTH_FORM_COPY[lang].intro));

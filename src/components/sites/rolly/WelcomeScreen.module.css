@@ -6,8 +6,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 100dvh;
-  padding: 28px 32px;
+  height: 100svh;
+  min-height: 0;
+  overflow: hidden;
+  padding: clamp(16px, 3vh, 28px) clamp(20px, 4vw, 32px);
   color: #172f3c;
   background:
     radial-gradient(ellipse at 15% 10%, #ff1f8f08, transparent 50%),
@@ -72,10 +74,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
   width: 100%;
   max-width: 660px;
-  margin: auto;
-  padding: 56px 0 72px;
+  margin: 0;
+  padding: clamp(14px, 4vh, 56px) 0 clamp(12px, 4.5vh, 72px);
   text-align: center;
 }
 
@@ -83,13 +88,9 @@
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 168px;
-  height: 168px;
-  margin-bottom: 28px;
-  border: 1px solid #ffffff;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #ff1f8f0d, #7b40f20d 50%, #0084ff12);
-  box-shadow: 0 12px 44px #7b40f20d;
+  width: 220px;
+  height: 220px;
+  margin-bottom: 12px;
 }
 
 .greeting {
@@ -158,16 +159,23 @@
 }
 
 @media (max-width: 480px) {
-  .welcome { padding: 20px; }
+  .welcome { padding: 16px 20px; }
   .brand { gap: 8px; font-size: 20px; }
   .brandMark { width: 34px; height: 34px; }
   .language { gap: 6px; padding: 3px 8px; }
   .language select { max-width: 106px; font-size: 12px; }
-  .hero { padding: 42px 0 30px; }
-  .mascotStage { margin-bottom: 22px; }
+  .hero { padding: 16px 0 18px; }
+  .mascotStage { width: min(220px, 27vh); height: min(220px, 27vh); margin-bottom: 12px; }
   .headline { letter-spacing: -1px; }
   .greeting { font-size: 14px; }
   .actions { margin-top: 28px; }
+}
+@media (max-height: 680px) {
+  .welcome { padding-top: 10px; padding-bottom: 10px; }
+  .mascotStage { width: 140px; height: 140px; margin-bottom: 4px; }
+  .greeting { font-size: 13px; }
+  .headline { margin-top: 8px; font-size: clamp(26px, 5vw, 36px); }
+  .actions { margin-top: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

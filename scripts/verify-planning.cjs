@@ -19,6 +19,14 @@ function compile(file, resolve = requireLocal) {
 const weeks = compile("chartWeek.ts");
 const model = compile("planningModel.ts", (name) => name === "./chartWeek" ? weeks : requireLocal(name));
 const header = compile("FinBridgeHeader.tsx");
+const setupCopy = compile("../../../../lib/setup-copy.ts");
+const outlookModel = compile("../../../../lib/financial-outlook.ts", (name) => name === "../components/sites/rolly/replica/planningModel" ? model : requireLocal(name));
+const outlookUI = compile("FinancialOutlook.tsx", (name) => {
+  if (name === "@/lib/financial-outlook") return outlookModel;
+  if (name.endsWith(".module.css")) return { default: new Proxy({}, { get: (_, key) => String(key) }) };
+  if (name === "./store") return { useAppState: () => state, updateState: update => { state = update(state); }, today: () => "2026-10-13" };
+  return requireLocal(name);
+});
 const wallets = [{ id: "bank", name: "Bank", currency: "VND" }, { id: "ali", name: "Alipay", currency: "CNY" }];
 const budget = { id: "budget", kind: "budget", title: "Living costs", amount: 10000000, saved: 999999, currency: "VND", date: "2026-10-01", cycle: "monthly", category: "", wallet: "bank", direction: "", person: "" };
 const expense = { id: "rent", budgetId: "budget", title: "Rent", amount: 3000000, category: "Rent", dueDate: "2026-10-10", recurrence: "monthly", active: true };
@@ -53,6 +61,8 @@ const testReact = { ...React, useState(initial) { const index = cursor++; if (!(
 const component = compile("Planning.tsx", (name) => {
   if (name === "react") return testReact;
   if (name === "./planningModel") return model;
+  if (name === "./FinancialOutlook") return outlookUI;
+  if (name === "@/lib/setup-copy") return setupCopy;
   if (name === "./chartWeek") return weeks;
   if (name === "./FinBridgeHeader") return header;
   if (name === "./CalendarLedgerModal") return { CalendarLedgerModal: () => null };

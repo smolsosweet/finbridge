@@ -41,13 +41,19 @@ export function plannedOccurrences(expense: FixedExpense, start: string, end: st
     let next = addDays(expense.dueDate, Math.max(0, Math.ceil(elapsed / 7)) * 7);
     while (next <= end && results.length < 400) { results.push(next); next = addDays(next, 7); }
   } else {
-    const step = expense.recurrence === "yearly" ? 12 : 1;
+    const step = expense.recurrence === "yearly" ? 12 : expense.intervalMonths && Number.isInteger(expense.intervalMonths) && expense.intervalMonths >= 1 && expense.intervalMonths <= 12 ? expense.intervalMonths : 1;
     const anchor = date(expense.dueDate), begin = date(start);
     let index = Math.max(0, Math.floor(((begin.getFullYear() - anchor.getFullYear()) * 12 + begin.getMonth() - anchor.getMonth()) / step) - 1);
-    let next = addMonths(expense.dueDate, index * step);
+    const occurrence = (i: number) => {
+      const key = addMonths(expense.dueDate, i * step);
+      if (expense.monthPosition !== "end") return key;
+      const d = date(key);
+      return localDateKey(new Date(d.getFullYear(), d.getMonth() + 1, 0, 12));
+    };
+    let next = occurrence(index);
     while (next <= end && results.length < 400) {
       if (next >= start) results.push(next);
-      next = addMonths(expense.dueDate, ++index * step);
+      next = occurrence(++index);
     }
   }
   return results;
@@ -63,8 +69,13 @@ export function budgetSummary(state: AppState, budget: Goal, asOf: string) {
 }
 export function validFixedExpense(state: AppState, expense: FixedExpense): boolean {
   const budget = state.goals.find((item) => item.id === expense.budgetId && item.kind === "budget");
-  const wallet = budget && state.wallets.find((item) => item.id === budget.wallet && !item.archived);
-  return !!budget && !!wallet && wallet.currency === budget.currency && expense.title.trim().length > 0 && Number.isFinite(expense.amount) && expense.amount > 0 && expense.dueDate >= budget.date && /^\d{4}-\d{2}-\d{2}$/.test(expense.dueDate) && Number.isFinite(date(expense.dueDate).getTime()) && localDateKey(date(expense.dueDate)) === expense.dueDate && ["once", "weekly", "monthly", "yearly"].includes(expense.recurrence) && !!expense.category.trim() && (!budget.category || expense.category === budget.category);
+  const wallet = state.wallets.find((item) => item.id === (budget?.wallet || expense.walletId) && !item.archived);
+  return (!expense.budgetId || !!budget) && !!wallet && (!budget || wallet.currency === budget.currency)
+    && expense.title.trim().length > 0 && Number.isFinite(expense.amount) && expense.amount > 0 && (!budget || expense.dueDate >= budget.date)
+    && /^\d{4}-\d{2}-\d{2}$/.test(expense.dueDate) && Number.isFinite(date(expense.dueDate).getTime()) && localDateKey(date(expense.dueDate)) === expense.dueDate
+    && ["once", "weekly", "monthly", "yearly"].includes(expense.recurrence) && (expense.intervalMonths === undefined || (Number.isInteger(expense.intervalMonths) && expense.intervalMonths >= 1 && expense.intervalMonths <= 12))
+    && (expense.reminderDays === undefined || (Number.isInteger(expense.reminderDays) && expense.reminderDays >= 0 && expense.reminderDays <= 30))
+    && !!expense.category.trim() && state.categoryMeta[expense.category]?.type !== "income" && (!budget?.category || expense.category === budget.category);
 }
 export function validBudget(state: AppState, budget: Goal): boolean {
   const wallet = state.wallets.find((item) => item.id === budget.wallet && !item.archived);

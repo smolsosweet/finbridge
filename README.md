@@ -1,5 +1,11 @@
 <div align="center">
 
+<!-- FinBridge application note; the upstream template documentation follows. -->
+
+FinBridge first-account setup: see [FIRST_ACCOUNT_SETUP.md](docs/FIRST_ACCOUNT_SETUP.md)
+for the authenticated seven-step flow, additive PostgreSQL migration, reminders,
+reserve/budget guidance, AI data boundary, and `npm run test:onboarding`.
+
 # AI Website Cloner Template
 
 ### Clone any website with one command

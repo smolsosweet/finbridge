@@ -5,6 +5,8 @@ import { ArrowDownRight, ArrowRight, CalendarDays, ChevronDown, ChevronLeft, Plu
 import { useSearchParams } from "next/navigation";
 import { FinBridgeHeader } from "./FinBridgeHeader";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
+import { FinancialOutlook } from "./FinancialOutlook";
+import { SETUP_COPY } from "@/lib/setup-copy";
 import { Modal } from "./Ui";
 import { localDateKey } from "./chartWeek";
 import { budgetSummary, plannedOccurrences, validBudget, validFixedExpense } from "./planningModel";
@@ -99,7 +101,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const [tab, setTab] = useState(initialTab);
   const [walletFilter, setWalletFilter] = useState("all");
   const [parentFilter, setParentFilter] = useState(params.get("budget") || "all");
-  const [form, setForm] = useState<"budget" | "fixed" | "">(initialForm === "fixed" && !budgets.length ? "budget" : initialForm);
+  const [form, setForm] = useState<"budget" | "fixed" | "">(initialForm);
   const [editingId, setEditingId] = useState("");
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -110,19 +112,26 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const [parentId, setParentId] = useState(params.get("budget") || budgets[0]?.id || "");
   const [dueDate, setDueDate] = useState(today);
   const [recurrence, setRecurrence] = useState<FixedExpense["recurrence"]>("monthly");
+  const [intervalMonths, setIntervalMonths] = useState(1);
+  const [reminderDays, setReminderDays] = useState(3);
+  const [monthPosition, setMonthPosition] = useState<"start" | "end" | "date">("date");
   const [error, setError] = useState("");
   const selectedParent = budgets.find((item) => item.id === parentId);
   const selectedWallet = activeWallets.find((item) => item.id === walletId);
+  const unassigned = lang === "vi" ? "Chưa liên kết ngân sách" : lang === "zh" ? "尚未关联预算" : "Not linked to a budget yet";
+  const repeatMonths = lang === "vi" ? "Lặp mỗi (tháng)" : lang === "zh" ? "每隔几个月重复" : "Repeat every (months)";
+  const reminderLabel = lang === "vi" ? "Nhắc trước (ngày)" : lang === "zh" ? "提前几天提醒" : "Remind before (days)";
   const walletName = (id: string) => { const item = state.wallets.find((wallet) => wallet.id === id); return item?.name === "." ? t.mainWallet : item?.name || t.emptyWallet; };
   const format = (value: number, currency: string) => new Intl.NumberFormat(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-GB", { maximumFractionDigits: 2 }).format(value) + " " + currency;
   const formatDate = (key: string) => new Intl.DateTimeFormat(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-GB", { dateStyle: "medium" }).format(new Date(key + "T12:00:00"));
   const open = (type: "budget" | "fixed", parent?: string, expense?: FixedExpense) => {
     setError(""); setEditingId(expense?.id || ""); setTitle(expense?.title || ""); setAmount(expense ? String(expense.amount) : "");
-    setWalletId(activeWallets[0]?.id || ""); setStartDate(today); setCycle("monthly");
-    const budget = budgets.find((item) => item.id === (parent || expense?.budgetId)) || budgets[0];
+    setWalletId(expense?.walletId || activeWallets[0]?.id || ""); setStartDate(today); setCycle("monthly");
+    const budget = expense && !expense.budgetId ? undefined : budgets.find((item) => item.id === (parent || expense?.budgetId)) || budgets[0];
     setParentId(budget?.id || ""); setCategory(expense?.category || (type === "fixed" ? budget?.category || "" : ""));
     setDueDate(expense?.dueDate || (budget && budget.date > today ? budget.date : today)); setRecurrence(expense?.recurrence || "monthly");
-    setForm(type === "fixed" && !budgets.length ? "budget" : type);
+    setIntervalMonths(expense?.intervalMonths || 1); setReminderDays(expense?.reminderDays ?? 3); setMonthPosition(expense?.monthPosition || "date");
+    setForm(type);
   };
   const selectParent = (id: string) => {
     const parent = budgets.find((item) => item.id === id);
@@ -145,7 +154,12 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       if (!saved) { setError(t.invalid); return; }
       setForm(""); setTab("budget"); return;
     }
-    const expense: FixedExpense = { id: editingId || crypto.randomUUID(), budgetId: parentId, title: title.trim(), amount: Number(amount), category: selectedParent?.category || category, dueDate, recurrence, active: editingId ? fixed.find((item) => item.id === editingId)?.active ?? true : true };
+    let plannedDue = dueDate;
+    if (monthPosition !== "date" && /^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+      const [year, month] = dueDate.split("-").map(Number);
+      plannedDue = `${year}-${String(month).padStart(2, "0")}-${String(monthPosition === "start" ? 1 : new Date(year, month, 0).getDate()).padStart(2, "0")}`;
+    }
+    const expense: FixedExpense = { id: editingId || crypto.randomUUID(), budgetId: parentId, walletId: selectedParent?.wallet || walletId, title: title.trim(), amount: Number(amount), category: selectedParent?.category || category, dueDate: plannedDue, recurrence, intervalMonths, reminderDays, monthPosition, active: editingId ? fixed.find((item) => item.id === editingId)?.active ?? true : true };
     if (!validFixedExpense(state, expense)) { setError(t.invalid); return; }
     let saved = false;
     updateState((current) => {
@@ -157,7 +171,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
     setForm(""); setTab("fixed");
   };
   const filteredBudgets = budgets.filter((item) => walletFilter === "all" || item.wallet === walletFilter);
-  const filteredFixed = fixed.filter((item) => { const parent = budgets.find((budget) => budget.id === item.budgetId); return (parentFilter === "all" || item.budgetId === parentFilter) && (walletFilter === "all" || parent?.wallet === walletFilter); });
+  const filteredFixed = fixed.filter((item) => { const parent = budgets.find((budget) => budget.id === item.budgetId); return (parentFilter === "all" || item.budgetId === parentFilter) && (walletFilter === "all" || (parent?.wallet || item.walletId) === walletFilter); });
 
   return <main className="r-dashboard fb-home fb-planning">
     <FinBridgeHeader
@@ -177,10 +191,11 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       </div>
       <button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open(tab)}>
         <Plus size={18} />
-        <span>{tab === "budget" ? t.addBudget : budgets.length ? t.addFixed : t.addBudget}</span>
+        <span>{tab === "budget" ? t.addBudget : t.addFixed}</span>
       </button>
     </div>
 
+    <FinancialOutlook editable />
     <div className="fb-planning-toolbar">
       <div className="fb-planning-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={tab === "budget"} onClick={() => setTab("budget")}>
@@ -223,18 +238,20 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
     {tab === "budget" ? <div className="fb-planning-cards">{!filteredBudgets.length ? <div className="fb-planning-empty"><Wallet size={30} /><h2>{t.emptyBudget}</h2><p>{t.emptyBudgetHint}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("budget")}><Plus size={17} />{t.addBudget}</button></div> : filteredBudgets.map((budget) => {
       const summary = budgetSummary(state, budget, today);
       return <article key={budget.id} className="fb-budget-card"><div className="fb-planning-card-heading"><span className="fb-planning-icon"><Wallet size={20} /></span><div><h2>{budget.title}</h2><p>{walletName(budget.wallet)} · {budget.currency} · {budget.category || t.allCategories}</p></div></div><p className="fb-planning-period"><CalendarDays size={15} />{formatDate(summary.start)} – {formatDate(summary.end)}</p><div className="fb-budget-limit"><span>{t.limit}</span><b>{format(budget.amount, budget.currency)}</b></div><progress aria-label={t.actual} value={Math.max(0, Math.min(summary.actual, budget.amount))} max={budget.amount} /><dl className="fb-planning-numbers"><div><dt>{t.actual}</dt><dd>{format(summary.actual, budget.currency)}</dd></div><div><dt>{t.remaining}</dt><dd>{format(summary.remaining, budget.currency)}</dd></div><div><dt>{t.planned}</dt><dd>{format(summary.planned, budget.currency)}</dd></div><div><dt>{t.flexible}</dt><dd>{format(summary.allocationRemaining, budget.currency)}</dd></div></dl>{(!summary.matchingCurrency || state.wallets.find((item) => item.id === budget.wallet)?.archived) && <p className="fb-planning-warning">{t.mismatch}</p>}{summary.actual > budget.amount && <p className="fb-planning-warning">{t.overActual}</p>}{summary.planned > budget.amount && <p className="fb-planning-warning">{t.overPlanned}</p>}<p className="fb-planning-note">{t.noDouble}</p><div className="fb-planning-card-actions"><button type="button" onClick={() => { setParentFilter(budget.id); setTab("fixed"); }}>{t.allocations}<ArrowRight size={15} /></button><button type="button" disabled={!summary.matchingCurrency || !!state.wallets.find((item) => item.id === budget.wallet)?.archived} onClick={() => open("fixed", budget.id)}><Plus size={16} />{t.addFixed}</button></div><button type="button" className="fb-planning-history" onClick={() => navigate("?tab=transactions&wallet=" + encodeURIComponent(budget.wallet) + "&type=expense&from=" + summary.start + "&to=" + summary.end + (budget.category ? "&category=" + encodeURIComponent(budget.category) : ""))}>{t.viewHistory}<ArrowRight size={14} /></button></article>;
-    })}</div> : <div className="fb-fixed-list">{!filteredFixed.length ? <div className="fb-planning-empty"><ReceiptText size={30} /><h2>{t.emptyFixed}</h2><p>{budgets.length ? t.emptyFixedHint : t.emptyBudgetHint}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("fixed", parentFilter === "all" ? undefined : parentFilter)}><Plus size={17} />{budgets.length ? t.addFixed : t.addBudget}</button></div> : filteredFixed.map((expense) => {
+    })}</div> : <div className="fb-fixed-list">{!filteredFixed.length ? <div className="fb-planning-empty"><ReceiptText size={30} /><h2>{t.emptyFixed}</h2><p>{SETUP_COPY[lang].planned}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("fixed", parentFilter === "all" ? undefined : parentFilter)}><Plus size={17} />{t.addFixed}</button></div> : filteredFixed.map((expense) => {
       const parent = budgets.find((item) => item.id === expense.budgetId);
       const window = parent ? budgetSummary(state, parent, today) : undefined;
       const due = window ? plannedOccurrences(expense, window.start, window.end) : [];
-      return <article className="fb-fixed-card" key={expense.id}><div className="fb-planning-card-heading"><span className="fb-planning-icon"><ArrowDownRight size={20} /></span><div><h2>{expense.title}</h2><p>{t.parent} · {parent?.title || t.noParent}</p><p>{parent ? walletName(parent.wallet) + " · " + parent.currency : ""} · {expense.category}</p></div><b>{parent ? format(expense.amount, parent.currency) : expense.amount}</b></div><div className="fb-fixed-meta"><span className={expense.active ? "is-active" : ""}>{expense.active ? t.active : t.paused}</span><span>{t[expense.recurrence]}</span><span>{formatDate(expense.dueDate)}</span>{due.length > 0 && <span>{due.map(formatDate).join(" · ")}</span>}</div><div className="fb-planning-card-actions"><button type="button" disabled={!parent} onClick={() => open("fixed", parent?.id, expense)}>{t.edit}</button><button type="button" onClick={() => updateState((current) => ({ ...current, fixedExpenses: (current.fixedExpenses || []).map((item) => item.id === expense.id ? { ...item, active: !item.active } : item) }))}>{expense.active ? t.pause : t.resume}</button></div></article>;
+      const currency = parent?.currency || state.wallets.find(w => w.id === expense.walletId)?.currency || "";
+      return <article className="fb-fixed-card" key={expense.id}><div className="fb-planning-card-heading"><span className="fb-planning-icon"><ArrowDownRight size={20} /></span><div><h2>{expense.title}</h2><p>{t.parent} · {parent?.title || (expense.budgetId ? t.noParent : unassigned)}</p><p>{walletName(parent?.wallet || expense.walletId || "")} · {currency} · {expense.category}</p></div><b>{format(expense.amount, currency)}</b></div><div className="fb-fixed-meta"><span className={expense.active ? "is-active" : ""}>{expense.active ? t.active : t.paused}</span><span>{expense.recurrence === "monthly" ? `${repeatMonths}: ${expense.intervalMonths || 1}` : t[expense.recurrence]}</span><span>{reminderLabel}: {expense.reminderDays ?? 3}</span><span>{formatDate(expense.dueDate)}</span>{due.length > 0 && <span>{due.map(formatDate).join(" · ")}</span>}</div><div className="fb-planning-card-actions"><button type="button" disabled={!!expense.budgetId && !parent} onClick={() => open("fixed", parent?.id, expense)}>{t.edit}</button><button type="button" onClick={() => updateState((current) => ({ ...current, fixedExpenses: (current.fixedExpenses || []).map((item) => item.id === expense.id ? { ...item, active: !item.active } : item) }))}>{expense.active ? t.pause : t.resume}</button></div></article>;
     })}<p className="fb-planning-note">{t.noPayment}</p></div>}
     {state.goals.some((item) => item.kind === "savings") && <details className="fb-planning-legacy"><summary>{t.oldSavings}</summary><ul>{state.goals.filter((item) => item.kind === "savings").map((item) => <li key={item.id}>{item.title} · {format(item.saved, item.currency)} / {format(item.amount, item.currency)}</li>)}</ul></details>}
     {form && <Modal title={form === "budget" ? t.addBudget : editingId ? t.edit + " · " + t.fixed : t.addFixed} onClose={() => setForm("")}><form className="r-form fb-planning-form" onSubmit={save}>
-      {form === "fixed" && <><label>{t.parent}<select value={parentId} required onChange={(event) => selectParent(event.target.value)}><option value="">{t.allBudgets}</option>{budgets.filter((item) => activeWallets.some((wallet) => wallet.id === item.wallet && wallet.currency === item.currency)).map((item) => <option key={item.id} value={item.id}>{item.title} · {item.currency}</option>)}</select></label><p className="fb-planning-note">{t.parentContext}{selectedParent ? " " + walletName(selectedParent.wallet) + " · " + selectedParent.currency : ""}</p></>}
+      {form === "fixed" && <><label>{t.parent}<select value={parentId} onChange={(event) => selectParent(event.target.value)}><option value="">{unassigned}</option>{budgets.filter((item) => activeWallets.some((wallet) => wallet.id === item.wallet && wallet.currency === item.currency)).map((item) => <option key={item.id} value={item.id}>{item.title} · {item.currency}</option>)}</select></label>{selectedParent && <p className="fb-planning-note">{t.parentContext} {walletName(selectedParent.wallet)} · {selectedParent.currency}</p>}</>}
       <label>{t.name}<input aria-label={t.name} placeholder={form === "budget" ? t.budgetPlaceholder : t.fixedPlaceholder} required maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-      {form === "budget" && <label>{t.wallet}<select value={walletId} required onChange={(event) => setWalletId(event.target.value)}>{activeWallets.map((item) => <option key={item.id} value={item.id}>{walletName(item.id)} · {item.currency}</option>)}</select></label>}
-      <label>{t.amount} · {form === "budget" ? selectedWallet?.currency : selectedParent?.currency}<input aria-label={t.amount} type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
+      {(form === "budget" || !selectedParent) && <label>{t.wallet}<select value={walletId} required onChange={(event) => { setWalletId(event.target.value); setAmount(""); }}>{activeWallets.map((item) => <option key={item.id} value={item.id}>{walletName(item.id)} · {item.currency}</option>)}</select></label>}
+      <label>{t.amount} · {form === "fixed" && selectedParent ? selectedParent.currency : selectedWallet?.currency}<input aria-label={t.amount} type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
+      {form === "fixed" && <><label>{repeatMonths}<input type="number" min={1} max={12} step={1} value={intervalMonths} onChange={event => setIntervalMonths(Number(event.target.value))} /></label><label>{reminderLabel}<input type="number" min={0} max={30} step={1} value={reminderDays} onChange={event => setReminderDays(Number(event.target.value))} /></label><label>{SETUP_COPY[lang].monthPosition}<select value={monthPosition} onChange={event => setMonthPosition(event.target.value as typeof monthPosition)}>{(["start", "end", "date"] as const).map((p, i) => <option key={p} value={p}>{SETUP_COPY[lang].positions[i]}</option>)}</select></label></>}
       <label>{t.category}<select value={form === "fixed" && selectedParent?.category ? selectedParent.category : category} disabled={form === "fixed" && !!selectedParent?.category} required={form === "fixed"} onChange={(event) => setCategory(event.target.value)}><option value="">{form === "budget" ? t.allCategories : t.chooseCategory}</option>{Array.from(new Set([...expenseCategories, ...(selectedParent?.category ? [selectedParent.category] : [])])).map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
       {form === "budget" ? <><label>{t.start}<input type="date" required value={startDate} onInput={(event) => setStartDate(event.currentTarget.value)} /></label><label>{t.cycle}<select value={cycle} onChange={(event) => setCycle(event.target.value)}>{(["weekly", "monthly", "yearly"] as const).map((item) => <option value={item} key={item}>{t[item]}</option>)}</select></label></> : <><label>{t.due}<input type="date" required min={selectedParent?.date} value={dueDate} onInput={(event) => setDueDate(event.currentTarget.value)} /></label><label>{t.recurrence}<select value={recurrence} onChange={(event) => setRecurrence(event.target.value as FixedExpense["recurrence"])}>{(["once", "weekly", "monthly", "yearly"] as const).map((item) => <option value={item} key={item}>{t[item]}</option>)}</select></label></>}
       <p className="fb-planning-note">{t.noPayment}</p>{error && <p role="alert" className="fb-planning-warning">{error}</p>}<div className="fb-modal-actions"><button type="button" className="r-secondary" onClick={() => setForm("")}>{t.cancel}</button><button type="submit" className="r-primary">{t.save}</button></div>

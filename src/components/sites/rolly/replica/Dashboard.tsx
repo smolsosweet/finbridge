@@ -10,6 +10,7 @@ import { calendarWeek, localDateKey, shiftCalendarWeek } from "./chartWeek";
 import { WalletSettingsDirectory } from "./SettingsOverview";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
 import { FinBridgeHeader } from "./FinBridgeHeader";
+import { FinancialOutlook } from "./FinancialOutlook";
 
 type DashboardSample = {
   id: string;
@@ -1183,6 +1184,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
           <span>{t.addTransaction}</span>
         </button>
       </div>
+      <FinancialOutlook />
       <section className="fb-wallet-section" aria-label={t.yourWallets}>
         <div className="fb-section-heading">
           <div>
