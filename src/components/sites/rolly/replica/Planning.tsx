@@ -12,6 +12,7 @@ import { localDateKey } from "./chartWeek";
 import { budgetSummary, plannedOccurrences, validBudget, validFixedExpense } from "./planningModel";
 import { updateState, useAppState, workspaceOwner, type FixedExpense, type Goal } from "./store";
 import { calculateScenario, scenarioContext, type FinancialScenario } from "@/lib/scenario-planner";
+import { SAFETY_COPY } from "@/components/safety/safety-copy";
 
 type PlannerWalletChoice = { id: string; name: string; currency: string };
 type PlannerMessage = { role: "user" | "assistant"; text: string; scenarios?: FinancialScenario[]; clarification?: string | null; walletChoices?: PlannerWalletChoice[]; pendingScenario?: string; selectedWalletId?: string };
@@ -377,6 +378,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       onSelectLanguage={(val) => updateState((s) => ({ ...s, settings: { ...s?.settings, language: val } }))}
     />
 
+    <button type="button" className="fb-safety-planning-link" onClick={() => navigate("safetyAlerts")}><span>{SAFETY_COPY[lang].title}<small>{SAFETY_COPY[lang].subtitle}</small></span><ArrowRight size={20} /></button>
     <div className="fb-home-intro fb-planning-header">
       <div>
         <p className="fb-eyebrow">{lang === "vi" ? "KẾ HOẠCH CHI TIÊU" : lang === "zh" ? "支出计划" : "SPENDING PLAN"}</p>

@@ -8,13 +8,14 @@ FinBridge is a multilingual personal finance workspace for wallets, transactions
 - First-account setup: preferred name, wallets, opening balances, categories, fixed costs and reserves.
 - Cash-flow summaries per currency, weekly charts per wallet and filtered transaction history.
 - Budgets linked to fixed expenses, due-date guidance and reserve warnings.
+- [Safety thresholds and alerts](docs/safety/SAFETY_ALERTS.md): actual/forecast budget rules, wallet floors, protected history and optional private email reminders.
 - Gemini-assisted transaction entry and financial scenario planning, with review before recording changes.
 
 Wallets are manually tracked. The application does not connect to banks, move real money or convert wallet balances between currencies.
 
 ## Data and security
 
-PostgreSQL stores accounts, sessions, verification records and completed initial setup. Subsequent financial records use account-scoped browser storage; full history synchronization across devices is not implemented.
+PostgreSQL stores accounts, sessions, verification records, completed initial setup and safety alert rules/history. With explicit source consent, a minimal financial snapshot is stored for alert evaluation. The full workspace still uses account-scoped browser storage; full history synchronization across devices is not implemented.
 
 Email needs a configured Brevo HTTPS or SMTP sender. Local outbox mode is development-only. Secrets belong in ignored environment files or hosting settings.
 

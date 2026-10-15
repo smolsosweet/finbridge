@@ -2,6 +2,7 @@ import nextEnv from "@next/env";
 import { Pool } from "pg";
 import { getMigrations } from "better-auth/db/migration";
 import { initializeAccountLifecycle } from "../src/lib/account-lifecycle.ts";
+import { SAFETY_SQL } from "../src/lib/safety-repository.ts";
 
 nextEnv.loadEnvConfig(process.cwd());
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required.");
@@ -12,6 +13,7 @@ try {
   const migration = await getMigrations(buildAuthOptions(config, pool));
   await migration.runMigrations();
   await initializeAccountLifecycle(pool);
+  await pool.query(SAFETY_SQL);
   await pool.query(`CREATE TABLE IF NOT EXISTS finbridge_onboarding (
     user_id TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
     data JSONB NOT NULL,

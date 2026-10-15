@@ -35,6 +35,8 @@
     "check": "npm run lint && npm run typecheck && npm run build",
     "auth:migrate": "node --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/migrate-auth.mjs",
     "test:auth": "node --test scripts/verify-auth-unit.cjs",
+    "test:safety": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-safety.mjs",
+    "test:safety:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-safety-postgres.mjs",
     "test:onboarding": "node --test scripts/verify-onboarding.cjs scripts/verify-onboarding-form.cjs",
     "test:auth:postgres": "node --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-auth-postgres.mjs",
     "test:transaction-ai": "node --experimental-strip-types --test scripts/verify-transaction-ai.mjs",
