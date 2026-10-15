@@ -9,5 +9,5 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ l
   }
   if (await getSession()) redirect("/app");
   const { lang } = await searchParams;
-  return <WelcomeEntry lang={authLanguage(lang)} />;
+  return <WelcomeEntry lang={authLanguage(lang)} preferStoredLanguage={!lang} />;
 }

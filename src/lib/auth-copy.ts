@@ -5,3 +5,8 @@ export const AUTH_COPY = {
   vi: { language: "Ngôn ngữ hiển thị", greeting: "Xin chào! Tôi là Jake, trợ lý tài chính cá nhân của bạn.", jack: "Jake, trợ lý FinBridge", headline: "Theo dõi thông minh hơn với trợ lý AI", start: "Bắt đầu", returning: "Người dùng quay lại? Đăng nhập tại đây", back: "Quay lại", title: "Đăng nhập FinBridge", subtitle: "Tiếp tục hành trình tài chính bằng tài khoản Google của bạn.", google: "Tiếp tục với Google", loading: "Đang kết nối Google…", note: "Lần đăng nhập Google đầu tiên sẽ tạo tài khoản FinBridge của bạn.", unavailable: "Đăng nhập Google chưa khả dụng. Vui lòng liên hệ quản trị ứng dụng.", failure: "Chưa thể hoàn tất đăng nhập. Vui lòng thử lại.", secure: "FinBridge không nhận mật khẩu Google của bạn." },
   zh: { language: "显示语言", greeting: "你好！我是 Jake，你的个人财务助手。", jack: "Jake，FinBridge 助手", headline: "与 AI 助手一起智能管理财务", start: "开始", returning: "已有账户？在此登录", back: "返回", title: "登录 FinBridge", subtitle: "使用你的 Google 账户继续财务之旅。", google: "使用 Google 继续", loading: "正在连接 Google…", note: "首次使用 Google 登录会创建你的 FinBridge 账户。", unavailable: "Google 登录暂不可用。请联系应用管理员。", failure: "未能完成登录，请重试。", secure: "FinBridge 不会获取你的 Google 密码。" },
 };
+export const AUTH_LINKING_COPY: Record<AuthLanguage, string> = {
+  en: "Verify this email address first, then try Google again to connect it to your FinBridge account.",
+  vi: "Hãy xác minh địa chỉ email này trước, rồi thử lại bằng Google để liên kết với tài khoản FinBridge.",
+  zh: "请先验证此邮箱，然后再次使用 Google 将其关联到你的 FinBridge 账户。",
+};

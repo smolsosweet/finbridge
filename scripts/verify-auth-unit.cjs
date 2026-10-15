@@ -12,6 +12,7 @@ function compile(relative, resolve = require) {
 const storage = compile("src/lib/workspace-storage.ts");
 const config = compile("src/lib/auth-config.ts");
 const copy = compile("src/lib/auth-copy.ts");
+const languagePreference = compile("src/lib/language-preference.ts");
 const mail = compile("src/lib/auth-mail.ts");
 test("account deletion clears only the deleted owner's local data after server confirmation", async () => {
   const previousStorage = global.localStorage;
@@ -93,13 +94,28 @@ const env = { BETTER_AUTH_URL: "http://localhost:3011", BETTER_AUTH_SECRET: "x".
 test("auth is unavailable when any required configuration is absent", () => { for (const key of ["BETTER_AUTH_URL", "BETTER_AUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "DATABASE_URL"]) assert.equal(config.readAuthConfig({ ...env, [key]: "" }), null); });
 test("production requires a canonical HTTPS origin and a strong-length secret", () => { assert.throws(() => config.readAuthConfig({ ...env, NODE_ENV: "production" })); assert.throws(() => config.readAuthConfig({ ...env, BETTER_AUTH_URL: "https://example.com/evil?next=x" })); assert.throws(() => config.readAuthConfig({ ...env, BETTER_AUTH_SECRET: "weak" })); assert.equal(config.readAuthConfig({ ...env, NODE_ENV: "production", BETTER_AUTH_URL: "https://example.com" }).baseURL, "https://example.com"); });
 test("welcome defaults to English and identifies Jake in all three languages", () => { assert.equal(copy.authLanguage(undefined), "en"); assert.equal(copy.authLanguage("forged"), "en"); for (const language of ["en", "vi", "zh"]) { assert.ok(copy.AUTH_COPY[language].greeting.includes("Jake")); assert.ok(copy.AUTH_COPY[language].google.includes("Google")); } });
+test("display language preference is normalized, stored locally and mapped for the workspace", () => {
+  const previousStorage = global.localStorage, records = new Map();
+  global.localStorage = { getItem: (key) => records.get(key) ?? null, setItem: (key, value) => records.set(key, value) };
+  try {
+    assert.equal(languagePreference.readPreferredLanguage(), "en");
+    assert.equal(languagePreference.rememberPreferredLanguage("Tiếng Việt"), "vi");
+    assert.equal(languagePreference.readPreferredLanguage(), "vi");
+    assert.equal(languagePreference.preferredLanguage("中文"), "zh");
+    assert.equal(languagePreference.workspaceLanguage("zh"), "中文");
+  } finally { global.localStorage = previousStorage; }
+});
 test("actual store partitions accounts, clears memory on logout, and preserves saved records", () => {
   const s = fixture(), previousWindow = global.window, previousStorage = global.localStorage;
   global.window = {}; global.localStorage = s;
   try {
-    const store = compile("src/components/sites/rolly/replica/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
+    const store = compile("src/components/sites/rolly/replica/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "@/lib/language-preference" ? languagePreference : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
     assert.throws(() => store.updateState((state) => state));
+    languagePreference.rememberPreferredLanguage("zh");
     store.activateUserWorkspace("A", "Google A");
+    assert.equal(store.useAppState().settings.language, "中文");
+    store.setSetting("language", "Tiếng Việt");
+    assert.equal(languagePreference.readPreferredLanguage(), "vi");
     assert.equal(store.useAppState().transactions.length, 0);
     store.updateState((state) => ({ ...state, transactions: [{ id: "A-only", amount: 123 }] }));
     const savedA = s.getItem(storage.userWorkspaceKey("A"));
@@ -117,7 +133,7 @@ test("actual store imports only after choice and retains the legacy backup", () 
   const s = fixture(), previousWindow = global.window, previousStorage = global.localStorage;
   global.window = {}; global.localStorage = s;
   try {
-    const store = compile("src/components/sites/rolly/replica/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
+    const store = compile("src/components/sites/rolly/replica/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "@/lib/language-preference" ? languagePreference : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
     store.activateUserWorkspace("A", "Google A"); assert.throws(() => store.importOldWorkspace(false));
     assert.equal(store.useAppState().transactions.length, 0);
     store.importOldWorkspace(true); assert.equal(store.useAppState().transactions.length, 1);
@@ -129,7 +145,7 @@ test("default category arrays do not leak across accounts", () => {
   const s = fixture(), previousWindow = global.window, previousStorage = global.localStorage;
   global.window = {}; global.localStorage = s;
   try {
-    const store = compile("src/components/sites/rolly/replica/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
+    const store = compile("src/components/sites/rolly/replica/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "@/lib/language-preference" ? languagePreference : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
     store.activateUserWorkspace("A", "A"); store.useAppState().categories.push("A-only");
     store.activateUserWorkspace("B", "B"); assert.ok(!store.useAppState().categories.includes("A-only"));
   } finally { global.window = previousWindow; global.localStorage = previousStorage; }

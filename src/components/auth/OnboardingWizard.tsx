@@ -5,6 +5,7 @@ import { Mascot } from "page-mascot";
 import { SETUP_COPY } from "@/lib/setup-copy";
 import { onboardingSchema, onboardingDraftSchema, OCCUPATIONS, SETUP_CURRENCIES, isStarterWorkspace, type OnboardingData, type OnboardingRecord } from "@/lib/onboarding";
 import { authLanguage } from "@/lib/auth-copy";
+import { rememberPreferredLanguage } from "@/lib/language-preference";
 import { LanguageSelector } from "@/components/sites/rolly/LanguageSelector";
 import type { AppState } from "@/components/sites/rolly/replica/store";
 import theme from "@/components/sites/rolly/WelcomeScreen.module.css";
@@ -65,7 +66,7 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
   const field = step === 3 ? "expenseCategories" : "incomeCategories";
   return <main lang={lang} className={`${theme.welcome} ${styles.page}`}>
     <div className={styles.shell}>
-      <header className={styles.header}><b><span className={theme.fin}>Fin</span><span className={theme.bridge}>Bridge</span></b><LanguageSelector value={lang} onChange={l => setData(d => ({ ...d, language: l }))} /><span>{step + 1} / 7</span></header>
+      <header className={styles.header}><b><span className={theme.fin}>Fin</span><span className={theme.bridge}>Bridge</span></b><LanguageSelector value={lang} onChange={l => { rememberPreferredLanguage(l); setData(d => ({ ...d, language: l })); }} /><span>{step + 1} / 7</span></header>
       <progress value={step + 1} max={7} aria-label={t.title} className={styles.progress} />
       <div className={styles.intro}><Mascot directions="/mascots/lac-directions.webp" reactions="/mascots/lac-reactions.webp" size={96} label="Jake, FinBridge" /><div><p>{t.title}</p><h1>{t.steps[step]}</h1><small>{t.subtitle}</small></div></div>
       <form onSubmit={next} className={styles.card}>

@@ -95,6 +95,15 @@ test("unverified email cannot obtain a session, even with the correct password",
   assert.equal(response.status, 403); assert.equal((await response.json()).code, "EMAIL_NOT_VERIFIED");
   assert.equal((await counts())[2], before);
 });
+test("unverified local accounts cannot be implicitly linked to Google", async () => {
+  const before = await counts();
+  subject = "email-user";
+  const flow = await start();
+  const response = await request("/callback/google?code=synthetic-code&state=" + flow.url.searchParams.get("state"), { cookie: flow.cookie });
+  assert.equal(response.status, 302);
+  assert.equal(new URL(response.headers.get("location"), baseURL).pathname, "/login");
+  assert.deepEqual(await counts(), before);
+});
 test("verification link enables email login and uses the same workspace user identity", async () => {
   const link = new URL(mail.find((message) => message.to === emailBody.email && message.kind === "verify").url);
   const verified = await request(link.pathname.replace("/api/auth", "") + link.search);
@@ -102,6 +111,15 @@ test("verification link enables email login and uses the same workspace user ide
   const response = await request("/sign-in/email", { method: "POST", body: emailBody });
   assert.equal(response.status, 200); emailCookie = cookies(response);
   const data = await session(emailCookie); assert.equal(data.user.id, emailUser); assert.equal(data.user.role, "user");
+});
+test("a verified matching Google identity links to the existing user without creating a duplicate", async () => {
+  const before = await counts();
+  const google = await signInAs("email-user");
+  const data = await session(google.cookie);
+  assert.equal(data.user.id, emailUser);
+  assert.deepEqual(await counts(), [before[0], before[1] + 1, before[2] + 1]);
+  const providers = (await pool.query('SELECT "providerId" FROM "account" WHERE "userId" = $1 ORDER BY "providerId"', [emailUser])).rows.map((row) => row.providerId);
+  assert.deepEqual(providers, ["credential", "google"]);
 });
 test("wrong password and unknown email return the same safe code and create no sessions", async () => {
   const before = (await counts())[2], codes = [];
@@ -349,16 +367,23 @@ test("email login and recovery rate limits reject bursts for a stable client add
   }
 });
 
-test("Google cannot silently take over an existing email account when linking is disabled", async () => {
+test("disabling Google account linking still prevents access to an existing verified email account", async () => {
+  const body = { ...emailBody, email: "linking-disabled@example.invalid" };
+  assert.equal((await request("/sign-up/email", { method: "POST", body })).status, 200);
+  const verify = new URL(mail.find((message) => message.to === body.email && message.kind === "verify").url);
+  assert.equal((await request(verify.pathname.replace("/api/auth", "") + verify.search)).status, 302);
   const before = await counts();
-  subject = "email-user";
-  const flow = await start();
-  const response = await request("/callback/google?code=synthetic-code&state=" + flow.url.searchParams.get("state"), { cookie: flow.cookie });
+  const linkingDisabled = betterAuth({ ...productionOptions, rateLimit: { enabled: false }, account: { ...productionOptions.account, accountLinking: { enabled: false } } });
+  const disabledRequest = (path, { method = "GET", cookie = "", body: requestBody } = {}) => handleAuthRequest(linkingDisabled, new Request(baseURL + "/api/auth" + path, { method, headers: { origin: baseURL, ...(cookie ? { cookie } : {}), ...(requestBody ? { "content-type": "application/json" } : {}) }, ...(requestBody ? { body: JSON.stringify(requestBody) } : {}) }), baseURL);
+  subject = "linking-disabled";
+  const started = await disabledRequest("/sign-in/social", { method: "POST", body: { provider: "google", callbackURL: "/app", errorCallbackURL: "/login?error=oauth" } });
+  const state = new URL((await started.json()).url).searchParams.get("state");
+  const response = await disabledRequest("/callback/google?code=synthetic-code&state=" + state, { cookie: cookies(started) });
   assert.equal(response.status, 302);
   assert.equal(new URL(response.headers.get("location"), baseURL).pathname, "/login");
   assert.deepEqual(await counts(), before);
   assert.equal(await session(cookies(response)), null);
-  const login = await request("/sign-in/email", { method: "POST", body: { ...emailBody, password: "New-synthetic-password-456" } });
+  const login = await request("/sign-in/email", { method: "POST", body: { ...body, password: emailBody.password } });
   assert.equal(login.status, 200);
 });
 

@@ -1,29 +1,35 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { GoogleIcon } from "./Icons";
 import { authClient } from "@/lib/auth-client";
-import { AUTH_COPY, authLanguage, type AuthLanguage } from "@/lib/auth-copy";
+import { AUTH_COPY, AUTH_LINKING_COPY, authLanguage, type AuthLanguage } from "@/lib/auth-copy";
 import { AUTH_FORM_COPY, type AuthMode } from "@/lib/auth-form-copy";
+import { AUTH_SIGNUP_NOTICE } from "@/lib/auth-notice-copy";
+import { readPreferredLanguage, rememberPreferredLanguage } from "@/lib/language-preference";
 import { LanguageSelector } from "./LanguageSelector";
 import welcome from "./WelcomeScreen.module.css";
 import styles from "./AuthCard.module.css";
 
 type FormMessage = keyof typeof AUTH_FORM_COPY.en;
+type AuthError = FormMessage | "googleFailure" | "googleVerificationRequired" | "";
+type AuthNotice = FormMessage | "checkSignup" | "";
 
-export function AuthCard({ onBack, lang = "en", configured = false, initialError = false, mode = "login", mailMode = "unavailable", token = "", verified: _verified = false }: {
-  onBack: () => void; lang?: string; configured?: boolean; initialError?: boolean;
+export function AuthCard({ onBack, lang = "en", configured = false, initialErrorCode = "", mode = "login", mailMode = "unavailable", token = "", verified: _verified = false, preferStoredLanguage = true }: {
+  onBack: () => void; lang?: string; configured?: boolean; initialErrorCode?: string; preferStoredLanguage?: boolean;
   mode?: AuthMode; mailMode?: "local" | "smtp" | "brevo" | "unavailable"; token?: string; verified?: boolean;
 }) {
   const [language, setLanguage] = useState<AuthLanguage>(authLanguage(lang));
+  useEffect(() => { if (preferStoredLanguage) setLanguage(readPreferredLanguage(authLanguage(lang))); }, [lang, preferStoredLanguage]);
   const t = AUTH_COPY[language], f = AUTH_FORM_COPY[language];
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<FormMessage | "googleFailure" | "">(initialError ? (mode === "reset" ? "invalidToken" : "googleFailure") : "");
-  const [notice, setNotice] = useState<FormMessage | "">("");
+  const initialError: AuthError = mode === "reset" && initialErrorCode ? "invalidToken" : initialErrorCode === "account_not_linked" ? "googleVerificationRequired" : initialErrorCode ? "googleFailure" : "";
+  const [error, setError] = useState<AuthError>(initialError);
+  const [notice, setNotice] = useState<AuthNotice>("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -37,7 +43,7 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
   const title = mode === "signup" ? f.signupTitle : mode === "forgot" ? f.forgotTitle : mode === "reset" ? f.resetTitle : f.loginTitle;
   const label = mode === "signup" ? f.signup : mode === "forgot" ? f.sendReset : mode === "reset" ? f.savePassword : f.login;
   const resetDone = mode === "reset" && notice === "resetDone";
-  const invalidReset = mode === "reset" && (!token || initialError || error === "invalidToken");
+  const invalidReset = mode === "reset" && (!token || Boolean(initialErrorCode) || error === "invalidToken");
   const disabled = !configured || loading || ((mode === "signup" || mode === "forgot") && !mailReady) || invalidReset || resetDone;
   function failure(code?: string, status?: number): FormMessage {
     if (status === 429) return "limited";
@@ -52,7 +58,7 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
     finally { inFlight.current = false; setLoading(false); }
   }
   function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+    event.preventDefault(); rememberPreferredLanguage(language);
     if (disabled) return;
     if ((mode === "signup" || mode === "reset") && password !== confirmation) { setError("mismatch"); return; }
     void run(async () => {
@@ -64,7 +70,7 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
         const fallbackName = email.trim().split("@")[0] || "User";
         const result = await authClient.signUp.email({ name: fallbackName, email: email.trim(), password, callbackURL: loginCallback });
         if (result.error) { setError(failure(result.error.code, result.error.status)); return; }
-        setPassword(""); setConfirmation(""); setNotice("checkVerification"); setNeedsVerification(true);
+        setPassword(""); setConfirmation(""); setNotice("checkSignup"); setNeedsVerification(true);
       } else if (mode === "forgot") {
         const result = await authClient.requestPasswordReset({ email: email.trim(), redirectTo: route("/reset-password") });
         if (result.error) { setError(failure(result.error.code, result.error.status)); return; }
@@ -78,6 +84,7 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
   }
   async function signInGoogle() {
     if (!configured || inFlight.current) return;
+    rememberPreferredLanguage(language);
     await run(async () => {
       const result = await authClient.signIn.social({ provider: "google", callbackURL: "/app", errorCallbackURL: route("/login") + "&error=oauth" });
       if (result.error || !result.data?.url) setError("googleFailure");
@@ -105,7 +112,7 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
         </button>
       </div>
       <div className={styles.headerRight}>
-        <LanguageSelector value={language} onChange={setLanguage} />
+        <LanguageSelector value={language} onChange={(next) => { rememberPreferredLanguage(next); setLanguage(next); }} />
       </div>
     </header>
     <div className={styles.content}>
@@ -119,8 +126,9 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
           <button disabled={disabled} aria-busy={loading} className={`${welcome.start} ${styles.submit}`}>{loading ? f.working : label}</button>
         </form>}
         {mode === "login" && <p className={styles.recovery}>{f.forgot} <Link className={styles.link} href={route("/forgot-password")}>{f.resetLink}</Link></p>}
-        {invalidReset ? <><p role="alert" className={styles.error}>{f.invalidToken}</p><p className={styles.recovery}><Link className={styles.link} href={route("/forgot-password")}>{f.newResetLink}</Link></p></> : error && <p role="alert" className={styles.error}>{error === "googleFailure" ? t.failure : f[error]}</p>}
-        {notice && <p role="status" className={styles.notice}>{f[notice]}</p>}
+        {invalidReset ? <><p role="alert" className={styles.error}>{f.invalidToken}</p><p className={styles.recovery}><Link className={styles.link} href={route("/forgot-password")}>{f.newResetLink}</Link></p></> : error && <p role="alert" className={styles.error}>{error === "googleFailure" ? t.failure : error === "googleVerificationRequired" ? AUTH_LINKING_COPY[language] : f[error]}</p>}
+        {notice && <p role="status" className={styles.notice}>{notice === "checkSignup" ? AUTH_SIGNUP_NOTICE[language] : f[notice]}</p>}
+        {notice === "checkSignup" && <p className={styles.recovery}><Link className={styles.link} href={route("/forgot-password")}>{f.resetLink}</Link></p>}
         {needsVerification && mailReady && <button type="button" onClick={resend} disabled={loading} className={`${styles.link} ${styles.resend}`}>{f.resend}</button>}
         {(mode === "login" || mode === "signup") && <><div className={styles.divider}><hr />{f.or}<hr /></div><button type="button" onClick={() => void signInGoogle()} disabled={!configured || loading} className={styles.google}><GoogleIcon />{t.google}</button></>}
         {!configured && <p role="status" className={styles.delivery}>{t.unavailable}</p>}
