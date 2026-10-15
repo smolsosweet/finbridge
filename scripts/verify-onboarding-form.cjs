@@ -5,7 +5,7 @@ function compile(file, resolve = require) {
   const module = { exports: {} }; new Function("require", "module", "exports", output)(resolve, module, module.exports); return module.exports;
 }
 const setup = compile("src/lib/onboarding.ts"), copy = compile("src/lib/setup-copy.ts"), authCopy = compile("src/lib/auth-copy.ts");
-let slots = [], cursor = 0, storage = new Map(), requests = [], completed = [], status = 200, props;
+let slots = [], cursor = 0, storage = new Map(), requests = [], completed = [], status = 200, props, routes = [], signOuts = 0, signOutFails = false;
 const fakeReact = { ...React, useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = typeof initial === "function" ? initial() : initial; return [slots[i], value => { slots[i] = typeof value === "function" ? value(slots[i]) : value; }]; }, useRef(initial) { const i = cursor++; if (!(i in slots)) slots[i] = { current: initial }; return slots[i]; }, useEffect(effect) { effect(); } };
 const { OnboardingWizard } = compile("src/components/auth/OnboardingWizard.tsx", name => {
   if (name === "react") return fakeReact;
@@ -13,6 +13,8 @@ const { OnboardingWizard } = compile("src/components/auth/OnboardingWizard.tsx",
   if (name === "@/lib/setup-copy") return copy;
   if (name === "@/lib/auth-copy") return authCopy;
   if (name === "@/lib/language-preference") return { rememberPreferredLanguage() {} };
+  if (name === "@/lib/sign-out") return { signOutGoogle: async () => { signOuts++; if (signOutFails) throw new Error("SIGN_OUT_FAILED"); } };
+  if (name === "next/navigation") return { useRouter: () => ({ replace: path => routes.push(path) }) };
   if (name.includes("LanguageSelector")) return { LanguageSelector: ({ value, onChange }) => React.createElement("button", { "data-lang": value, type: "button", onClick: () => onChange?.("en") }, value) };
   if (name.endsWith(".module.css")) return { default: new Proxy({}, { get: (_, key) => String(key) }) };
   return require(name);
@@ -25,13 +27,26 @@ function click(label) { const button = find(tree(), n => n.type === "button" && 
 async function submit() { const form = find(tree(), n => n.type === "form"); await form.props.onSubmit({ preventDefault() {} }); }
 const fresh = { wallets: [{ id: "default", name: ".", currency: "USD", initial: 0, type: "cash" }], transactions: [], goals: [], categories: [], categoryMeta: {}, fixedExpenses: [], settings: { language: "English" } };
 function reset(language = "English") {
-  slots = []; cursor = 0; requests = []; completed = []; status = 200; storage = new Map();
+  slots = []; cursor = 0; requests = []; completed = []; status = 200; storage = new Map(); routes = []; signOuts = 0; signOutFails = false;
   global.localStorage = { getItem: k => storage.get(k) || null, setItem: (k, v) => storage.set(k, v), removeItem: k => storage.delete(k) };
   global.fetch = async (url, options) => { requests.push({ url, body: JSON.parse(options.body) }); return Response.json(status === 200 ? { profile: { data: JSON.parse(options.body), completedAt: "2026-10-14T00:00:00Z" } } : { error: "OFFLINE" }, { status }); };
   props = { userId: "synthetic-user", name: "Synthetic", state: { ...fresh, settings: { language } }, onComplete: profile => completed.push(profile) };
 }
 test("actual setup UI renders EN/VI/ZH and does not contain the old introduction slides", () => {
   for (const [lang, language] of [["en", "English"], ["vi", "Tiếng Việt"], ["zh", "中文"]]) { reset(language); const html = renderToStaticMarkup(tree()); assert.match(html, new RegExp('lang="' + lang + '"')); assert.ok(html.includes(copy.SETUP_COPY[lang].name)); assert.doesNotMatch(html, /365-Day|Disappears Before|Rolly understands/); }
+});
+test("setup has a safe exit that signs out and returns to welcome without deleting the draft", async () => {
+  reset(); fill("What should Jake call you?", "Draft name"); tree();
+  const exit = find(tree(), n => n.type === "button" && text(n) === "Sign out"); assert.ok(exit);
+  await exit.props.onClick();
+  assert.equal(signOuts, 1); assert.deepEqual(routes, ["/?lang=en"]);
+  assert.ok(storage.get("finbridge-setup-draft:synthetic-user"));
+});
+test("setup shows a clear error when sign-out cannot complete", async () => {
+  reset(); signOutFails = true;
+  const exit = find(tree(), n => n.type === "button" && text(n) === "Sign out"); await exit.props.onClick();
+  assert.equal(signOuts, 1); assert.deepEqual(routes, []);
+  assert.ok(find(tree(), n => n.props.role === "alert" && text(n).includes("Could not sign out")));
 });
 test("seven-step workflow saves two currencies, custom categories, quarterly tuition and reserves exactly once", async () => {
   reset(); fill("What should Jake call you?", "Synthetic preferred name"); await submit(); click("Full-time employee"); await submit();

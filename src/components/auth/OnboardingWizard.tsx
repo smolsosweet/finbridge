@@ -1,17 +1,26 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ArrowLeft, ArrowRight, Check, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, LogOut, Plus, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { Mascot } from "page-mascot";
 import { SETUP_COPY } from "@/lib/setup-copy";
 import { onboardingSchema, onboardingDraftSchema, OCCUPATIONS, SETUP_CURRENCIES, isStarterWorkspace, type OnboardingData, type OnboardingRecord } from "@/lib/onboarding";
 import { authLanguage } from "@/lib/auth-copy";
 import { rememberPreferredLanguage } from "@/lib/language-preference";
+import { signOutGoogle } from "@/lib/sign-out";
 import { LanguageSelector } from "@/components/sites/rolly/LanguageSelector";
 import type { AppState } from "@/components/sites/rolly/replica/store";
 import theme from "@/components/sites/rolly/WelcomeScreen.module.css";
 import styles from "./OnboardingWizard.module.css";
 
+const EXIT_COPY = {
+  en: { action: "Sign out", pending: "Signing out…", error: "Could not sign out. Please try again." },
+  vi: { action: "Đăng xuất", pending: "Đang đăng xuất…", error: "Không thể đăng xuất. Vui lòng thử lại." },
+  zh: { action: "退出登录", pending: "正在退出登录…", error: "无法退出登录，请重试。" },
+} as const;
+
 export function OnboardingWizard({ userId, name, state, onComplete }: { userId: string; name: string; state: AppState; onComplete: (record: OnboardingRecord) => void }) {
+  const router = useRouter();
   const initialLanguage = authLanguage(/中文|zh/.test(String(state.settings.language)) ? "zh" : /Việt|vi/.test(String(state.settings.language)) ? "vi" : "en");
   const key = "finbridge-setup-draft:" + encodeURIComponent(userId);
   const [data, setData] = useState<OnboardingData>(() => {
@@ -24,6 +33,8 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
   const [step, setStep] = useState(0), [walletIndex, setWalletIndex] = useState(0), [custom, setCustom] = useState("");
   const [hasFixed, setHasFixed] = useState(data.commitments.length > 0), [error, setError] = useState("");
   const [saving, setSaving] = useState(false); const inFlight = useRef(false);
+  const [exiting, setExiting] = useState(false), [exitError, setExitError] = useState("");
+  const exitText = EXIT_COPY[lang];
   const [bill, setBill] = useState({ title: "", amount: "", walletId: data.wallets[0]?.id || "", category: "", dueDate: "", intervalMonths: 1, monthPosition: "date" as "start" | "end" | "date", reminderDays: 3 });
   useEffect(() => { try { localStorage.setItem(key, JSON.stringify(data)); } catch { /* Setup remains editable if browser storage is full. */ } }, [data, key]);
   const wallet = data.wallets[walletIndex];
@@ -63,11 +74,23 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
       onComplete(result.profile); localStorage.removeItem(key);
     } catch { setError(t.unavailable); } finally { inFlight.current = false; setSaving(false); }
   }
+  async function exitSetup() {
+    if (saving || exiting) return;
+    setExiting(true); setExitError("");
+    try {
+      await signOutGoogle();
+      router.replace(`/?lang=${lang}`);
+    } catch {
+      setExitError(exitText.error);
+      setExiting(false);
+    }
+  }
   const field = step === 3 ? "expenseCategories" : "incomeCategories";
   return <main lang={lang} className={`${theme.welcome} ${styles.page}`}>
     <div className={styles.shell}>
-      <header className={styles.header}><b><span className={theme.fin}>Fin</span><span className={theme.bridge}>Bridge</span></b><LanguageSelector value={lang} onChange={l => { rememberPreferredLanguage(l); setData(d => ({ ...d, language: l })); }} /><span>{step + 1} / 7</span></header>
+      <header className={styles.header}><b><span className={theme.fin}>Fin</span><span className={theme.bridge}>Bridge</span></b><div className={styles.headerControls}><LanguageSelector value={lang} onChange={l => { rememberPreferredLanguage(l); setData(d => ({ ...d, language: l })); }} /><button type="button" className={styles.exit} disabled={saving || exiting} onClick={exitSetup}><LogOut size={15} />{exiting ? exitText.pending : exitText.action}</button><span>{step + 1} / 7</span></div></header>
       <progress value={step + 1} max={7} aria-label={t.title} className={styles.progress} />
+      {exitError && <p role="alert" className={styles.exitError}>{exitError}</p>}
       <div className={styles.intro}><Mascot directions="/mascots/lac-directions.webp" reactions="/mascots/lac-reactions.webp" size={96} label="Jake, FinBridge" /><div><p>{t.title}</p><h1>{t.steps[step]}</h1><small>{t.subtitle}</small></div></div>
       <form onSubmit={next} className={styles.card}>
         {step === 0 && <label>{t.name}<input required maxLength={80} autoComplete="given-name" value={data.displayName} onChange={e => setData(d => ({ ...d, displayName: e.target.value }))} /></label>}
