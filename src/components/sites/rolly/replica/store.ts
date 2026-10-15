@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { readUserWorkspace, userWorkspaceKey, importLegacyWorkspace as copyLegacyWorkspace } from "@/lib/workspace-storage";
+import { readPreferredLanguage, rememberPreferredLanguage, workspaceLanguage } from "@/lib/language-preference";
 
 export interface Wallet { id: string; name: string; currency: string; initial: number; type: string; limit?: number; archived?: boolean; }
 export interface Transaction { id: string; title: string; amount: number; type: "expense" | "income" | "transfer"; category: string; subcategory?: string; date: string; wallet: string; targetWallet?: string; note: string; image?: string; interval?: number; unit?: string; }
@@ -37,7 +38,7 @@ export function activateUserWorkspace(userId: string, name: string) {
   if (!userId.trim()) throw new Error("A server-authenticated user is required.");
   if (activeOwner === userId) return;
   activeOwner = userId; ownerName = name; initialized = false;
-  current = { ...structuredClone(initialState), settings: { ...initialState.settings, name, language: "English" } };
+  current = { ...structuredClone(initialState), settings: { ...initialState.settings, name, language: workspaceLanguage(readPreferredLanguage()) } };
   getSnapshot(); notify();
 }
 export function clearUserWorkspace(expectedOwner?: string) {
@@ -72,7 +73,10 @@ export function updateState(update: (value: AppState) => AppState) {
   notify();
 }
 export function useAppState() { return useSyncExternalStore(subscribe, getSnapshot, () => initialState); }
-export function setSetting(name: string, value: string | boolean) { updateState((s) => ({ ...s, settings: { ...s.settings, [name]: value } })); }
+export function setSetting(name: string, value: string | boolean) {
+  if (name === "language" && typeof value === "string") rememberPreferredLanguage(value);
+  updateState((s) => ({ ...s, settings: { ...s.settings, [name]: value } }));
+}
 export function currencySymbol(code: string) { return ({ USD: "$", VND: "₫", EUR: "€", GBP: "£", AUD: "A$", SGD: "S$", JPY: "¥" } as Record<string, string>)[code] || code + " "; }
 export function money(amount: number, currency = "USD", settings = current.settings) {
   const text = new Intl.NumberFormat(settings.separator ? "de-DE" : "en-US", { maximumFractionDigits: 2, notation: settings.compact ? "compact" : "standard" }).format(amount);

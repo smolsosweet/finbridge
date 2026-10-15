@@ -7,9 +7,9 @@ function compile(file, resolve = require) {
   const output = ts.transpileModule(fs.readFileSync(file, "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const module = { exports: {} }; new Function("require", "module", "exports", output)(resolve, module, module.exports); return module.exports;
 }
-const copy = compile("src/lib/auth-copy.ts"), forms = compile("src/lib/auth-form-copy.ts");
+const copy = compile("src/lib/auth-copy.ts"), forms = compile("src/lib/auth-form-copy.ts"), notices = compile("src/lib/auth-notice-copy.ts", (name) => name === "./auth-copy" ? copy : require(name));
 let slots = [], cursor = 0, calls = [], destination = "", apiError = null;
-const fakeReact = { ...React, useState(value) { const i = cursor++; if (!(i in slots)) slots[i] = value; return [slots[i], (next) => { slots[i] = next; }]; }, useRef(value) { const i = cursor++; if (!(i in slots)) slots[i] = { current: value }; return slots[i]; } };
+const fakeReact = { ...React, useState(value) { const i = cursor++; if (!(i in slots)) slots[i] = value; return [slots[i], (next) => { slots[i] = next; }]; }, useRef(value) { const i = cursor++; if (!(i in slots)) slots[i] = { current: value }; return slots[i]; }, useEffect(effect) { cursor++; effect(); } };
 const method = (kind) => async (body) => { calls.push({ kind, body }); return apiError ? { error: apiError } : { data: { url: "https://accounts.google.com" } }; };
 const client = { signIn: { email: method("login"), social: method("google") }, signUp: { email: method("signup") }, requestPasswordReset: method("forgot"), resetPassword: method("reset"), sendVerificationEmail: method("resend") };
 const { AuthCard } = compile("src/components/sites/rolly/AuthCard.tsx", (name) => {
@@ -23,6 +23,8 @@ const { AuthCard } = compile("src/components/sites/rolly/AuthCard.tsx", (name) =
   if (name === "@/lib/auth-client") return { authClient: client };
   if (name === "@/lib/auth-copy") return copy;
   if (name === "@/lib/auth-form-copy") return forms;
+  if (name === "@/lib/auth-notice-copy") return notices;
+  if (name === "@/lib/language-preference") return { readPreferredLanguage: (fallback) => fallback, rememberPreferredLanguage() {} };
   return require(name);
 });
 function find(node, match) { if (!React.isValidElement(node)) return; if (match(node)) return node; for (const child of React.Children.toArray(node.props.children)) { const result = find(child, match); if (result) return result; } }
@@ -56,7 +58,7 @@ async function main() {
   confirmInput.props.onChange({ target: { value: "Synthetic-password-123" } }); await submit(); assert.equal(calls[0].kind, "signup"); assert.equal(destination, ""); assert.ok(find(tree(), (node) => node.props.role === "status"));
   for (const language of ["vi", "zh", "en"]) {
     switchLanguage(language);
-    assert.equal(find(tree(), (node) => node.props.role === "status").props.children, forms.AUTH_FORM_COPY[language].checkVerification);
+    assert.equal(find(tree(), (node) => node.props.role === "status").props.children, notices.AUTH_SIGNUP_NOTICE[language]);
   }
   find(tree(), (node) => node.type === "button" && node.props.children === forms.AUTH_FORM_COPY.en.resend).props.onClick();
   await new Promise((resolve) => setImmediate(resolve));

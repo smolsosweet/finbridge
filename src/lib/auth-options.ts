@@ -22,7 +22,15 @@ export function buildAuthOptions(config: NonNullable<ReturnType<typeof readAuthC
       sendVerificationEmail: sendMail ? async ({ user, url }: { user: { email: string }; url: string }) => { await sendMail({ to: user.email, url, kind: "verify" }); } : undefined,
     },
     socialProviders: { google: { clientId: config.clientId, clientSecret: config.clientSecret, prompt: "select_account" as const, includeGrantedScopes: false } },
-    account: { encryptOAuthTokens: true, accountLinking: { enabled: false } },
+    account: {
+      encryptOAuthTokens: true,
+      accountLinking: {
+        enabled: true,
+        trustedProviders: ["google"],
+        requireLocalEmailVerified: true,
+        allowDifferentEmails: false,
+      },
+    },
     session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24, freshAge: 300, cookieCache: { enabled: false } },
     advanced: { cookiePrefix: "finbridge" },
     rateLimit: { enabled: true, window: 60, max: 30 },
