@@ -45,7 +45,7 @@ let state = {
 
 let writes = 0, cursor = 0, slots = [], destination = "";
 let signOutCalls = 0, signOutFails = false, route = "", refreshes = 0;
-let deleteCalls = [], deleteFailure = "";
+let deactivationCalls = [], deactivationFailure = "";
 let authenticatedUser = { id: "google-user-A", name: "Google User A", email: "signed-in-google@example.invalid" };
 const testReact = {
   ...React,
@@ -93,7 +93,7 @@ function resolve(name) {
   if (name === "./Ui") return ui;
   if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams(), useRouter: () => ({ replace: (next) => { route = next; }, refresh: () => { refreshes++; } }) };
   if (name === "@/lib/sign-out") return { async signOutGoogle() { signOutCalls++; if (signOutFails) throw new Error("SIGN_OUT_FAILED"); } };
-  if (name === "@/lib/delete-account") return { async deleteAccount(userId, password) { deleteCalls.push({ userId, password }); if (deleteFailure) throw new Error(deleteFailure); } };
+  if (name === "@/lib/deactivate-account") return { async deactivateAccount(userId) { deactivationCalls.push({ userId }); if (deactivationFailure) throw new Error(deactivationFailure); } };
   if (name === "@/components/auth/AuthenticatedUser") return { useAuthenticatedUser: () => authenticatedUser };
   if (name === "./Tools") return { CurrencySelect: () => null };
   return localRequire(name);
@@ -155,7 +155,7 @@ assert.ok(accountHtml.includes("Định dạng số tiền"), "Should include cu
 assert.ok(accountHtml.includes("Nhắc nhở thông báo"), "Should include notification reminders");
 assert.ok(accountHtml.includes("Đổi tài khoản"), "Should include switch account");
 assert.ok(accountHtml.includes("Đăng xuất"), "Should include logout");
-assert.ok(accountHtml.includes("Xóa tài khoản"), "Should include delete account");
+assert.match(accountHtml, /fb-account-opt-row is-danger/, "Should include account-closure action");
 
 // Verify removed items are NOT in AccountSettings
 assert.doesNotMatch(accountHtml, /Tính cách của FinBridge|Tính cách của Rolly/, "Personality should be removed");
@@ -265,28 +265,28 @@ async function verifyAccountIdentity() {
   process.stdout.write("PASS: authenticated account email in EN/VI/ZH; stale and forged local identity ignored; read-only profile email; account switching signs out without local identity or financial writes.\n");
 }
 
-async function verifyDeleteAccount() {
+async function verifyAccountDeactivation() {
   const writesBefore = writes;
-  for (const [language, label] of [["English", "Delete account"], ["Tiếng Việt", "Xóa tài khoản"], ["中文", "删除账户"]]) {
+  for (const language of ["English", "Tiếng Việt", "中文"]) {
     state.settings.language = language; slots = []; cursor = 0; route = "";
     const renderAccount = () => { cursor = 0; return settings.AccountSettings({ navigate }); };
     const row = find(renderAccount(), (node) => node.type === "button" && node.props.className === "fb-account-opt-row is-danger");
-    assert.ok(row, `Delete row in ${language}`);
-    const before = deleteCalls.length;
-    row.props.onClick(); assert.equal(deleteCalls.length, before, "Opening confirmation cannot delete");
+    assert.ok(row, `Account-closure row in ${language}`);
+    const before = deactivationCalls.length;
+    row.props.onClick(); assert.equal(deactivationCalls.length, before, "Opening confirmation cannot deactivate");
     const form = () => find(renderAccount(), (node) => node.type === "form" && node.props.className === "fb-dialog-confirm r-form");
     assert.ok(form());
-    deleteFailure = "SESSION_EXPIRED";
+    assert.equal(find(renderAccount(), (node) => node.type === "input" && node.props.type === "password"), undefined, "Account closure must use recent sign-in rather than collect a password in the settings modal");
+    deactivationFailure = "RECENT_LOGIN_REQUIRED";
     await form().props.onSubmit({ preventDefault() {} });
     assert.equal(route, ""); assert.ok(find(renderAccount(), (node) => node.props.role === "alert"));
-    find(renderAccount(), (node) => node.type === "input" && node.props.type === "password").props.onChange({ target: { value: "Synthetic-password-123" } });
-    deleteFailure = "";
+    deactivationFailure = "";
     await form().props.onSubmit({ preventDefault() {} });
-    assert.deepEqual(deleteCalls.at(-1), { userId: authenticatedUser.id, password: "Synthetic-password-123" });
+    assert.deepEqual(deactivationCalls.at(-1), { userId: authenticatedUser.id });
     assert.match(route, /^\/\?lang=(en|vi|zh)$/);
   }
-  assert.equal(writes, writesBefore, "Delete must use authenticated server deletion, not reset local financial data");
-  process.stdout.write("PASS: EN/VI/ZH delete confirmation, stale-session error, authenticated deletion and welcome redirect.\n");
+  assert.equal(writes, writesBefore, "Account closure must use authenticated server deactivation, not reset local financial data");
+  process.stdout.write("PASS: EN/VI/ZH account closure, recent-login reauthentication, server deactivation and welcome redirect.\n");
 }
 
-verifyAccountIdentity().then(verifyLogout).then(verifyDeleteAccount).catch((error) => { console.error(error); process.exitCode = 1; });
+verifyAccountIdentity().then(verifyLogout).then(verifyAccountDeactivation).catch((error) => { console.error(error); process.exitCode = 1; });

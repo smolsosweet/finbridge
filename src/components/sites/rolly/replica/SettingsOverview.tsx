@@ -95,16 +95,16 @@ const COPY = {
         body: "FinBridge coi quyền riêng tư và an toàn dữ liệu của bạn là ưu tiên cao nhất. Dữ liệu tài chính, ví và các khoản chi tiêu thuộc về bạn và chỉ phục vụ cho việc quản lý tài chính của chính bạn.",
       },
       {
-        heading: "2. Lưu trữ và mã hóa an toàn",
-        body: "Mọi thông tin giao dịch, hạn mức ngân sách và lịch sử dòng tiền được lưu trữ cục bộ và đồng bộ hóa qua kết nối mã hóa tiêu chuẩn cao (TLS/SSL).",
+        heading: "2. Lưu trữ và bảo mật",
+        body: "Dữ liệu giao dịch hiện được lưu trên thiết bị này theo từng tài khoản. Khi FinBridge triển khai đồng bộ máy chủ, dữ liệu được truyền qua HTTPS; mật khẩu không bao giờ được lưu ở dạng văn bản thuần.",
       },
       {
         heading: "3. Không thương mại hóa dữ liệu cá nhân",
         body: "FinBridge cam kết không bao giờ bán, cho thuê, chia sẻ hay tiết lộ thông tin tài chính hoặc hành vi chi tiêu của bạn cho bất kỳ bên thứ ba, công ty quảng cáo hay đối tác môi giới nào.",
       },
       {
-        heading: "4. Quyền kiểm soát toàn diện",
-        body: "Bạn có toàn quyền truy xuất, sửa đổi hoặc xóa vĩnh viễn toàn bộ dữ liệu tài khoản và các ví đã tạo khỏi thiết bị và hệ thống bất cứ lúc nào trong mục Cài đặt tài khoản.",
+        heading: "4. Quyền kiểm soát dữ liệu",
+        body: "Bạn có thể xuất, chỉnh sửa hoặc đóng tài khoản trong Cài đặt tài khoản. Đóng tài khoản sẽ vô hiệu hóa quyền truy cập và giữ dữ liệu cần thiết cho kiểm toán; không xóa vĩnh viễn dữ liệu tài chính.",
       },
     ],
   },
@@ -176,16 +176,16 @@ const COPY = {
         body: "FinBridge treats your privacy and data security as our utmost priority. All financial records, wallets, and transaction entries belong solely to you and serve only your personal financial management.",
       },
       {
-        heading: "2. Secure Storage & Encryption",
-        body: "All transaction data, budget thresholds, and cash flow histories are stored securely and synchronized using enterprise-grade encryption protocols (TLS/SSL).",
+        heading: "2. Storage & security",
+        body: "Financial workspace data is currently stored per account on this device. When server synchronization is enabled, data is transmitted over HTTPS; passwords are never stored in plain text.",
       },
       {
         heading: "3. Zero Commercialization of Personal Data",
         body: "FinBridge pledges never to sell, rent, monetize, share, or disclose your financial information or spending habits to any third-party advertisers, data brokers, or marketing partners.",
       },
       {
-        heading: "4. Complete Data Sovereignty",
-        body: "You retain full control to export, modify, or permanently delete your account data and all associated wallets at any time directly through Account Settings.",
+        heading: "4. Data control",
+        body: "You can export, modify, or close your account in Account Settings. Closing it immediately disables access and retains the data required for audit; it does not permanently erase financial records.",
       },
     ],
   },
@@ -257,16 +257,16 @@ const COPY = {
         body: "FinBridge 将您的隐私与数据安全视为重中之重。所有财务数据、钱包和交易记录均归您所有，仅用于您的个人财务管理。",
       },
       {
-        heading: "2. 安全存储与加密",
-        body: "所有交易信息、预算限额与现金流记录均安全存储，并通过业界标准的高强度加密协议（TLS/SSL）进行传输同步。",
+        heading: "2. 存储与安全",
+        body: "财务工作区数据目前按账户保存在本设备上。启用服务器同步后，数据将通过 HTTPS 传输；密码绝不会以明文保存。",
       },
       {
         heading: "3. 绝不将个人数据商业化",
         body: "FinBridge 承诺绝不出售、出租、共享或向任何第三方广告商、数据中介或商业伙伴披露您的财务信息或消费行为。",
       },
       {
-        heading: "4. 拥有完全的数据控制权",
-        body: "您拥有对个人数据的完全控制权，可随时在“账户设置”中导出、修改或永久删除您的账户及其关联的所有钱包数据。",
+        heading: "4. 数据控制权",
+        body: "您可以在“账户设置”中导出、修改或关闭账户。关闭账户会立即停用访问权限，并保留审计所需的数据；不会永久删除财务记录。",
       },
     ],
   },

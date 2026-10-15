@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { test, after } from "node:test";
-import fs from "node:fs";
-import ts from "typescript";
 import nextEnv from "@next/env";
 import { Pool } from "pg";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { generateKeyPair, exportJWK, SignJWT } from "jose";
+import { deactivateAccountLifecycle, initializeAccountLifecycle, isAccountActive } from "../src/lib/account-lifecycle.ts";
+import { verifyPassword as verifyFinBridgePassword } from "../src/lib/password-security.ts";
+import { hashPassword as hashLegacyScrypt } from "@better-auth/utils/password";
 
 nextEnv.loadEnvConfig(process.cwd());
 const databaseURL = process.env.AUTH_TEST_DATABASE_URL;
@@ -14,19 +15,19 @@ if (!databaseURL) throw new Error("AUTH_TEST_DATABASE_URL required; tests are no
 const db = new URL(databaseURL);
 if (!["127.0.0.1", "localhost"].includes(db.hostname) || db.pathname !== "/finbridge_auth_test") throw new Error("Only the dedicated local finbridge_auth_test database is allowed.");
 const pool = new Pool({ connectionString: databaseURL, max: 2 });
-const source = ts.transpileModule(fs.readFileSync("src/lib/auth-options.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 } }).outputText;
-const { buildAuthOptions } = await import("data:text/javascript;base64," + Buffer.from(source).toString("base64"));
+const { buildAuthOptions } = await import("../src/lib/auth-options.ts");
 const baseURL = "http://localhost:3011";
 const config = { baseURL, secret: "synthetic-only-test-secret-" + "x".repeat(40), clientId: "synthetic-client", clientSecret: "synthetic-client-secret", databaseURL };
 const mail = [];
 let mailFailure = false;
 const productionOptions = buildAuthOptions(config, pool, async (message) => { if (mailFailure) throw new Error("SYNTHETIC_MAIL_FAILURE"); mail.push(message); });
 const migration = await getMigrations(productionOptions); await migration.runMigrations();
+await initializeAccountLifecycle(pool);
 // Protocol cases isolate OAuth from burst protection; the final case tests the real limiter.
 const auth = betterAuth({ ...productionOptions, rateLimit: { enabled: false } });
-const handlerSource = ts.transpileModule(fs.readFileSync("src/lib/auth-handler.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 } }).outputText;
-const { handleAuthRequest } = await import("data:text/javascript;base64," + Buffer.from(handlerSource).toString("base64"));
-const tables = ['session', 'account', 'verification', 'user'];
+const { handleAuthRequest } = await import("../src/lib/auth-handler.ts");
+const { handleAccountDeactivation, RECENT_LOGIN_MS } = await import("../src/lib/account-deactivation-handler.ts");
+const tables = ['session', 'account', 'verification', 'finbridge_account_lifecycle', 'user'];
 // These are disposable fixtures in a database whose name and host were checked above.
 for (const table of tables) await pool.query('DELETE FROM "' + table + '"');
 const originalFetch = globalThis.fetch;
@@ -86,6 +87,7 @@ test("email sign-up stores a hash and default user role, sends verification and 
   emailUser = data.id; assert.equal(data.role, "user"); assert.equal(data.emailVerified, false);
   const credential = (await pool.query('SELECT password FROM "account" WHERE "userId" = $1 AND "providerId" = $2', [emailUser, "credential"])).rows[0];
   assert.ok(credential.password); assert.notEqual(credential.password, emailBody.password);
+  assert.match(credential.password, /^\$argon2id\$/);
   assert.equal((await counts())[2], before[2]);
   assert.equal(mail.at(-1).kind, "verify"); assert.equal(mail.at(-1).to, emailBody.email);
 });
@@ -166,6 +168,8 @@ test("reset link changes the password, revokes sessions and cannot be replayed",
   const token = new URL(callback.headers.get("location")).searchParams.get("token");
   const body = { token, newPassword: "New-synthetic-password-456" };
   assert.equal((await request("/reset-password", { method: "POST", body })).status, 200);
+  const credential = (await pool.query('SELECT password FROM "account" WHERE "userId" = $1 AND "providerId" = $2', [emailUser, "credential"])).rows[0];
+  assert.match(credential.password, /^\$argon2id\$/);
   assert.equal(await session(emailCookie), null);
   assert.equal((await request("/reset-password", { method: "POST", body })).status, 400);
   assert.equal((await request("/sign-in/email", { method: "POST", body: emailBody })).status, 401);
@@ -222,63 +226,15 @@ test("unverified duplicate signup sends no additional mail; explicit resend reco
   assert.equal(mail.length, sent + 1); assert.equal(mail.at(-1).to, body.email);
 });
 
-test("deletion requires authentication and trusted origin; stale Google session is rejected", async () => {
-  const before = await counts();
-  assert.equal((await request("/delete-user", { method: "POST", body: {} })).status, 401);
-  assert.deepEqual(await counts(), before);
-  const user = await signInAs("delete-google");
-  const data = await session(user.cookie);
-  const protectedCounts = await counts();
-  assert.equal((await request("/delete-user", { method: "POST", cookie: user.cookie, origin: "https://attacker.invalid", body: {} })).status, 403);
-  assert.deepEqual(await counts(), protectedCounts);
-  await pool.query('UPDATE "session" SET "createdAt" = $1 WHERE id = $2', [new Date(Date.now() - 360000), data.session.id]);
-  const refused = await request("/delete-user", { method: "POST", cookie: user.cookie, body: {} });
-  assert.equal(refused.status, 400); assert.equal((await refused.json()).code, "SESSION_EXPIRED");
-  assert.deepEqual(await counts(), protectedCounts);
-});
-
-test("fresh Google deletion removes only its own identity and revokes all of its sessions", async () => {
-  const prior = await counts(), user = await signInAs("delete-google");
-  const data = await session(user.cookie);
-  const other = (await pool.query('SELECT id FROM "user" WHERE email = $1', [emailBody.email])).rows[0].id;
-  const response = await request("/delete-user", { method: "POST", cookie: user.cookie, body: { userId: other } });
-  assert.equal(response.status, 200); assert.equal((await response.json()).message, "User deleted");
-  assert.equal(await session(user.cookie), null);
-  for (const table of ["session", "account"]) assert.equal(Number((await pool.query('SELECT COUNT(*) AS n FROM "' + table + '" WHERE "userId" = $1', [data.user.id])).rows[0].n), 0);
-  assert.equal((await pool.query('SELECT id FROM "user" WHERE id = $1', [other])).rowCount, 1);
-  assert.equal((await counts())[0], prior[0] - 1);
-});
-
-test("email deletion checks the password, removes server setup, and allows signup with the same email", async () => {
-  const body = { ...emailBody, email: "delete-email@example.invalid" };
-  await request("/sign-up/email", { method: "POST", body });
-  const link = new URL(mail.at(-1).url); await request(link.pathname.replace("/api/auth", "") + link.search);
-  const login = await request("/sign-in/email", { method: "POST", body });
-  const cookie = cookies(login), data = await session(cookie);
-  await pool.query('CREATE TABLE IF NOT EXISTS finbridge_onboarding (user_id TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE, data JSONB NOT NULL, completed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP)');
-  await pool.query("INSERT INTO finbridge_onboarding (user_id, data) VALUES ($1, $2)", [data.user.id, JSON.stringify({ synthetic: true })]);
-  await pool.query('UPDATE "session" SET "createdAt" = $1 WHERE id = $2', [new Date(Date.now() - 360000), data.session.id]);
-  const before = await counts();
-  assert.equal((await request("/delete-user", { method: "POST", cookie, body: { password: "Wrong-password-123" } })).status, 400);
-  assert.deepEqual(await counts(), before);
-  assert.equal((await request("/delete-user", { method: "POST", cookie, body: { password: body.password } })).status, 200);
-  assert.equal(await session(cookie), null);
-  assert.equal((await pool.query('SELECT id FROM "user" WHERE id = $1', [data.user.id])).rowCount, 0);
-  assert.equal((await pool.query('SELECT user_id FROM finbridge_onboarding WHERE user_id = $1', [data.user.id])).rowCount, 0);
-  const sent = mail.length;
-  assert.equal((await request("/sign-up/email", { method: "POST", body })).status, 200);
-  assert.equal(mail.length, sent + 1);
-  assert.notEqual((await pool.query('SELECT id FROM "user" WHERE email = $1', [body.email])).rows[0].id, data.user.id);
-});
-
-test("reset link for a deleted account cannot change a replacement account with the same email", async () => {
+test("a reset link from a closed account cannot change a replacement account", async () => {
   const body = { ...emailBody, email: "replacement-reset@example.invalid" };
   await request("/sign-up/email", { method: "POST", body });
   const verify = new URL(mail.at(-1).url); await request(verify.pathname.replace("/api/auth", "") + verify.search);
   const login = await request("/sign-in/email", { method: "POST", body });
   await request("/request-password-reset", { method: "POST", body: { email: body.email, redirectTo: "/reset-password?lang=vi" } });
   const oldToken = new URL(mail.at(-1).url).pathname.split("/").at(-1);
-  assert.equal((await request("/delete-user", { method: "POST", cookie: cookies(login), body: {} })).status, 200);
+  const old = await session(cookies(login));
+  await deactivateAccountLifecycle(pool, { userId: old.user.id, secret: config.secret });
   await request("/sign-up/email", { method: "POST", body });
   const oldAttempt = await request("/reset-password", { method: "POST", body: { token: oldToken, newPassword: "Invalid-old-link-password-789" } });
   assert.equal(oldAttempt.status, 400);
@@ -385,6 +341,74 @@ test("disabling Google account linking still prevents access to an existing veri
   assert.equal(await session(cookies(response)), null);
   const login = await request("/sign-in/email", { method: "POST", body: { ...body, password: emailBody.password } });
   assert.equal(login.status, 200);
+});
+
+test("Argon2id protects new passwords while legacy scrypt hashes remain usable", async () => {
+  const legacy = await hashLegacyScrypt("Legacy-password-123");
+  assert.equal(await verifyFinBridgePassword({ hash: legacy, password: "Legacy-password-123" }), true);
+  assert.equal(await verifyFinBridgePassword({ hash: legacy, password: "Wrong-password-123" }), false);
+});
+
+test("deactivation keeps an encrypted audit record, revokes access and releases the email for a new account", async () => {
+  const fixture = await verifiedEmailFixture("deactivated-account@example.invalid");
+  const original = await session(fixture.cookie);
+  const originalEmail = original.user.email;
+  await deactivateAccountLifecycle(pool, { userId: original.user.id, secret: config.secret });
+  assert.equal(await isAccountActive(pool, original.user.id), false);
+  assert.equal(await session(fixture.cookie), null, "all active sessions are revoked");
+  const lifecycle = (await pool.query("SELECT status, identity_ciphertext, retired_email FROM finbridge_account_lifecycle WHERE user_id = $1", [original.user.id])).rows[0];
+  assert.equal(lifecycle.status, "deactivated");
+  assert.ok(!lifecycle.identity_ciphertext.includes(originalEmail), "identity audit data is encrypted at rest");
+  const retired = (await pool.query('SELECT email, "emailVerified" FROM "user" WHERE id = $1', [original.user.id])).rows[0];
+  assert.equal(retired.email, lifecycle.retired_email); assert.equal(retired.emailVerified, false);
+  const identities = (await pool.query('SELECT "accountId", "accessToken", "refreshToken", "idToken" FROM "account" WHERE "userId" = $1', [original.user.id])).rows;
+  assert.ok(identities.every((identity) => identity.accountId.startsWith("deactivated:") && identity.accessToken === null && identity.refreshToken === null && identity.idToken === null));
+  const replacement = { ...fixture.body, password: "Replacement-password-123" };
+  assert.equal((await request("/sign-up/email", { method: "POST", body: replacement })).status, 200);
+  const fresh = (await pool.query('SELECT id FROM "user" WHERE email = $1', [originalEmail])).rows[0];
+  assert.notEqual(fresh.id, original.user.id, "the same email may create a distinct active account");
+});
+
+test("deactivation releases a Google identity for a distinct replacement account", async () => {
+  const first = await signInAs("deactivated-google-identity");
+  const original = await session(first.cookie);
+  await deactivateAccountLifecycle(pool, { userId: original.user.id, secret: config.secret });
+  assert.equal(await session(first.cookie), null);
+  const replacement = await signInAs("deactivated-google-identity");
+  const fresh = await session(replacement.cookie);
+  assert.notEqual(fresh.user.id, original.user.id);
+  assert.equal(fresh.user.email, "deactivated-google-identity@example.invalid");
+  assert.equal(await isAccountActive(pool, fresh.user.id), true);
+});
+
+test("account closure accepts only a fresh same-origin session and its own user id", async () => {
+  const deactivated = [];
+  const dependencies = {
+    baseURL,
+    secret: config.secret,
+    getSession: async () => ({ user: { id: "session-user-only" }, session: { createdAt: new Date() } }),
+    deactivate: async (input) => { deactivated.push(input); },
+  };
+  const foreign = await handleAccountDeactivation(new Request(baseURL + "/api/account/deactivate", { method: "POST", headers: { origin: "https://attacker.invalid" }, body: JSON.stringify({ userId: "victim" }) }), dependencies);
+  assert.equal(foreign.status, 403); assert.deepEqual(deactivated, []);
+  const fresh = await handleAccountDeactivation(new Request(baseURL + "/api/account/deactivate", { method: "POST", headers: { origin: baseURL }, body: JSON.stringify({ userId: "victim" }) }), dependencies);
+  assert.equal(fresh.status, 200); assert.deepEqual(deactivated, [{ userId: "session-user-only", secret: config.secret }]);
+  const stale = await handleAccountDeactivation(new Request(baseURL + "/api/account/deactivate", { method: "POST", headers: { origin: baseURL } }), {
+    ...dependencies,
+    getSession: async () => ({ user: { id: "stale-user" }, session: { createdAt: new Date(Date.now() - RECENT_LOGIN_MS) } }),
+  });
+  assert.equal(stale.status, 403); assert.equal((await stale.json()).code, "RECENT_LOGIN_REQUIRED");
+  const noSession = await handleAccountDeactivation(new Request(baseURL + "/api/account/deactivate", { method: "POST", headers: { origin: baseURL } }), { ...dependencies, getSession: async () => null });
+  assert.equal(noSession.status, 401);
+});
+
+test("the Better Auth hard-delete endpoint is unavailable even to an authenticated user", async () => {
+  const fixture = await verifiedEmailFixture("hard-delete-disabled@example.invalid");
+  const original = await session(fixture.cookie);
+  const response = await request("/delete-user", { method: "POST", cookie: fixture.cookie, body: { password: fixture.body.password } });
+  assert.equal(response.status, 404);
+  assert.equal((await session(fixture.cookie)).user.id, original.user.id);
+  assert.equal((await pool.query('SELECT COUNT(*)::int AS n FROM "user" WHERE id = $1', [original.user.id])).rows[0].n, 1);
 });
 
 after(async () => { globalThis.fetch = originalFetch; for (const table of tables) await pool.query('DELETE FROM "' + table + '"'); await pool.end(); });

@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "better-auth";
 import type { Pool } from "pg";
 import type { readAuthConfig } from "./auth-config";
 import type { SendAuthMail } from "./auth-mail";
+import { hashPassword, verifyPassword } from "./password-security";
 
 export function buildAuthOptions(config: NonNullable<ReturnType<typeof readAuthConfig>>, database: Pool, sendMail?: SendAuthMail) {
   return {
@@ -10,10 +11,11 @@ export function buildAuthOptions(config: NonNullable<ReturnType<typeof readAuthC
     secret: config.secret,
     trustedOrigins: [config.baseURL],
     database,
-    user: { deleteUser: { enabled: true }, additionalFields: { role: { type: "string" as const, defaultValue: "user", required: true, input: false } } },
+    user: { additionalFields: { role: { type: "string" as const, defaultValue: "user", required: true, input: false } } },
     emailAndPassword: {
       enabled: true, disableSignUp: !sendMail, requireEmailVerification: true,
       autoSignIn: false, minPasswordLength: 12, maxPasswordLength: 128,
+      password: { hash: hashPassword, verify: verifyPassword },
       resetPasswordTokenExpiresIn: 1800, revokeSessionsOnPasswordReset: true,
       sendResetPassword: sendMail ? async ({ user, url }: { user: { email: string }; url: string }) => { await sendMail({ to: user.email, url, kind: "reset" }); } : undefined,
     },

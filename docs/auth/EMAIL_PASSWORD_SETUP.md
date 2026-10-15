@@ -8,7 +8,9 @@ at `5029ec7`. The local app now runs from `D:\ai-website-cloner-codex`.
 - Login with email/password or Google; password visibility toggle.
 - Registration with email, password and confirmation; the initial display name
   is derived from the email and can be customized during account setup.
-- Passwords require 12–128 characters and are hashed by Better Auth (scrypt).
+- Passwords require 12-128 characters and new credentials are hashed with
+  Argon2id. Existing scrypt hashes remain valid and are upgraded when their
+  owner resets the password.
 - Email verification is required before credential login. Registration never
   automatically authenticates an unverified account. Verification links expire
   after one hour; signup offers an explicit resend button, and login offers it
@@ -26,12 +28,13 @@ at `5029ec7`. The local app now runs from `D:\ai-website-cloner-codex`.
   account linking remains disabled.
 - Auth forms and messages are available in English, Vietnamese and Chinese.
   Changing the language also updates notices and errors already on screen.
-- Account deletion now calls Better Auth's authenticated server endpoint. It
-  removes the user, provider accounts and all sessions; PostgreSQL cascades the
-  onboarding record. Deletion requires a session created within five minutes or
-  the correct FinBridge password. A Google-only user with an older session must
-  sign out and sign in again. Opening the confirmation dialog performs no writes.
-  Only confirmed server deletion clears this account's browser workspace and
+- Closing an account is a server-side soft deactivation, not deletion. It
+  requires a session created within five minutes; a Google-only user with an
+  older session signs out and signs in again. It preserves the user and finance
+  records for audit, expires sessions and reset links, clears OAuth tokens, and
+  retires the prior identifiers. The original email and Google identity can then
+  create a new, separate account. Opening the confirmation dialog performs no
+  writes. Only confirmed closure clears this account's browser workspace and
   setup draft, then returns to welcome. Other accounts and the unclaimed legacy
   backup are retained. Data on other devices and downloaded backups is not
   automatically removed.

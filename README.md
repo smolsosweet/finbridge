@@ -4,7 +4,7 @@ FinBridge is a multilingual personal finance workspace for wallets, transactions
 
 ## Features
 
-- Google sign-in, verified email/password accounts, recovery, logout and account deletion.
+- Google sign-in, verified email/password accounts, recovery, logout and soft account closure.
 - First-account setup: preferred name, wallets, opening balances, categories, fixed costs and reserves.
 - Cash-flow summaries per currency, weekly charts per wallet and filtered transaction history.
 - Budgets linked to fixed expenses, due-date guidance and reserve warnings.

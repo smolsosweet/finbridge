@@ -3,7 +3,7 @@
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { signOutGoogle } from "@/lib/sign-out";
-import { deleteAccount } from "@/lib/delete-account";
+import { deactivateAccount } from "@/lib/deactivate-account";
 import { useAuthenticatedUser } from "@/components/auth/AuthenticatedUser";
 import {
   Bell,
@@ -52,17 +52,16 @@ const COPY_ACCOUNT = {
     notificationSub: "Thời gian nhận thông báo nhắc nhở ghi chép chi tiêu",
     switchAccount: "Đổi tài khoản",
     switchAccountSub: "Chuyển đổi sang tài khoản khác hoặc đăng nhập mới",
-    delete: "Xóa tài khoản",
-    deleteSub: "Xóa tài khoản FinBridge và thu hồi mọi phiên đăng nhập",
-    deleteTitle: "Xóa vĩnh viễn tài khoản?",
-    deleteNote: "Tài khoản FinBridge, thông tin thiết lập trên server và dữ liệu của tài khoản trên trình duyệt này sẽ bị xóa. Không thể hoàn tác. Dữ liệu trên thiết bị khác hoặc bản sao lưu đã tải xuống không tự bị xóa.",
-    deleteAuth: "Cần đăng nhập trong vòng 5 phút hoặc nhập mật khẩu FinBridge để xác nhận. Với Google, hãy đăng xuất rồi đăng nhập lại nếu phiên đã cũ.",
-    deletePassword: "Mật khẩu FinBridge (nếu có)",
-    deleteConfirm: "Xác nhận xóa tài khoản",
-    deleteBusy: "Đang xóa tài khoản…",
-    deleteError: "Chưa thể xóa tài khoản. Vui lòng thử lại.",
-    deleteStale: "Phiên đăng nhập đã cũ. Nhập mật khẩu FinBridge hoặc đăng xuất rồi đăng nhập lại trước khi xóa.",
-    deleteWrongPassword: "Mật khẩu không đúng hoặc tài khoản này chưa có mật khẩu FinBridge.",
+    deactivate: "Đóng tài khoản",
+    deactivateSub: "Dừng tài khoản và đăng xuất khỏi mọi thiết bị",
+    deactivateTitle: "Đóng tài khoản?",
+    deactivateNote: "Tài khoản sẽ dừng hoạt động ngay và mọi phiên đăng nhập sẽ kết thúc. Dữ liệu được giữ lại an toàn để kiểm toán; bạn vẫn có thể tạo tài khoản mới bằng email này.",
+    deactivateSecurity: "Để bảo vệ tài khoản, hãy đăng nhập lại trong vòng 5 phút trước khi xác nhận.",
+    deactivateReauth: "Phiên đăng nhập đã cũ. Hãy đăng xuất rồi đăng nhập lại để tiếp tục.",
+    deactivateSignInAgain: "Đăng xuất để đăng nhập lại",
+    deactivateConfirm: "Đóng tài khoản",
+    deactivateBusy: "Đang đóng tài khoản…",
+    deactivateError: "Chưa thể đóng tài khoản. Vui lòng thử lại.",
     save: "Lưu thay đổi",
     cancel: "Hủy",
     langLabel: "Ngôn ngữ hiển thị",
@@ -92,17 +91,16 @@ const COPY_ACCOUNT = {
     notificationSub: "Daily reminder time for recording expenses",
     switchAccount: "Switch account",
     switchAccountSub: "Switch to another account or sign in",
-    delete: "Delete account",
-    deleteSub: "Delete your FinBridge account and revoke all sessions",
-    deleteTitle: "Permanently delete your account?",
-    deleteNote: "Your FinBridge account, server setup and this account's data in this browser will be deleted. This cannot be undone. Data on other devices and downloaded backups are not automatically erased.",
-    deleteAuth: "Sign in within the last 5 minutes or enter your FinBridge password to confirm. For Google, sign out and sign in again if your session is older.",
-    deletePassword: "FinBridge password (if you have one)",
-    deleteConfirm: "Confirm account deletion",
-    deleteBusy: "Deleting account…",
-    deleteError: "Could not delete your account. Please try again.",
-    deleteStale: "Your session is too old. Enter your FinBridge password or sign out and sign in again before deleting.",
-    deleteWrongPassword: "Incorrect password, or this account does not have a FinBridge password.",
+    deactivate: "Close account",
+    deactivateSub: "Deactivate your account and sign out on every device",
+    deactivateTitle: "Close your account?",
+    deactivateNote: "Your account stops working immediately and every sign-in session ends. Data is securely retained for audit; you can still create a new account with this email.",
+    deactivateSecurity: "To protect your account, sign in again within five minutes before confirming.",
+    deactivateReauth: "Your sign-in is no longer recent. Sign out and sign in again to continue.",
+    deactivateSignInAgain: "Sign out to sign in again",
+    deactivateConfirm: "Close account",
+    deactivateBusy: "Closing account…",
+    deactivateError: "We couldn't close your account. Please try again.",
     save: "Save changes",
     cancel: "Cancel",
     langLabel: "Display language",
@@ -132,17 +130,16 @@ const COPY_ACCOUNT = {
     notificationSub: "每日记账提醒时间",
     switchAccount: "切换账户",
     switchAccountSub: "切换至其他账户或登录新账户",
-    delete: "注销账户",
-    deleteSub: "删除 FinBridge 账户并撤销所有登录会话",
-    deleteTitle: "永久删除账户？",
-    deleteNote: "您的 FinBridge 账户、服务器上的设置和此浏览器中的账户数据将被删除，且无法恢复。其他设备上的数据和已下载的备份不会自动删除。",
-    deleteAuth: "请在登录后 5 分钟内操作，或输入 FinBridge 密码确认。Google 用户如会话较旧，请退出后重新登录。",
-    deletePassword: "FinBridge 密码（如已设置）",
-    deleteConfirm: "确认删除账户",
-    deleteBusy: "正在删除账户…",
-    deleteError: "无法删除账户，请重试。",
-    deleteStale: "登录时间过久。请输入 FinBridge 密码，或退出后重新登录再删除。",
-    deleteWrongPassword: "密码不正确，或此账户尚未设置 FinBridge 密码。",
+    deactivate: "关闭账户",
+    deactivateSub: "停用账户并退出所有设备",
+    deactivateTitle: "关闭账户？",
+    deactivateNote: "账户将立即停止使用，所有登录会话都会结束。数据会被安全保留以供审计；你仍可用此邮箱创建新账户。",
+    deactivateSecurity: "为保护账户，请在五分钟内重新登录后再确认。",
+    deactivateReauth: "当前登录已不再有效。请退出后重新登录以继续。",
+    deactivateSignInAgain: "退出后重新登录",
+    deactivateConfirm: "关闭账户",
+    deactivateBusy: "正在关闭账户…",
+    deactivateError: "暂时无法关闭账户，请重试。",
     save: "保存更改",
     cancel: "取消",
     langLabel: "显示语言",
@@ -170,10 +167,9 @@ export function AccountSettings({
   const router = useRouter();
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [logoutError, setLogoutError] = useState(false);
-  const [deleteBusy, setDeleteBusy] = useState(false);
-  const [deleteError, setDeleteError] = useState<"deleteError" | "deleteStale" | "deleteWrongPassword" | "">("");
-  const [deletePassword, setDeletePassword] = useState("");
-  const deleting = useRef(false);
+  const [deactivationBusy, setDeactivationBusy] = useState(false);
+  const [deactivationError, setDeactivationError] = useState<"deactivateError" | "deactivateReauth" | "">("");
+  const deactivating = useRef(false);
 
   const [option, setOption] = useState(initialOption);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
@@ -186,23 +182,23 @@ export function AccountSettings({
   const [nameInput, setNameInput] = useState(displayName);
 
   const close = () => {
-    if (deleting.current) return;
+    if (deactivating.current) return;
     setOption("");
     setLogoutError(false);
-    setDeleteError(""); setDeletePassword("");
+    setDeactivationError("");
   };
 
-  async function removeAccount(event: FormEvent) {
+  async function closeAccount(event: FormEvent) {
     event.preventDefault();
-    if (deleting.current || !authenticatedUser) return;
-    deleting.current = true; setDeleteBusy(true); setDeleteError("");
+    if (deactivating.current || !authenticatedUser) return;
+    deactivating.current = true; setDeactivationBusy(true); setDeactivationError("");
     try {
-      await deleteAccount(authenticatedUser.id, deletePassword || undefined);
+      await deactivateAccount(authenticatedUser.id);
       router.replace("/?lang=" + lang); router.refresh();
     } catch (error) {
       const code = error instanceof Error ? error.message : "";
-      setDeleteError(code === "SESSION_EXPIRED" || code === "UNAUTHORIZED" ? "deleteStale" : code === "INVALID_PASSWORD" || code === "CREDENTIAL_ACCOUNT_NOT_FOUND" ? "deleteWrongPassword" : "deleteError");
-    } finally { deleting.current = false; setDeleteBusy(false); setDeletePassword(""); }
+      setDeactivationError(code === "RECENT_LOGIN_REQUIRED" || code === "UNAUTHORIZED" ? "deactivateReauth" : "deactivateError");
+    } finally { deactivating.current = false; setDeactivationBusy(false); }
   }
 
   function openEditProfile() {
@@ -269,11 +265,11 @@ export function AccountSettings({
       danger: false,
     },
     {
-      id: "delete",
-      name: t.delete,
-      sub: t.deleteSub,
+      id: "deactivate",
+      name: t.deactivate,
+      sub: t.deactivateSub,
       icon: <Trash2 size={20} />,
-      onClick: () => setOption("delete"),
+      onClick: () => setOption("deactivate"),
       danger: true,
     },
   ];
@@ -509,26 +505,25 @@ export function AccountSettings({
             </div>
           )}
 
-          {option === "delete" && (
-            <form className="fb-dialog-confirm r-form" onSubmit={removeAccount}>
-              <h2 style={{ color: "#ef4444" }}>{t.deleteTitle}</h2>
+          {option === "deactivate" && (
+            <form className="fb-dialog-confirm r-form" onSubmit={closeAccount}>
+              <h2 style={{ color: "#ef4444" }}>{t.deactivateTitle}</h2>
               <p className="r-dialog-note" style={{ color: "#b91c1c" }}>
-                {t.deleteNote}
+                {t.deactivateNote}
               </p>
-              <p className="r-dialog-note">{t.deleteAuth}</p>
-              <label>{t.deletePassword}<input type="password" autoComplete="current-password" maxLength={128} value={deletePassword} disabled={deleteBusy} onChange={(event) => setDeletePassword(event.target.value)} /></label>
-              {deleteError && <p role="alert">{t[deleteError]}</p>}
+              {deactivationError === "deactivateReauth" ? <><p role="alert">{t.deactivateReauth}</p><button type="button" className="r-button" disabled={deactivationBusy || logoutBusy} onClick={() => void logout()}>{t.deactivateSignInAgain}</button></> : <p className="r-dialog-note">{t.deactivateSecurity}</p>}
+              {deactivationError === "deactivateError" && <p role="alert">{t.deactivateError}</p>}
               <div className="fb-modal-actions">
-                <button type="button" className="r-button" disabled={deleteBusy} onClick={close}>
+                <button type="button" className="r-button" disabled={deactivationBusy} onClick={close}>
                   {t.cancel}
                 </button>
                 <button
                   type="submit"
                   className="r-danger"
-                  disabled={deleteBusy || !authenticatedUser}
-                  aria-busy={deleteBusy}
+                  disabled={deactivationBusy || !authenticatedUser}
+                  aria-busy={deactivationBusy}
                 >
-                  {deleteBusy ? t.deleteBusy : t.deleteConfirm}
+                  {deactivationBusy ? t.deactivateBusy : t.deactivateConfirm}
                 </button>
               </div>
             </form>

@@ -14,26 +14,25 @@ const config = compile("src/lib/auth-config.ts");
 const copy = compile("src/lib/auth-copy.ts");
 const languagePreference = compile("src/lib/language-preference.ts");
 const mail = compile("src/lib/auth-mail.ts");
-test("account deletion clears only the deleted owner's local data after server confirmation", async () => {
-  const previousStorage = global.localStorage;
+test("account deactivation clears only the closed owner's local data after server confirmation", async () => {
+  const previousStorage = global.localStorage, previousFetch = global.fetch;
   const entries = new Map([[storage.userWorkspaceKey("A"), "A-data"], [storage.userWorkspaceKey("B"), "B-data"], [storage.LEGACY_WORKSPACE_KEY, "legacy"], ["finbridge-setup-draft:A", "A-draft"]]);
-  let owner = "A", cleared = false, requests = 0, response = { error: { code: "SESSION_EXPIRED" } };
+  let owner = "A", cleared = false, requests = 0, signedOut = 0, response = new Response(JSON.stringify({ code: "RECENT_LOGIN_REQUIRED" }), { status: 403 });
   global.localStorage = { removeItem: key => entries.delete(key) };
-  const helper = compile("src/lib/delete-account.ts", name => {
-    if (name === "./auth-client") return { authClient: { async deleteUser(body) { requests++; assert.equal(body.userId, undefined); return response; } } };
+  global.fetch = async (url, options) => { requests++; assert.equal(url, "/api/account/deactivate"); assert.equal(options.method, "POST"); return response; };
+  const helper = compile("src/lib/deactivate-account.ts", name => {
+    if (name === "./auth-client") return { authClient: { async signOut() { signedOut++; } } };
     if (name === "./workspace-storage") return storage;
     if (name === "@/components/sites/rolly/replica/store") return { workspaceOwner: () => owner, clearUserWorkspace: id => { assert.equal(id, "A"); cleared = true; } };
     return require(name);
   });
   try {
-    await assert.rejects(() => helper.deleteAccount("B")); assert.equal(requests, 0);
-    await assert.rejects(() => helper.deleteAccount("A"), /SESSION_EXPIRED/); assert.equal(cleared, false); assert.equal(entries.get(storage.userWorkspaceKey("A")), "A-data");
-    response = { data: { success: true, message: "Verification email sent" } };
-    await assert.rejects(() => helper.deleteAccount("A")); assert.equal(cleared, false);
-    response = { data: { success: true, message: "User deleted" } };
-    await helper.deleteAccount("A"); assert.equal(cleared, true); assert.equal(entries.has(storage.userWorkspaceKey("A")), false); assert.equal(entries.has("finbridge-setup-draft:A"), false);
+    await assert.rejects(() => helper.deactivateAccount("B")); assert.equal(requests, 0);
+    await assert.rejects(() => helper.deactivateAccount("A"), /RECENT_LOGIN_REQUIRED/); assert.equal(cleared, false); assert.equal(entries.get(storage.userWorkspaceKey("A")), "A-data");
+    response = new Response(JSON.stringify({ success: true }), { status: 200 });
+    await helper.deactivateAccount("A"); assert.equal(cleared, true); assert.equal(signedOut, 1); assert.equal(entries.has(storage.userWorkspaceKey("A")), false); assert.equal(entries.has("finbridge-setup-draft:A"), false);
     assert.equal(entries.get(storage.userWorkspaceKey("B")), "B-data"); assert.equal(entries.get(storage.LEGACY_WORKSPACE_KEY), "legacy");
-  } finally { global.localStorage = previousStorage; }
+  } finally { global.localStorage = previousStorage; global.fetch = previousFetch; }
 });
 test("Brevo requires a key and a verified-sender address shape; unknown modes are rejected", () => {
   assert.throws(() => mail.readMailConfig({ AUTH_EMAIL_MODE: "brevo" }));
