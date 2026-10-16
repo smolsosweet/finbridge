@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, Bell, Check, CheckCircle2, ChevronRight, CircleHelp, Database, Mail, PauseCircle, Plus, Search, ShieldCheck, Trash2, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Bell, Check, CheckCircle2, ChevronDown, ChevronRight, CircleHelp, Database, Mail, PauseCircle, Plus, Search, ShieldCheck, Trash2, Wallet } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { FinBridgeHeader } from "@/components/sites/rolly/replica/FinBridgeHeader";
 import { setSetting, useAppState } from "@/components/sites/rolly/replica/store";
@@ -543,20 +543,37 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                           {group.rows.map(row => <span key={row.id}>{conditionLabel(row)}</span>)}
                         </div>
 
-                        <div className={styles.configurationValues}>
-                          {group.rows.map(row => {
-                            const e = doc.evaluated[row.id];
-                            return (
-                              <div key={row.id} className={styles.configValueCard}>
-                                <small className={styles.configBasis}>{conditionLabel(row)}</small>
-                                <small className={styles.configLabel}>{row.kind === "reserve" ? x.balanceLabel : row.basis === "forecast" ? t.forecast : x.actualLabel}</small>
-                                <b className={styles.configAmount}>{e ? money(e.value, e.currency) : "—"}</b>
-                                {e && e.state !== "unavailable" && <p className={styles.configThreshold}>{x.thresholdLabel}: {money(e.limit, e.currency)}</p>}
-                                {e?.state === "unavailable" && <p className={styles.configReason}>{reason(e)}</p>}
-                              </div>
-                            );
-                          })}
-                        </div>
+                        {group.rows.some(row => doc.evaluated[row.id]?.state === "unavailable") && (
+                          <div className={styles.unavailableWarning}>
+                            {group.rows.filter(row => doc.evaluated[row.id]?.state === "unavailable").map(row => (
+                              <p key={row.id} className={styles.configReason}>
+                                <CircleHelp size={14} />
+                                <span>{conditionLabel(row)}: {reason(doc.evaluated[row.id]!)}</span>
+                              </p>
+                            ))}
+                          </div>
+                        )}
+
+                        <details className={styles.configDetailsToggle}>
+                          <summary>
+                            <span>{lang === "vi" ? "Chi tiết từng điều kiện" : lang === "zh" ? "条件详情" : "Condition details"} ({group.rows.length})</span>
+                            <ChevronDown size={14} />
+                          </summary>
+                          <div className={styles.configurationValues}>
+                            {group.rows.map(row => {
+                              const e = doc.evaluated[row.id];
+                              return (
+                                <div key={row.id} className={styles.configValueCard}>
+                                  <small className={styles.configBasis}>{conditionLabel(row)}</small>
+                                  <small className={styles.configLabel}>{row.kind === "reserve" ? x.balanceLabel : row.basis === "forecast" ? t.forecast : x.actualLabel}</small>
+                                  <b className={styles.configAmount}>{e ? money(e.value, e.currency) : "—"}</b>
+                                  {e && e.state !== "unavailable" && <p className={styles.configThreshold}>{x.thresholdLabel}: {money(e.limit, e.currency)}</p>}
+                                  {e?.state === "unavailable" && <p className={styles.configReason}>{reason(e)}</p>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </details>
 
                         <footer>
                           <span className={styles.channelBadge}>

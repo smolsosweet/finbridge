@@ -746,10 +746,20 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       <details className="fb-planning-analysis">
         <summary><TrendingUp size={19}/><span><b>{lang === "vi" ? "Xem phân tích chi tiêu" : lang === "zh" ? "查看支出分析" : "View spending analysis"}</b><small>{lang === "vi" ? "Theo danh mục và theo tuần, từ giao dịch đã ghi nhận." : lang === "zh" ? "按类别和周查看已记录的支出。" : "Review recorded expenses by category and week."}</small></span><ChevronDown size={18}/></summary>
         <div className="fb-planning-analysis-body">
-          <div className="fb-planning-analysis-period"><label className="fb-period-control"><span>{lang === "vi" ? "Kỳ xem" : lang === "zh" ? "查看期间" : "Period"}</span><input type="month" value={selectedMonth} onChange={(event) => event.target.value && setSelectedMonth(event.target.value)} aria-label={lang === "vi" ? "Chọn tháng xem báo cáo" : "Select reporting month"} /></label></div>
           {unmappedExpenseCount > 0 && <p className="fb-planning-note">{lang === "vi" ? `${unmappedExpenseCount} giao dịch thiếu ví hoặc tiền tệ đã được loại khỏi phân tích.` : lang === "zh" ? `${unmappedExpenseCount} 笔交易缺少钱包或币种，未计入分析。` : `${unmappedExpenseCount} transactions without a wallet or currency were excluded from analysis.`}</p>}
-    <section className="fb-planning-analytics" aria-labelledby="fb-analytics-title">
-      <header className="fb-planning-section-heading"><div><p className="fb-eyebrow">{lang === "vi" ? "THỰC TẾ" : "ACTUALS"}</p><h2 id="fb-analytics-title">{lang === "vi" ? "Phân tích chi tiêu" : lang === "zh" ? "支出分析" : "Spending analytics"}</h2></div><span>{monthLabel}</span></header>
+          <section className="fb-planning-analytics" aria-labelledby="fb-analytics-title">
+            <header className="fb-planning-section-heading fb-analytics-heading-inline">
+              <div>
+                <p className="fb-eyebrow">{lang === "vi" ? "THỰC TẾ" : "ACTUALS"}</p>
+                <h2 id="fb-analytics-title">{lang === "vi" ? "Phân tích chi tiêu" : lang === "zh" ? "支出分析" : "Spending analytics"}</h2>
+              </div>
+              <div className="fb-analytics-period-inline">
+                <label className="fb-period-control">
+                  <span>{lang === "vi" ? "Kỳ xem" : lang === "zh" ? "查看期间" : "Period"}</span>
+                  <input type="month" value={selectedMonth} onChange={(event) => event.target.value && setSelectedMonth(event.target.value)} aria-label={lang === "vi" ? "Chọn tháng xem báo cáo" : "Select reporting month"} />
+                </label>
+              </div>
+            </header>
       <div className="fb-overview-grid"><section className="fb-category-column" aria-label={lang === "vi" ? "Chi tiêu theo danh mục" : "Spending by category"}><h3>{lang === "vi" ? "Chi tiêu theo danh mục" : lang === "zh" ? "按类别支出" : "Category spending"}</h3>{periodBudgetSummaries.filter(({ budget }) => !budget.category?.trim()).map(({ budget, window, summary }) => {
         const ratio = budget.amount > 0 ? Math.min(100, Math.max(0, summary.actual / budget.amount * 100)) : 0;
         const isOver = summary.actual > budget.amount;

@@ -1,7 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { CalendarDays, Moon, Sun } from "lucide-react";
+import { useState, useRef, useEffect, type ReactNode } from "react";
+import { CalendarDays, Check, ChevronDown, Moon, Sun } from "lucide-react";
 import { NotificationCenter } from "./NotificationCenter";
 
 export interface FinBridgeHeaderProps {
@@ -31,6 +31,25 @@ export function FinBridgeHeader({
   const langLabel = lang === "vi" ? "Ngôn ngữ hiển thị" : lang === "zh" ? "显示语言" : "Display language";
   const selectedLang =
     currentLanguage || (lang === "vi" ? "Tiếng Việt" : lang === "zh" ? "中文" : "English");
+
+  const [langOpen, setLangOpen] = useState(false);
+  const langRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (langRef.current && !langRef.current.contains(e.target as Node)) {
+        setLangOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, []);
+
+  const languageOptions = [
+    { value: "Tiếng Việt", label: "Tiếng Việt" },
+    { value: "English", label: "English" },
+    { value: "中文", label: "中文" },
+  ];
 
   return (
     <header className="fb-home-header">
@@ -91,16 +110,60 @@ export function FinBridgeHeader({
         {children}
 
         {!children && onSelectLanguage && (
-          <select
-            aria-label={langLabel}
-            className="fb-header-lang-select"
-            value={selectedLang}
-            onChange={(e) => onSelectLanguage(e.target.value)}
-          >
-            <option value="Tiếng Việt">Tiếng Việt</option>
-            <option value="English">English</option>
-            <option value="中文">中文</option>
-          </select>
+          <div className="fb-header-lang-wrapper" ref={langRef}>
+            <button
+              type="button"
+              className={`fb-header-lang-trigger ${langOpen ? "is-open" : ""}`}
+              onClick={() => setLangOpen(!langOpen)}
+              aria-haspopup="listbox"
+              aria-expanded={langOpen}
+            >
+              <span>{selectedLang}</span>
+              <ChevronDown size={14} className={`fb-header-lang-chevron ${langOpen ? "is-open" : ""}`} />
+            </button>
+
+            {/* Accessible select for tests and form integrations */}
+            <select
+              aria-label={langLabel}
+              className="fb-header-lang-select"
+              value={selectedLang}
+              onChange={(e) => onSelectLanguage(e.target.value)}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                height: "100%",
+                opacity: 0.001,
+                zIndex: 0,
+                pointerEvents: "none",
+              }}
+            >
+              <option value="Tiếng Việt">Tiếng Việt</option>
+              <option value="English">English</option>
+              <option value="中文">中文</option>
+            </select>
+
+            {langOpen && (
+              <ul className="fb-header-lang-menu" role="listbox">
+                {languageOptions.map((opt) => (
+                  <li
+                    key={opt.value}
+                    role="option"
+                    aria-selected={opt.value === selectedLang}
+                    className={`fb-header-lang-item ${opt.value === selectedLang ? "is-selected" : ""}`}
+                    onClick={() => {
+                      onSelectLanguage(opt.value);
+                      setLangOpen(false);
+                    }}
+                  >
+                    <span>{opt.label}</span>
+                    {opt.value === selectedLang && <Check size={14} />}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </div>
     </header>
