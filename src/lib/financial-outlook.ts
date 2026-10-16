@@ -1,5 +1,6 @@
 import type { AppState, Goal } from "@/components/sites/rolly/replica/store";
-import { budgetSummary, plannedOccurrences } from "../components/sites/rolly/replica/planningModel";
+import { budgetSummary } from "../components/sites/rolly/replica/planningModel";
+import { unpaidOccurrences } from "./fixed-expense-payments";
 const cents = (n: number) => Math.round(n * 100);
 const days = (a: string, b: string) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400000);
 export function reserveAmounts(state: AppState): Record<string, number> {
@@ -44,7 +45,7 @@ export function financialOutlook(state: AppState, asOf: string) {
     const budget = state.goals.find(b => b.kind === "budget" && b.id === expense.budgetId);
     const wallet = state.wallets.find(w => !w.archived && w.id === (budget?.wallet || expense.walletId));
     if (!wallet || (expense.budgetId && !budget) || (budget && wallet.currency !== budget.currency)) return [];
-    const due = plannedOccurrences(expense, asOf, end)[0]; if (!due) return [];
+    const due = unpaidOccurrences(state, expense, asOf, end)[0]; if (!due) return [];
     const balance = trackedBalance(state, wallet.id);
     const after = (cents(balance.amount) - cents(expense.amount)) / 100;
     return [{ expense, wallet, due, daysUntil: days(asOf, due), balance, after, reserve: reserves[wallet.id] || 0,

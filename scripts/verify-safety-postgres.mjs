@@ -1,114 +1,53 @@
 import assert from "node:assert/strict";
 import { test, after } from "node:test";
-import nextEnv from "@next/env";
-import { Pool } from "pg";
 import { randomUUID } from "node:crypto";
-import { safetyFixture, ruleFixture } from "./safety-fixtures.mjs";
+import { ruleFixture } from "./safety-fixtures.mjs";
 import { safetyRepository, SAFETY_SQL } from "../src/lib/safety-repository.ts";
+import { workspaceRepository } from "../src/lib/workspace-repository.ts";
 import { handleSafety } from "../src/lib/safety-handler.ts";
 import { runSafetyWorker } from "../src/lib/safety-worker.ts";
-import { initializeAccountLifecycle, deactivateAccountLifecycle } from "../src/lib/account-lifecycle.ts";
-
-nextEnv.loadEnvConfig(process.cwd());
-const connectionString = process.env.AUTH_TEST_DATABASE_URL;
-if (!connectionString) throw new Error("AUTH_TEST_DATABASE_URL required");
-const url = new URL(connectionString);
-if (!["localhost", "127.0.0.1"].includes(url.hostname) || url.pathname !== "/finbridge_auth_test") throw new Error("Only the dedicated local test database is allowed");
-const pool = new Pool({ connectionString, max: 4 });
-await initializeAccountLifecycle(pool); await pool.query(SAFETY_SQL);
-const owner = "safety-test-" + randomUUID(), other = "safety-test-" + randomUUID(), sourceId = randomUUID();
-for (const id of [owner, other]) await pool.query('INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt") VALUES($1,$2,$3,true,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)', [id, "Synthetic Safety User", id + "@example.invalid"]);
-const repo = safetyRepository(pool), origin = "https://finbridge.invalid";
-const snapshot = safetyFixture(), now = new Date();
-const date = now.toISOString().slice(0, 10), month = date.slice(0, 7) + "-01";
-snapshot.budgets[0].date = month; snapshot.transactions[0].date = date; snapshot.transactions[0].amount = 850;
-async function request(body, { id = owner, trusted = true, emailAvailable = true } = {}) {
-  const revision = (await repo.read(id)).revision;
-  return handleSafety(new Request(origin + "/api/safety", { method: "POST", headers: { "content-type": "application/json", origin: trusted ? origin : "https://foreign.invalid" }, body: JSON.stringify({ revision, ...body }) }), id, origin, repo, emailAvailable);
+import { deactivateAccountLifecycle } from "../src/lib/account-lifecycle.ts";
+import { testPool, syntheticUser, cleanupFinance, workspaceFixture } from "./workspace-fixtures.mjs";
+const pool=await testPool(),owner=await syntheticUser(pool),other=await syntheticUser(pool),repo=safetyRepository(pool),workspaces=workspaceRepository(pool),origin="https://finbridge.invalid";
+await workspaces.save(owner,{revision:0,mutationId:randomUUID(),data:workspaceFixture()});
+const saved=()=>repo.read(owner);
+async function request(body,{id=owner,trusted=true,emailAvailable=true}={}) {
+ const revision=(await repo.read(id)).revision;
+ return handleSafety(new Request(origin+"/api/safety",{method:"POST",headers:{"content-type":"application/json",origin:trusted?origin:"https://foreign.invalid"},body:JSON.stringify({revision,...body})}),id,origin,repo,emailAvailable);
 }
-const saved = async () => repo.read(owner);
-after(async () => {
-  for (const table of ["finbridge_safety_events", "finbridge_safety_changes", "finbridge_safety_limits", "finbridge_safety", "finbridge_account_lifecycle"]) await pool.query(`DELETE FROM ${table} WHERE user_id=ANY($1::text[])`, [[owner, other]]);
-  await pool.query('DELETE FROM "user" WHERE id=ANY($1::text[])', [[owner, other]]); await pool.end();
+after(async()=>{await cleanupFinance(pool,[owner,other]);await pool.end();});
+test("schema migration preserves rows and reads authoritative database financial records",async()=>{await pool.query(SAFETY_SQL);const doc=await saved();assert.equal(doc.revision,0);assert.equal(doc.sourceId,"database");assert.equal(doc.snapshot.transactions[0].amount,850);});
+test("foreign origins, missing sessions and client-supplied financial snapshots are rejected",async()=>{
+ assert.equal((await request({action:"read"},{trusted:false})).status,403);
+ assert.equal((await handleSafety(new Request(origin+"/api/safety"),null,origin,repo,true)).status,401);
+ assert.equal((await request({action:"sync",sourceId:randomUUID(),snapshot:{}})).status,400);
+ assert.equal((await saved()).revision,0);
 });
-test("schema migration is idempotent and does not reset rows", async () => { await pool.query(SAFETY_SQL); assert.equal((await saved()).revision, 0); });
-test("foreign origins and missing sessions perform zero writes", async () => {
-  assert.equal((await request({ action: "source", sourceId, snapshot }, { trusted: false })).status, 403);
-  const res = await handleSafety(new Request(origin + "/api/safety"), null, origin, repo, true); assert.equal(res.status, 401); assert.equal((await saved()).revision, 0);
+const groupId=randomUUID();
+const groupRules=[{...ruleFixture(),id:"actual-80",groupId,email:true},{...ruleFixture(),id:"actual-100",groupId,threshold:100,email:true},{...ruleFixture(),id:"forecast-100",groupId,basis:"forecast",threshold:100,email:true}];
+test("one configuration atomically stores actual 80/100 and forecast 100 in relational alert rows",async()=>{
+ const response=await request({action:"saveGroup",groupId,rules:groupRules});assert.equal(response.status,200);const publicDoc=await response.json();assert.equal("snapshot" in publicDoc,false);assert.equal(publicDoc.rules.length,3);
+ const rows=await pool.query("SELECT basis,threshold_value FROM finbridge_alert_rules WHERE user_id=$1 ORDER BY position",[owner]);assert.equal(rows.rowCount,3);assert.deepEqual(rows.rows.map(r=>r.basis),["actual","actual","forecast"]);
+ const doc=await saved();assert.equal(doc.events.filter(e=>e.ruleId==="actual-80").length,1);assert.ok(doc.evaluated["actual-80"]?.state!=="unavailable");
 });
-test("explicit source consent stores a redacted snapshot and returns no financial snapshot", async () => {
-  const res = await request({ action: "source", sourceId, snapshot }); assert.equal(res.status, 200);
-  const data = await res.json(); assert.equal(data.sourceId, sourceId); assert.equal("snapshot" in data, false); assert.equal(data.revision, 1);
+test("another account cannot access alerts or use scopes from an absent workspace",async()=>{assert.deepEqual((await repo.read(other)).rules,[]);assert.equal((await request({action:"save",rule:ruleFixture()},{id:other})).status,400);});
+test("forged identity, invalid target, duplicate conditions, mixed groups and unsupported money precision roll back",async()=>{
+ const before=(await saved()).revision;
+ for(const body of [{action:"read",userId:other},{action:"save",rule:{...ruleFixture(),targetId:"foreign-budget"}},{action:"save",rule:{...ruleFixture(),unit:"amount",threshold:1.001}},{action:"saveGroup",groupId,rules:[groupRules[0],{...groupRules[0],id:"duplicate"}]},{action:"saveGroup",groupId,rules:[{...groupRules[0],groupId:randomUUID()}]}])assert.equal((await request(body)).status,400);
+ assert.equal((await request({action:"save",rule:{...ruleFixture(),email:true}},{emailAvailable:false})).status,400);assert.equal((await saved()).revision,before);
 });
-test("saving a reached threshold produces one persisted alert, and replay/sync never duplicates it", async () => {
-  const rule = { ...ruleFixture(), email: true };
-  assert.equal((await request({ action: "save", rule })).status, 200);
-  assert.equal((await saved()).events.length, 1);
-  assert.equal((await request({ action: "sync", sourceId, snapshot })).status, 200);
-  assert.equal((await saved()).events.length, 1);
+test("concurrent rule edits conflict instead of overwriting",async()=>{const revision=(await saved()).revision;const responses=await Promise.all([request({action:"saveGroup",revision,groupId,rules:groupRules.map(r=>({...r,name:"A"}))}),request({action:"saveGroup",revision,groupId,rules:groupRules.map(r=>({...r,name:"B"}))})]);assert.deepEqual(responses.map(r=>r.status).sort(),[200,409]);});
+test("GET has no writes and marking read retains financial data",async()=>{const before=await saved();assert.equal((await handleSafety(new Request(origin+"/api/safety"),owner,origin,repo,true)).status,200);assert.equal((await saved()).revision,before.revision);assert.equal((await request({action:"read"})).status,200);assert.ok((await saved()).events.every(e=>e.read));});
+test("worker sends each generic reminder once and accepts database data even after 24 hours",async()=>{
+ await pool.query("UPDATE finbridge_safety SET document=jsonb_set(document,'{syncedAt}',to_jsonb($2::text)) WHERE user_id=$1",[owner,new Date(Date.now()-26*3600000).toISOString()]);
+ let calls=0;await runSafetyWorker(pool,async(to,language)=>{calls++;assert.equal(to,owner+"@example.invalid");assert.equal(language,"en");return "accepted";});assert.ok(calls>=1);const accepted=calls;
+ await runSafetyWorker(pool,async()=>{calls++;return "accepted";});assert.equal(calls,accepted);assert.equal((await saved()).events.find(e=>e.ruleId==="actual-80").emailStatus,"accepted");
 });
-test("another account cannot read alerts or reuse a foreign source", async () => {
-  assert.deepEqual((await repo.read(other)).rules, []);
-  assert.equal((await request({ action: "sync", sourceId, snapshot }, { id: other })).status, 409);
-  assert.equal((await repo.read(other)).revision, 0);
+test("removed group conditions are archived; invalid grouped edit cannot save partially",async()=>{const old=await saved();const rules=old.rules.filter(r=>r.id!=="forecast-100");assert.equal((await request({action:"saveGroup",groupId,rules})).status,200);assert.equal((await saved()).rules.find(r=>r.id==="forecast-100").archived,true);assert.equal((await pool.query("SELECT archived FROM finbridge_alert_rules WHERE user_id=$1 AND id='forecast-100'",[owner])).rows[0].archived,true);});
+test("ambiguous email result is not blindly resent; pause cancels queued mail",async()=>{
+ const r={...ruleFixture(),id:"unknown-rule",unit:"amount",threshold:760,email:true};await request({action:"save",rule:r});let calls=0;await runSafetyWorker(pool,async()=>{calls++;return "unknown";});await runSafetyWorker(pool,async()=>{calls++;return "accepted";});assert.equal(calls,1);assert.equal((await saved()).events.find(e=>e.ruleId===r.id).emailStatus,"unknown");
+ const pause={...r,id:"pause-rule",threshold:750};await request({action:"save",rule:pause});await request({action:"save",rule:{...pause,active:false}});assert.equal((await saved()).events.find(e=>e.ruleId===pause.id).emailStatus,"cancelled");
 });
-test("forged owners, invalid target, unsupported money precision and disabled email are rejected", async () => {
-  const before = (await saved()).revision;
-  assert.equal((await request({ action: "read", userId: other })).status, 400);
-  assert.equal((await request({ action: "save", rule: { ...ruleFixture(), id: "bad", targetId: "foreign-budget" } })).status, 400);
-  assert.equal((await request({ action: "save", rule: { ...ruleFixture(), id: "precision", unit: "amount", threshold: 1.001 } })).status, 400);
-  assert.equal((await request({ action: "save", rule: { ...ruleFixture(), email: true } }, { emailAvailable: false })).status, 400);
-  assert.equal((await saved()).revision, before);
-});
-test("concurrent updates use optimistic locking: one succeeds and one conflicts", async () => {
-  const revision = (await saved()).revision;
-  const responses = await Promise.all([request({ action: "save", revision, rule: { ...ruleFixture(), name: "Name A", email: true } }), request({ action: "save", revision, rule: { ...ruleFixture(), name: "Name B", email: true } })]);
-  assert.deepEqual(responses.map(r => r.status).sort(), [200, 409]);
-});
-test("a stale source cannot replace a newer device's data", async () => {
-  const nextSource = randomUUID(); assert.equal((await request({ action: "source", sourceId: nextSource, snapshot })).status, 200);
-  const before = (await saved()).revision;
-  assert.equal((await request({ action: "sync", sourceId, snapshot })).status, 409); assert.equal((await saved()).revision, before);
-});
-test("GET has no writes and marking read preserves the financial snapshot", async () => {
-  const before = await saved();
-  const get = await handleSafety(new Request(origin + "/api/safety"), owner, origin, repo, true); assert.equal(get.status, 200); assert.equal((await saved()).revision, before.revision);
-  assert.equal((await request({ action: "read" })).status, 200);
-  const after = await saved(); assert.ok(after.events.every(e => e.read)); assert.deepEqual(after.snapshot, before.snapshot);
-});
-test("the worker claims an email once, revalidates its rule and reports provider acceptance", async () => {
-  let calls = 0;
-  const result = await runSafetyWorker(pool, async (to, language) => { calls++; assert.equal(to, owner + "@example.invalid"); assert.equal(language, "en"); return "accepted"; });
-  assert.equal(calls, 1); assert.equal(result.accepted, 1); assert.equal((await saved()).events[0].emailStatus, "accepted");
-  await runSafetyWorker(pool, async () => { calls++; return "accepted"; }); assert.equal(calls, 1);
-});
-test("pausing cancels queued mail without deleting the rule or alert history", async () => {
-  await request({ action: "save", rule: { ...ruleFixture(), id: "pause-rule", unit: "amount", threshold: 750, email: true } });
-  const before = (await saved()).events.length;
-  await request({ action: "save", rule: { ...ruleFixture(), id: "pause-rule", unit: "amount", threshold: 750, email: true, active: false } });
-  const after = await saved(); assert.equal(after.events.length, before); assert.equal(after.events.find(e => e.ruleId === "pause-rule").emailStatus, "cancelled");
-});
-test("email timeout becomes unknown and is never automatically resent", async () => {
-  await request({ action: "save", rule: { ...ruleFixture(), id: "unknown-rule", unit: "amount", threshold: 760, email: true } });
-  let calls = 0; await runSafetyWorker(pool, async () => { calls++; return "unknown"; });
-  await runSafetyWorker(pool, async () => { calls++; return "accepted"; }); assert.equal(calls, 1); assert.equal((await saved()).events.find(e => e.ruleId === "unknown-rule").emailStatus, "unknown");
-});
-test("stale snapshots pause background alerts and cancel unsent stale mail", async () => {
-  await request({ action: "save", rule: { ...ruleFixture(), id: "stale-rule", unit: "amount", threshold: 770, email: true } });
-  await pool.query("UPDATE finbridge_safety SET document=jsonb_set(document,'{syncedAt}',to_jsonb($2::text)) WHERE user_id=$1", [owner, new Date(now.getTime() - 26 * 3600000).toISOString()]);
-  let calls = 0; await runSafetyWorker(pool, async () => { calls++; return "accepted"; }); assert.equal(calls, 0);
-  assert.equal((await saved()).events.find(e => e.ruleId === "stale-rule").emailStatus, "cancelled");
-});
-test("request limits are enforced in PostgreSQL without changing rules", async () => {
-  await pool.query("UPDATE finbridge_safety_limits SET requests=60,window_at=CURRENT_TIMESTAMP WHERE user_id=$1", [owner]);
-  const before = (await saved()).revision; const res = await request({ action: "read" }); assert.equal(res.status, 429); assert.equal((await saved()).revision, before);
-  await pool.query("UPDATE finbridge_safety_limits SET requests=0 WHERE user_id=$1", [owner]);
-});
-test("closing an account keeps its rules and history but blocks writes and queued email", async () => {
-  const before = (await saved()).rules.length;
-  await deactivateAccountLifecycle(pool, { userId: owner, secret: "synthetic-only-lifecycle-secret-".repeat(2) });
-  await assert.rejects(repo.read(owner), /UNAUTHENTICATED/);
-  const res = await handleSafety(new Request(origin + "/api/safety"), owner, origin, repo, true); assert.equal(res.status, 401);
-  let calls = 0; await runSafetyWorker(pool, async () => { calls++; return "accepted"; }); assert.equal(calls, 0);
-  const retained = await pool.query("SELECT document FROM finbridge_safety WHERE user_id=$1", [owner]); assert.equal(retained.rows[0].document.rules.length, before);
-});
+test("workspace edits refresh derived alert snapshots transactionally",async()=>{const r=await workspaces.read(owner);r.data.transactions[0].amount=900;await workspaces.save(owner,{revision:r.revision,mutationId:randomUUID(),data:r.data});assert.equal((await saved()).snapshot.transactions[0].amount,900);});
+test("database request limits reject excess writes",async()=>{await pool.query("UPDATE finbridge_safety_limits SET requests=60,window_at=CURRENT_TIMESTAMP WHERE user_id=$1",[owner]);const before=(await saved()).revision;assert.equal((await request({action:"read"})).status,429);assert.equal((await saved()).revision,before);await pool.query("UPDATE finbridge_safety_limits SET requests=0 WHERE user_id=$1",[owner]);});
+test("closed account retains financial records and rules while blocking access and email",async()=>{const before=(await saved()).rules.length;await deactivateAccountLifecycle(pool,{userId:owner,secret:"synthetic-only-lifecycle-secret-".repeat(2)});await assert.rejects(repo.read(owner),/UNAUTHENTICATED/);let calls=0;await runSafetyWorker(pool,async()=>{calls++;return "accepted";});assert.equal(calls,0);assert.equal((await pool.query("SELECT document FROM finbridge_safety WHERE user_id=$1",[owner])).rows[0].document.rules.length,before);});

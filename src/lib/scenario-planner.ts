@@ -1,5 +1,6 @@
 import type { AppState } from "../components/sites/rolly/replica/store";
-import { budgetSummary, plannedOccurrences } from "../components/sites/rolly/replica/planningModel";
+import { budgetSummary } from "../components/sites/rolly/replica/planningModel";
+import { unpaidOccurrences } from "./fixed-expense-payments";
 
 export interface ScenarioChange {
   title: string;
@@ -85,10 +86,10 @@ export function calculateScenario(state: AppState, scenario: FinancialScenario, 
   for (const expense of state.fixedExpenses || []) {
     if (!expense.active) continue;
     const budget = state.goals.find((goal) => goal.id === expense.budgetId && goal.kind === "budget");
-    const wallet = budget && state.wallets.find((item) => item.id === budget.wallet && !item.archived);
-    if (!budget || !wallet || wallet.currency !== budget.currency) continue;
-    for (const dueDate of plannedOccurrences(expense, nextDate(today), end)) {
-      plannedBills.push({ title: expense.title, amount: expense.amount, currency: budget.currency, date: dueDate });
+    const wallet = state.wallets.find((item) => item.id === (budget?.wallet || expense.walletId) && !item.archived);
+    if (!wallet || (expense.budgetId && !budget) || (budget && wallet.currency !== budget.currency)) continue;
+    for (const dueDate of unpaidOccurrences(state, expense, nextDate(today), end)) {
+      plannedBills.push({ title: expense.title, amount: expense.amount, currency: wallet.currency, date: dueDate });
       plannedByWallet.set(wallet.id, (plannedByWallet.get(wallet.id) || 0) + cents(expense.amount));
     }
   }
@@ -205,7 +206,7 @@ export function calculateScenario(state: AppState, scenario: FinancialScenario, 
     }, 0);
     const forecastEnd = end < summary.end ? end : summary.end;
     const actualToDateCents = state.transactions.filter((item) => item.wallet === budget.wallet && item.type === "expense" && (!budget.category || item.category === budget.category) && item.date.slice(0, 10) >= summary.start && item.date.slice(0, 10) <= today).reduce((sum, item) => sum + cents(item.amount), 0);
-    const plannedAmountCents = (state.fixedExpenses || []).filter((item) => item.active && item.budgetId === budget.id).reduce((sum, item) => sum + plannedOccurrences(item, nextDate(today), forecastEnd).length * cents(item.amount), 0);
+    const plannedAmountCents = (state.fixedExpenses || []).filter((item) => item.active && item.budgetId === budget.id).reduce((sum, item) => sum + unpaidOccurrences(state, item, nextDate(today), forecastEnd).length * cents(item.amount), 0);
     const fixedCategories = new Set((state.fixedExpenses || []).filter((item) => item.active && item.budgetId === budget.id).map((item) => item.category));
     const budgetMonthStart = summary.start > currentMonthStart ? summary.start : currentMonthStart;
     const monthSpendCents = state.transactions.filter((item) => item.wallet === budget.wallet && item.type === "expense" && (!budget.category || item.category === budget.category) && !fixedCategories.has(item.category) && item.date.slice(0, 10) >= budgetMonthStart && item.date.slice(0, 10) <= today).reduce((sum, item) => sum + cents(item.amount), 0);

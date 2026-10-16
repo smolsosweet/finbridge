@@ -3,15 +3,19 @@
 import { useSyncExternalStore } from "react";
 import { readUserWorkspace, userWorkspaceKey, importLegacyWorkspace as copyLegacyWorkspace } from "@/lib/workspace-storage";
 import { readPreferredLanguage, rememberPreferredLanguage, workspaceLanguage } from "@/lib/language-preference";
+import type { FinancialScenario } from "@/lib/scenario-planner";
+import type { OnboardingData } from "@/lib/onboarding";
+import type { BankRecipient } from "@/lib/bank-transfer";
 
 export interface Wallet { id: string; name: string; currency: string; initial: number; type: string; limit?: number; archived?: boolean; }
-export interface Transaction { id: string; title: string; amount: number; type: "expense" | "income" | "transfer"; category: string; subcategory?: string; date: string; wallet: string; targetWallet?: string; note: string; image?: string; interval?: number; unit?: string; }
+export interface Transaction { id: string; title: string; amount: number; type: "expense" | "income" | "transfer"; category: string; subcategory?: string; date: string; wallet: string; targetWallet?: string; note: string; image?: string; interval?: number; unit?: string; fixedExpenseId?: string; fixedExpenseDueDate?: string; paymentConfirmation?: "user"; }
 export interface Goal { id: string; kind: string; title: string; amount: number; saved: number; currency: string; date: string; cycle: string; category: string; wallet: string; direction: string; person: string; }
-export interface FixedExpense { id: string; budgetId: string; walletId?: string; title: string; amount: number; category: string; dueDate: string; recurrence: "once" | "weekly" | "monthly" | "yearly"; intervalMonths?: number; monthPosition?: "start" | "end" | "date"; reminderDays?: number; active: boolean; }
+export interface FixedExpense { id: string; budgetId: string; walletId?: string; title: string; amount: number; category: string; dueDate: string; recurrence: "once" | "weekly" | "monthly" | "yearly"; intervalMonths?: number; monthPosition?: "start" | "end" | "date"; reminderDays?: number; active: boolean; paymentRecipient?: BankRecipient; }
 export interface CategoryMetadata { type: string; icon: string; children: string[]; archived?: boolean; }
 export interface ChatMessage { role: "assistant" | "user"; text: string; localOnly?: boolean; transaction?: Transaction; draftIds?: string[]; walletChoiceDraftIds?: string[]; categoryChoiceDraftIds?: string[]; retryReceipt?: boolean; }
 export interface TransactionChatSession { messages: ChatMessage[]; drafts: Array<{ id: string; title: string; amount: number | null; type: "expense" | "income" | null; category: string | null; date: string | null; wallet: string | null; currency: string | null; needsReview: string[] }>; clarifyingDraftId: string | null; }
-export interface AppState { wallets: Wallet[]; transactions: Transaction[]; goals: Goal[]; fixedExpenses?: FixedExpense[]; recurring: Transaction[]; rules: string[]; categories: string[]; categoryMeta: Record<string, CategoryMetadata>; receiptDraft?: string; transactionChat?: TransactionChatSession; settings: Record<string, string | boolean>; }
+export type PlanningChatMessage = { role: "user" | "assistant"; text: string; scenarios?: FinancialScenario[]; clarification?: string | null; walletChoices?: Array<{ id: string; name: string; currency: string }>; pendingScenario?: string; selectedWalletId?: string };
+export interface AppState { wallets: Wallet[]; transactions: Transaction[]; goals: Goal[]; fixedExpenses?: FixedExpense[]; recurring: Transaction[]; rules: string[]; categories: string[]; categoryMeta: Record<string, CategoryMetadata>; walletCategories?: Record<string, string[]>; receiptDraft?: string; transactionChat?: TransactionChatSession; planningChat?: PlanningChatMessage[]; onboardingDraft?: OnboardingData; settings: Record<string, string | boolean>; }
 export const initialState: AppState = {
   wallets: [{ id: "default", name: ".", currency: "USD", initial: 0, type: "cash" }],
   transactions: [], goals: [], fixedExpenses: [], recurring: [], rules: [],
@@ -31,27 +35,44 @@ let current = initialState;
 let initialized = false;
 let activeOwner: string | null = null;
 let ownerName = "";
+let persistence: "browser" | "database" = "browser";
+let flushDatabase: (() => Promise<void>) | null = null;
 const listeners = new Set<() => void>();
 function notify() { listeners.forEach((listener) => listener()); }
 export function workspaceOwner() { return activeOwner; }
-export function activateUserWorkspace(userId: string, name: string) {
+export function activateUserWorkspace(userId: string, name: string, options?: { persistence: "database" | "browser" }) {
   if (!userId.trim()) throw new Error("A server-authenticated user is required.");
   if (activeOwner === userId) return;
   activeOwner = userId; ownerName = name; initialized = false;
+  persistence = options?.persistence || "browser";
   current = { ...structuredClone(initialState), settings: { ...initialState.settings, name, language: workspaceLanguage(readPreferredLanguage()) } };
   getSnapshot(); notify();
 }
 export function clearUserWorkspace(expectedOwner?: string) {
   if (expectedOwner && activeOwner !== expectedOwner) return;
-  activeOwner = null; ownerName = ""; initialized = false; current = initialState; notify();
+  activeOwner = null; ownerName = ""; initialized = false; current = initialState; flushDatabase = null; notify();
 }
+export function workspacePersistence() { return persistence; }
+export function getWorkspaceState() { return getSnapshot(); }
+export function replaceDatabaseWorkspace(owner: string, value: AppState) {
+  if (activeOwner !== owner || persistence !== "database") return;
+  current = value; initialized = true; notify();
+}
+export function registerWorkspaceFlusher(owner: string, flush: () => Promise<void>) {
+  if (activeOwner !== owner) return () => {};
+  flushDatabase = flush;
+  return () => { if (flushDatabase === flush) flushDatabase = null; };
+}
+export async function flushWorkspace() { if (persistence === "database" && flushDatabase) await flushDatabase(); }
 export function importOldWorkspace(explicitlyConfirmed: boolean) {
   if (!activeOwner) throw new Error("No active user workspace.");
+  if (persistence === "database") throw new Error("Use the database migration flow.");
   copyLegacyWorkspace(localStorage, activeOwner, explicitlyConfirmed);
   initialized = false; getSnapshot(); notify();
 }
 function getSnapshot() {
   if (!activeOwner) return initialState;
+  if (persistence === "database") return current;
   if (!initialized && typeof window !== "undefined") {
     initialized = true;
     try {
@@ -69,7 +90,8 @@ export const subscribeWorkspace = subscribe;
 export function updateState(update: (value: AppState) => AppState) {
   if (!activeOwner) throw new Error("No active user workspace.");
   current = update(getSnapshot());
-  try { localStorage.setItem(userWorkspaceKey(activeOwner), JSON.stringify(current)); } catch { /* In-memory editing remains available. */ }
+  if (current.walletCategories) current = { ...current, walletCategories: Object.fromEntries(current.wallets.map(w => [w.id, [...new Set(current.walletCategories?.[w.id] || current.categories)].filter(n => current.categories.includes(n))])) };
+  if (persistence === "browser") { try { localStorage.setItem(userWorkspaceKey(activeOwner), JSON.stringify(current)); } catch { /* Demo data can remain in memory. */ } }
   notify();
 }
 export function useAppState() { return useSyncExternalStore(subscribe, getSnapshot, () => initialState); }

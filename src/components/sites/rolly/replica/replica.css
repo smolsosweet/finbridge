@@ -1348,6 +1348,10 @@ html:has(.r-chat-page){scrollbar-gutter:auto}
 .fb-alert-bell { position:relative; display:inline-flex; justify-content:center; align-items:center; width:40px; height:40px; border:1px solid #e2e8f0; border-radius:12px; color:#713ee8; }
 .fb-alert-bell > span { position:absolute; right:-5px; top:-5px; border-radius:12px; background:#713ee8; color:white; font-size:10px; padding:2px 5px; }
 .r-dark .fb-safety-planning-link { background:#283047; border-color:#4c4168; color:#c4a6ff; }
+.fb-budget-new-category > button { display:inline-flex; align-items:center; gap:6px; color:#713ee8; font-size:13px; font-weight:600; }
+.fb-budget-new-category > div { display:grid; gap:12px; margin-top:12px; padding:15px; border:1px solid #dcd5f1; border-radius:12px; background:#f8f6ff; }
+.fb-budget-new-category > div > button { color:#713ee8; font-size:13px; font-weight:650; justify-self:start; }
+.fb-budget-new-category small { color:#64748b; line-height:1.7; }
 @media(max-width:640px) {
   .fb-home-header { flex-wrap:wrap; gap:12px; }
   .fb-home-header > .fb-brand { max-width:100%; }

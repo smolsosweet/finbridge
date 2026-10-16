@@ -20,7 +20,7 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 export function PageHeader({ title, subtitle, onBack, close = false, children }: { title?: string; subtitle?: string; onBack: () => void; close?: boolean; children?: ReactNode }) {
   return <header className={"r-header " + (close ? "r-header-close" : "")}><button type="button" className="r-icon-button" onClick={onBack} aria-label={close ? "Đóng" : "Quay lại"}>{close ? <X size={20} /> : <ArrowLeft size={20} />}</button>{title && <div><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div>}{children}</header>;
 }
-export function Modal({ title, children, onClose, sheet = false, wide = false }: { title?: string; children: ReactNode; onClose: () => void; sheet?: boolean; wide?: boolean }) {
+export function Modal({ title, children, onClose, sheet = false, wide = false, closeLabel = "Đóng hộp thoại" }: { title?: string; children: ReactNode; onClose: () => void; sheet?: boolean; wide?: boolean; closeLabel?: string }) {
   const panel = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
 
@@ -49,7 +49,7 @@ export function Modal({ title, children, onClose, sheet = false, wide = false }:
       previous?.focus();
     };
   }, []);
-  return <div className={"r-overlay " + (sheet ? "r-sheet-overlay" : "")} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title || "Tùy chọn"} className={"r-dialog " + (sheet ? "r-sheet " : "") + (wide ? "r-wide-dialog" : "")}><button type="button" className="r-modal-close" aria-label="Đóng hộp thoại" onClick={onClose}><X size={18} /></button>{sheet && <div className="r-handle" />}{title && <h2>{title}</h2>}{children}</div></div>;
+  return <div className={"r-overlay " + (sheet ? "r-sheet-overlay" : "")} onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div ref={panel} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title || "Tùy chọn"} className={"r-dialog " + (sheet ? "r-sheet " : "") + (wide ? "r-wide-dialog" : "")}><button type="button" className="r-modal-close" aria-label={closeLabel} onClick={onClose}><X size={18} /></button>{sheet && <div className="r-handle" />}{title && <h2>{title}</h2>}{children}</div></div>;
 }
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="r-field"><span>{label}</span>{children}</label>;

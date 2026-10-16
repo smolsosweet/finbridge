@@ -2,6 +2,7 @@
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { FirstRunGate } from "./FirstRunGate";
+import { DatabaseWorkspace } from "./DatabaseWorkspace";
 import { authClient } from "@/lib/auth-client";
 import { AuthenticatedUserContext, type AuthenticatedUser } from "./AuthenticatedUser";
 import { activateUserWorkspace, clearUserWorkspace, subscribeWorkspace, workspaceOwner } from "@/components/sites/rolly/replica/store";
@@ -26,7 +27,7 @@ function SessionWorkspace({ user, children }: { user: AuthenticatedUser; childre
   const { data: session, isPending } = authClient.useSession();
   const ready = useSyncExternalStore(subscribeWorkspace, () => workspaceOwner() === user.id, () => false);
   useEffect(() => {
-    activateUserWorkspace(user.id, user.name);
+    activateUserWorkspace(user.id, user.name, { persistence: "database" });
     return () => clearUserWorkspace(user.id);
   }, [user.id, user.name]);
   useEffect(() => {
@@ -40,5 +41,5 @@ function SessionWorkspace({ user, children }: { user: AuthenticatedUser; childre
   const currentUser = session?.user.id === user.id
     ? { id: session.user.id, name: session.user.name, email: session.user.email }
     : user;
-  return <AuthenticatedUserContext.Provider value={currentUser}><FirstRunGate>{children}</FirstRunGate></AuthenticatedUserContext.Provider>;
+  return <AuthenticatedUserContext.Provider value={currentUser}><DatabaseWorkspace key={user.id} owner={user.id}><FirstRunGate>{children}</FirstRunGate></DatabaseWorkspace></AuthenticatedUserContext.Provider>;
 }

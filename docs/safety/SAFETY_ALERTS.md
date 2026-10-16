@@ -20,24 +20,21 @@ follows scope → threshold → notifications → review, in EN/VI/ZH.
   FX destination amounts disable the affected reserve estimate.
 - Currency precision, time zones and safe-integer checks precede comparisons.
 
-## Source consent and persistence
+## Database persistence
 
-`finbridge_safety` stores the account-owned revisioned rules and alert snapshot.
-`finbridge_safety_events` retains alerts and queue state; `finbridge_safety_changes`
-retains rule/source changes. Rules pause without hard deletion. PostgreSQL
-`finbridge_safety_limits` bounds accepted updates to 60 per user per minute.
+Authenticated workspace records live in PostgreSQL business tables, including wallets,
+categories, wallet assignments, transactions, budgets, fixed costs, preferences and chats.
+See [database structure](../DATABASE.md). `finbridge_alert_rules` stores individual
+conditions; several actual/forecast thresholds share one configuration group. Rule
+edits commit atomically and removed conditions are archived.
 
-The user explicitly selects a publishing device. Snapshot fields include wallet
-names/currencies/opening balances, minimal transaction amounts/dates/categories
-and budget details. Notes, receipts, chats and unrelated settings are excluded.
-This is **alert snapshot synchronization**, not full workspace synchronization or
-an authoritative bank ledger. Switching the source replaces that snapshot without
-merging or overwriting local ledgers on other devices. The publisher uses a source
-identifier and optimistic revision checks; conflicts stop automatic publication
-until the user reviews and reselects the source. Updates debounce after changes
-and refresh every five minutes while open. Snapshots older than 24 hours suspend
-background alert creation and pending stale emails. An open device is not proof
-its manually recorded data is complete.
+`finbridge_safety` retains evaluation state; `finbridge_safety_events` retains alerts
+and queue state; `finbridge_safety_changes` retains configuration history. Rule writes
+are limited to 60 per account per minute. Alert snapshots are derived server-side
+from database financial records on workspace save and during scheduled evaluation.
+The client cannot upload an alternate snapshot or select a publishing device.
+Database records do not expire after 24 hours; manually recorded data can still be
+incomplete. The worker excludes notes, receipt images and chats from calculations.
 
 ## Alerts and email
 
@@ -64,8 +61,7 @@ closure. A PostgreSQL advisory lock serializes worker invocations.
 
 1. Run `npm run auth:migrate`. New tables are additive/idempotent; no account or
    financial reset is performed.
-2. Open Planning → Safety thresholds & alerts, review source consent, choose the
-   device and create a rule. In-app alerts do not require a mail provider.
+2. Open Planning, choose Safety thresholds & alerts, then create a configuration with actual spending, forecast spending, or both. In-app alerts do not require a mail provider.
 3. For email, configure existing verified Brevo sender variables:
    `AUTH_EMAIL_MODE=brevo`, `BREVO_API_KEY`, `AUTH_EMAIL_FROM`, and canonical HTTPS
    `BETTER_AUTH_URL`. Keep keys outside Git/browser bundles.
@@ -80,14 +76,14 @@ closure. A PostgreSQL advisory lock serializes worker invocations.
 
 Each invocation evaluates at most 50 accounts and sends at most 10 queued emails;
 scheduling capacity must match usage. No real email or scheduler is enabled by
-local feature development. Push/SMS, digests, arbitrary recipients, full workspace
-cloud sync, bill-payment matching and delivery webhooks are outside this version.
+local feature development. Push/SMS, digests, arbitrary recipients, real-time
+collaborative editing, bill-payment matching and delivery webhooks are outside this version.
 
 ## Verification
 
 - `npm run test:safety`: calculations, schemas, request boundary, redaction and
   email behavior (external network mocked).
-- `npm run test:safety:postgres`: real PostgreSQL account isolation, revision/source
+- `npm run test:safety:postgres`: real PostgreSQL account isolation, revision
   conflicts, concurrent writes, migration, outbox and account closure. Refuses any
   database other than local `finbridge_auth_test`.
 - UI: `node --no-warnings --experimental-strip-types --experimental-loader

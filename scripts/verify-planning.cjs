@@ -18,9 +18,13 @@ function compile(file, resolve = requireLocal) {
 }
 const weeks = compile("chartWeek.ts");
 const model = compile("planningModel.ts", (name) => name === "./chartWeek" ? weeks : requireLocal(name));
-const header = compile("FinBridgeHeader.tsx");
+const header = compile("FinBridgeHeader.tsx", name => name === "@/components/safety/SafetyProvider" ? { useSafety: () => null } : name === "@/components/safety/safety-copy" ? compile("../../../safety/safety-copy.ts") : requireLocal(name));
 const setupCopy = compile("../../../../lib/setup-copy.ts");
-const outlookModel = compile("../../../../lib/financial-outlook.ts", (name) => name === "../components/sites/rolly/replica/planningModel" ? model : requireLocal(name));
+const paymentsModel = compile("../../../../lib/fixed-expense-payments.ts", (name) => name === "../components/sites/rolly/replica/planningModel" ? model : requireLocal(name));
+const outlookModel = compile("../../../../lib/financial-outlook.ts", (name) => name === "../components/sites/rolly/replica/planningModel" ? model : name === "./fixed-expense-payments" ? paymentsModel : requireLocal(name));
+const safetyCopy = compile("../../../safety/safety-copy.ts");
+const budgetCategories = compile("../../../../lib/budget-categories.ts");
+const scenarioModel = compile("../../../../lib/scenario-planner.ts", name => name === "../components/sites/rolly/replica/planningModel" ? model : name === "./fixed-expense-payments" ? paymentsModel : requireLocal(name));
 const outlookUI = compile("FinancialOutlook.tsx", (name) => {
   if (name === "@/lib/financial-outlook") return outlookModel;
   if (name.endsWith(".module.css")) return { default: new Proxy({}, { get: (_, key) => String(key) }) };
@@ -57,18 +61,22 @@ assert.equal(model.validBudget(state, { ...budget, category: "Salary" }), false)
 assert.equal(model.budgetSummary({ ...state, fixedExpenses: [{ ...expense, active: false }] }, budget, "2026-10-13").planned, 0);
 
 let cursor = 0, slots = [];
-const testReact = { ...React, useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial; return [slots[index], (next) => { slots[index] = typeof next === "function" ? next(slots[index]) : next; }]; } };
+const testReact = { ...React, useEffect() {}, useRef(initial) { const index=cursor++; if (!(index in slots)) slots[index]={current:initial}; return slots[index]; }, useState(initial) { const index = cursor++; if (!(index in slots)) slots[index] = typeof initial === "function" ? initial() : initial; return [slots[index], (next) => { slots[index] = typeof next === "function" ? next(slots[index]) : next; }]; } };
 const component = compile("Planning.tsx", (name) => {
   if (name === "react") return testReact;
   if (name === "./planningModel") return model;
   if (name === "./FinancialOutlook") return outlookUI;
   if (name === "@/lib/setup-copy") return setupCopy;
+  if (name === "@/lib/scenario-planner") return scenarioModel;
+  if (name === "@/lib/budget-categories") return budgetCategories;
+  if (name === "@/components/safety/safety-copy") return safetyCopy;
+  if (name === "@/components/payments/FixedExpenseActions") return { FixedExpenseActions: () => null };
   if (name === "./chartWeek") return weeks;
   if (name === "./FinBridgeHeader") return header;
   if (name === "./CalendarLedgerModal") return { CalendarLedgerModal: () => null };
   if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams() };
   if (name === "./Ui") return { Modal: ({ children }) => React.createElement("div", { role: "dialog" }, children) };
-  if (name === "./store") return { useAppState: () => state, updateState: (update) => { state = update(state); } };
+  if (name === "./store") return { useAppState: () => state, workspaceOwner: () => "synthetic", workspacePersistence: () => "browser", getWorkspaceState: () => state, updateState: (update) => { state = update(state); } };
   return requireLocal(name);
 }).Planning;
 let props = { navigate: () => {} };
@@ -92,12 +100,12 @@ state.settings.language = "English";
 const today = weeks.localDateKey(new Date());
 state = { ...state, goals: [], fixedExpenses: [] }; slots = []; props = { navigate: () => {}, initialForm: "budget" };
 render(); set("Name", "Monthly essentials"); set("Amount", "8000000");
-find(tree(), (node) => node.type === "form").props.onSubmit({ preventDefault() {} });
+find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit({ preventDefault() {} });
 assert.equal(state.goals.length, 1); assert.equal(state.goals[0].currency, "VND");
 const createdBudget = state.goals[0];
 slots = []; props = { navigate: () => {}, initialTab: "fixed", initialForm: "fixed" };
 render(); set("Name", "Phone plan"); set("Amount", "250000"); set("Category", "Food");
-find(tree(), (node) => node.type === "form").props.onSubmit({ preventDefault() {} });
+find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit({ preventDefault() {} });
 assert.equal(state.fixedExpenses.length, 1);
 assert.equal(state.fixedExpenses[0].budgetId, state.goals[0].id);
 assert.equal(state.fixedExpenses[0].dueDate, today);
@@ -106,7 +114,7 @@ assert.equal(JSON.stringify(state.wallets), JSON.stringify(wallets));
 // A parent removed while the form is open causes rejection with zero writes.
 slots = []; props = { navigate: () => {}, initialTab: "fixed", initialForm: "fixed" };
 render(); set("Name", "Another bill"); set("Amount", "100000"); set("Category", "Food");
-const staleSubmit = find(tree(), (node) => node.type === "form").props.onSubmit;
+const staleSubmit = find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit;
 state = { ...state, goals: [] };
 staleSubmit({ preventDefault() {} });
 assert.equal(state.fixedExpenses.length, 1);
@@ -116,7 +124,7 @@ state = { ...state, goals: [createdBudget] }; slots = []; props = { navigate: ()
 render();
 find(tree(), (node) => node.type === "button" && node.props.children === "Edit").props.onClick();
 set("Name", "Phone plan updated"); set("Amount", "300000");
-find(tree(), (node) => node.type === "form").props.onSubmit({ preventDefault() {} });
+find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit({ preventDefault() {} });
 assert.equal(state.fixedExpenses.length, 1);
 assert.equal(state.fixedExpenses[0].amount, 300000);
 find(tree(), (node) => node.type === "button" && node.props.children === "Pause").props.onClick();
@@ -126,9 +134,9 @@ find(tree(), (node) => node.type === "button" && node.props.children === "Resume
 assert.equal(state.fixedExpenses[0].active, true);
 state = { ...state, goals: [createdBudget, { ...createdBudget, id: "cny-budget", title: "CNY living costs", wallet: "ali", currency: "CNY", category: "Food" }] };
 find(tree(), (node) => node.type === "button" && node.props.children === "Edit").props.onClick();
-set("Parent budget", "cny-budget");
+set("Linked budget (optional)", "cny-budget");
 assert.equal(find(tree(), (node) => node.type === "input" && node.props["aria-label"] === "Amount").props.value, "", "changing currency never reuses an unconverted amount");
-find(tree(), (node) => node.type === "form").props.onSubmit({ preventDefault() {} });
+find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit({ preventDefault() {} });
 assert.equal(state.fixedExpenses[0].budgetId, createdBudget.id);
 assert.equal(JSON.stringify(state.transactions), snapshot);
 assert.equal(JSON.stringify(state.wallets), JSON.stringify(wallets));

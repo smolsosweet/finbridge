@@ -10,14 +10,21 @@ import { SETUP_COPY } from "@/lib/setup-copy";
 import { Modal } from "./Ui";
 import { localDateKey } from "./chartWeek";
 import { budgetSummary, plannedOccurrences, validBudget, validFixedExpense } from "./planningModel";
-import { updateState, useAppState, workspaceOwner, type FixedExpense, type Goal } from "./store";
+import { updateState, useAppState, workspaceOwner, workspacePersistence, getWorkspaceState, type FixedExpense, type Goal } from "./store";
 import { calculateScenario, scenarioContext, type FinancialScenario } from "@/lib/scenario-planner";
 import { SAFETY_COPY } from "@/components/safety/safety-copy";
+import { addBudgetCategory, expenseCategoriesForWallet } from "@/lib/budget-categories";
+import { FixedExpenseActions } from "@/components/payments/FixedExpenseActions";
 
 type PlannerWalletChoice = { id: string; name: string; currency: string };
 type PlannerMessage = { role: "user" | "assistant"; text: string; scenarios?: FinancialScenario[]; clarification?: string | null; walletChoices?: PlannerWalletChoice[]; pendingScenario?: string; selectedWalletId?: string };
 
 function persistPlannerMessages(storageKey: string, messages: PlannerMessage[]) {
+  if (workspacePersistence() === "database") {
+    const planningChat = messages.slice(-100);
+    if (JSON.stringify(getWorkspaceState().planningChat || []) !== JSON.stringify(planningChat)) updateState(current => ({ ...current, planningChat }));
+    return;
+  }
   try {
     if (messages.length) localStorage.setItem(storageKey, JSON.stringify(messages.slice(-100)));
     else localStorage.removeItem(storageKey);
@@ -50,17 +57,17 @@ function localizeScenarioDetail(text: string, lang: "vi" | "en" | "zh") {
 
 const COPY = {
   vi: {
-    title: "Kế hoạch chi tiêu", intro: "Đặt hạn mức ngân sách, rồi phân bổ các khoản chi cố định bên trong.",
+    title: "Kế hoạch chi tiêu", intro: "Theo dõi hạn mức chi và các khoản đến hạn. Có thể liên kết khoản chi với ngân sách khi cần.",
     budget: "Ngân sách", fixed: "Khoản chi cố định", addBudget: "Tạo ngân sách", addFixed: "Thêm khoản chi cố định",
     budgetHint: "Hạn mức theo ví, danh mục và kỳ.", fixedHint: "Tiền nhà, học phí và các khoản dự kiến phải trả.",
     flow: "Ngân sách → Khoản chi cố định → Giao dịch thực tế",
     flowHint: "Khoản chi cố định là kế hoạch trong ngân sách. Khi phát sinh, ghi giao dịch qua chat; lịch sử sẽ cập nhật chi thực tế.",
-    wallet: "Ví nguồn", allWallets: "Tất cả ví", allBudgets: "Tất cả ngân sách", parent: "Thuộc ngân sách",
+    wallet: "Ví nguồn", allWallets: "Tất cả ví", allBudgets: "Tất cả ngân sách", parent: "Liên kết ngân sách (tùy chọn)",
     limit: "Hạn mức", actual: "Đã chi thực tế", remaining: "Hạn mức còn lại", planned: "Chi cố định dự kiến trong kỳ",
     flexible: "Hạn mức chưa phân bổ cố định", noPayment: "Lập kế hoạch chưa trừ tiền và chưa tạo giao dịch.",
     noDouble: "Chi thực tế và kế hoạch được hiển thị riêng; không cộng hai số này thành tổng chi.",
     emptyBudget: "Chưa có ngân sách", emptyBudgetHint: "Tạo ngân sách cho một ví trước, rồi thêm các khoản chi cố định vào đó.",
-    emptyFixed: "Chưa có khoản chi cố định phù hợp", emptyFixedHint: "Mỗi khoản cần một ngân sách, số tiền và ngày dự kiến trả.",
+    emptyFixed: "Chưa có khoản chi cố định phù hợp", emptyFixedHint: "Mỗi khoản có ví chi, số tiền và lịch đến hạn; có thể liên kết ngân sách.",
     emptyWallet: "Chưa có ví đang hoạt động", name: "Tên", amount: "Số tiền", start: "Ngày bắt đầu", category: "Danh mục",
     allCategories: "Tất cả danh mục chi", chooseCategory: "Chọn danh mục chi", cycle: "Kỳ ngân sách", due: "Ngày dự kiến trả đầu tiên",
     recurrence: "Lặp lại", once: "Một lần", weekly: "Hàng tuần", monthly: "Hàng tháng", yearly: "Hàng năm",
@@ -72,20 +79,20 @@ const COPY = {
     oldSavings: "Các mục tiêu tiết kiệm cũ vẫn được giữ trong dữ liệu; chưa chuyển thành khoản chi cố định.",
     viewHistory: "Xem giao dịch thực tế", countBudget: "ngân sách", countFixed: "khoản đang áp dụng", mainWallet: "Ví chính",
     noParent: "Ngân sách không còn trong danh sách", allocations: "Xem khoản chi cố định", budgetPlaceholder: "Ví dụ: Sinh hoạt tháng", fixedPlaceholder: "Ví dụ: Tiền thuê nhà",
-    delete: "Xóa", deleteBudgetConfirm: "Xóa ngân sách này? Các khoản chi cố định thuộc ngân sách này cũng sẽ bị xóa.", deleteFixedConfirm: "Xóa khoản chi cố định này?", resetChat: "Xóa hội thoại", resetChatConfirm: "Xóa toàn bộ hội thoại mô phỏng này?",
+    delete: "Xóa", deleteBudgetConfirm: "Xóa ngân sách này? Các khoản chi cố định vẫn được giữ và sẽ bỏ liên kết ngân sách.", deleteFixedConfirm: "Xóa khoản chi cố định này?", resetChat: "Xóa hội thoại", resetChatConfirm: "Xóa toàn bộ hội thoại mô phỏng này?",
   },
   en: {
-    title: "Spending plan", intro: "Set a budget limit, then allocate fixed expenses within it.",
+    title: "Spending plan", intro: "Track spending limits and upcoming bills. Link a bill to a budget when useful.",
     budget: "Budgets", fixed: "Fixed expenses", addBudget: "Create budget", addFixed: "Add fixed expense",
     budgetHint: "A limit by wallet, category and period.", fixedHint: "Rent, tuition and other planned bills.",
     flow: "Budget → Fixed expenses → Recorded transactions",
     flowHint: "Fixed expenses are budget plans. When spending happens, record it in chat; history updates actual spending.",
-    wallet: "Source wallet", allWallets: "All wallets", allBudgets: "All budgets", parent: "Parent budget",
+    wallet: "Source wallet", allWallets: "All wallets", allBudgets: "All budgets", parent: "Linked budget (optional)",
     limit: "Limit", actual: "Actual spending", remaining: "Remaining limit", planned: "Planned fixed expenses this period",
     flexible: "Limit not allocated to fixed expenses", noPayment: "Planning does not debit money or create a transaction.",
     noDouble: "Actual spending and plans are shown separately; they are not added into total spending.",
     emptyBudget: "No budgets yet", emptyBudgetHint: "Create a budget for a wallet first, then add its fixed expenses.",
-    emptyFixed: "No matching fixed expenses", emptyFixedHint: "Each expense needs a budget, an amount and a planned payment date.",
+    emptyFixed: "No matching fixed expenses", emptyFixedHint: "Each bill has a wallet, amount and due schedule. Linking a budget is optional.",
     emptyWallet: "No active wallets", name: "Name", amount: "Amount", start: "Start date", category: "Category",
     allCategories: "All expense categories", chooseCategory: "Choose an expense category", cycle: "Budget period", due: "First planned payment date",
     recurrence: "Repeat", once: "Once", weekly: "Weekly", monthly: "Monthly", yearly: "Yearly",
@@ -97,20 +104,20 @@ const COPY = {
     oldSavings: "Existing savings goals are retained in storage and have not been converted to fixed expenses.",
     viewHistory: "View actual transactions", countBudget: "budgets", countFixed: "active expenses", mainWallet: "Main wallet",
     noParent: "Budget no longer listed", allocations: "View fixed expenses", budgetPlaceholder: "For example: Monthly living costs", fixedPlaceholder: "For example: Rent",
-    delete: "Delete", deleteBudgetConfirm: "Delete this budget? Its fixed expenses will also be deleted.", deleteFixedConfirm: "Delete this fixed expense?", resetChat: "Reset conversation", resetChatConfirm: "Delete this scenario conversation?",
+    delete: "Delete", deleteBudgetConfirm: "Delete this budget? Linked fixed expenses will be kept without a budget link.", deleteFixedConfirm: "Delete this fixed expense?", resetChat: "Reset conversation", resetChatConfirm: "Delete this scenario conversation?",
   },
   zh: {
-    title: "支出计划", intro: "先设定预算限额，再在预算内安排固定支出。",
+    title: "支出计划", intro: "跟踪支出限额和应付账单，需要时可将账单关联到预算。",
     budget: "预算", fixed: "固定支出", addBudget: "创建预算", addFixed: "添加固定支出",
     budgetHint: "按钱包、类别和周期设置限额。", fixedHint: "房租、学费及其他计划账单。",
     flow: "预算 → 固定支出 → 实际交易",
     flowHint: "固定支出属于预算计划。实际付款后，通过聊天记录交易，历史记录将更新实际支出。",
-    wallet: "来源钱包", allWallets: "全部钱包", allBudgets: "全部预算", parent: "所属预算",
+    wallet: "来源钱包", allWallets: "全部钱包", allBudgets: "全部预算", parent: "关联预算（选填）",
     limit: "限额", actual: "实际支出", remaining: "剩余限额", planned: "本期计划固定支出",
     flexible: "尚未分配给固定支出的限额", noPayment: "制定计划不会扣款，也不会创建交易。",
     noDouble: "实际支出与计划分别显示，不相加为总支出。",
     emptyBudget: "尚无预算", emptyBudgetHint: "请先为钱包创建预算，再添加固定支出。",
-    emptyFixed: "没有符合条件的固定支出", emptyFixedHint: "每笔支出需要所属预算、金额和预计付款日期。",
+    emptyFixed: "没有符合条件的固定支出", emptyFixedHint: "每笔账单有付款钱包、金额和到期规则，可选关联预算。",
     emptyWallet: "没有可用钱包", name: "名称", amount: "金额", start: "开始日期", category: "类别",
     allCategories: "全部支出类别", chooseCategory: "选择支出类别", cycle: "预算周期", due: "首次预计付款日期",
     recurrence: "重复", once: "一次", weekly: "每周", monthly: "每月", yearly: "每年",
@@ -122,7 +129,7 @@ const COPY = {
     oldSavings: "原有储蓄目标仍保留在数据中，未转换为固定支出。",
     viewHistory: "查看实际交易", countBudget: "项预算", countFixed: "项启用支出", mainWallet: "主钱包",
     noParent: "预算已不在列表中", allocations: "查看固定支出", budgetPlaceholder: "例如：每月生活费", fixedPlaceholder: "例如：房租",
-    delete: "删除", deleteBudgetConfirm: "删除此预算？其固定支出也会一并删除。", deleteFixedConfirm: "删除此固定支出？", resetChat: "清除对话", resetChatConfirm: "清除此情景对话？",
+    delete: "删除", deleteBudgetConfirm: "删除此预算？关联的固定支出将保留并取消预算关联。", deleteFixedConfirm: "删除此固定支出？", resetChat: "清除对话", resetChatConfirm: "清除此情景对话？",
   },
 };
 
@@ -135,7 +142,6 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const budgets = state.goals.filter((item) => item.kind === "budget");
   const fixed = state.fixedExpenses || [];
   const activeWallets = state.wallets.filter((item) => !item.archived);
-  const expenseCategories = Array.from(new Set([...state.categories.filter((name) => state.categoryMeta[name]?.type !== "income" && !state.categoryMeta[name]?.archived), ...state.transactions.filter((item) => item.type === "expense").map((item) => item.category)])).filter(Boolean);
   const [calendarLedgerOpen, setCalendarLedgerOpen] = useState(false);
   const [tab, setTab] = useState(initialTab);
   const [walletFilter, setWalletFilter] = useState("all");
@@ -146,6 +152,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const [amount, setAmount] = useState("");
   const [walletId, setWalletId] = useState(activeWallets[0]?.id || "");
   const [category, setCategory] = useState("");
+  const [addingCategory, setAddingCategory] = useState(false), [newCategory, setNewCategory] = useState(""), [categoryError, setCategoryError] = useState("");
   const [startDate, setStartDate] = useState(today);
   const [cycle, setCycle] = useState("monthly");
   const [parentId, setParentId] = useState(params.get("budget") || budgets[0]?.id || "");
@@ -163,7 +170,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const plannerStorageKey = `finbridge-scenario-planner:${workspaceOwner() || "guest"}:v1`;
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(plannerStorageKey);
+      const saved = workspacePersistence() === "database" ? JSON.stringify(state.planningChat || []) : localStorage.getItem(plannerStorageKey);
       if (saved) {
         const parsed: unknown = JSON.parse(saved);
         if (Array.isArray(parsed)) {
@@ -180,6 +187,15 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   }, [plannerMessages, plannerReadyKey, plannerStorageKey]);
   const selectedParent = budgets.find((item) => item.id === parentId);
   const selectedWallet = activeWallets.find((item) => item.id === walletId);
+  const expenseCategories = expenseCategoriesForWallet(state, form === "fixed" && selectedParent ? selectedParent.wallet : walletId);
+  const categoryCopy = lang === "vi" ? { add: "Thêm danh mục", name: "Tên danh mục mới", save: "Thêm và chọn", hint: "Danh mục chi được lưu trong database và gắn với ví đã chọn.", invalid: "Nhập tên danh mục chi hợp lệ, tối đa 80 ký tự. Tên không được trùng danh mục thu nhập." } : lang === "zh" ? { add: "添加类别", name: "新类别名称", save: "添加并选择", hint: "支出类别存入数据库并关联所选钱包。", invalid: "请输入不超过80个字符的有效支出类别名称，不能与收入类别重名。" } : { add: "Add category", name: "New category name", save: "Add and select", hint: "The expense category is stored in the database and linked to the selected wallet.", invalid: "Use a valid expense category name, up to 80 characters. It cannot match an income category." };
+  function createBudgetCategory() {
+    try {
+      let selected = "";
+      updateState(current => { const result = addBudgetCategory(current, selectedParent && form === "fixed" ? selectedParent.wallet : walletId, newCategory); selected = result.name; return result.state; });
+      setCategory(selected); setNewCategory(""); setAddingCategory(false); setCategoryError("");
+    } catch { setCategoryError(categoryCopy.invalid); }
+  }
   const unassigned = lang === "vi" ? "Chưa liên kết ngân sách" : lang === "zh" ? "尚未关联预算" : "Not linked to a budget yet";
   const repeatMonths = lang === "vi" ? "Lặp mỗi (tháng)" : lang === "zh" ? "每隔几个月重复" : "Repeat every (months)";
   const reminderLabel = lang === "vi" ? "Nhắc trước (ngày)" : lang === "zh" ? "提前几天提醒" : "Remind before (days)";
@@ -247,6 +263,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
     void sendToPlanner(prompt.pendingScenario, walletId, priorMessages, nextHistory);
   };
   const open = (type: "budget" | "fixed", parent?: string, expense?: FixedExpense) => {
+    setAddingCategory(false); setNewCategory(""); setCategoryError("");
     setError(""); setEditingId(expense?.id || ""); setTitle(expense?.title || ""); setAmount(expense ? String(expense.amount) : "");
     setWalletId(expense?.walletId || activeWallets[0]?.id || ""); setStartDate(today); setCycle("monthly");
     const budget = expense && !expense.budgetId ? undefined : budgets.find((item) => item.id === (parent || expense?.budgetId)) || budgets[0];
@@ -281,7 +298,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       const [year, month] = dueDate.split("-").map(Number);
       plannedDue = `${year}-${String(month).padStart(2, "0")}-${String(monthPosition === "start" ? 1 : new Date(year, month, 0).getDate()).padStart(2, "0")}`;
     }
-    const expense: FixedExpense = { id: editingId || crypto.randomUUID(), budgetId: parentId, walletId: selectedParent?.wallet || walletId, title: title.trim(), amount: Number(amount), category: selectedParent?.category || category, dueDate: plannedDue, recurrence, intervalMonths, reminderDays, monthPosition, active: editingId ? fixed.find((item) => item.id === editingId)?.active ?? true : true };
+    const expense: FixedExpense = { ...fixed.find(item => item.id === editingId), id: editingId || crypto.randomUUID(), budgetId: parentId, walletId: selectedParent?.wallet || walletId, title: title.trim(), amount: Number(amount), category: selectedParent?.category || category, dueDate: plannedDue, recurrence, intervalMonths, reminderDays, monthPosition, active: editingId ? fixed.find((item) => item.id === editingId)?.active ?? true : true };
     if (!validFixedExpense(state, expense)) { setError(t.invalid); return; }
     let saved = false;
     updateState((current) => {
@@ -294,7 +311,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   };
   const deleteBudget = (budgetId: string) => {
     if (!window.confirm(t.deleteBudgetConfirm)) return;
-    updateState((current) => ({ ...current, goals: current.goals.filter((item) => item.id !== budgetId), fixedExpenses: (current.fixedExpenses || []).filter((item) => item.budgetId !== budgetId) }));
+    updateState((current) => ({ ...current, goals: current.goals.filter((item) => item.id !== budgetId), fixedExpenses: (current.fixedExpenses || []).map(item => item.budgetId === budgetId ? { ...item, walletId: current.goals.find(g => g.id === budgetId)?.wallet || item.walletId, budgetId: "" } : item) }));
   };
   const deleteFixed = (expenseId: string) => {
     if (!window.confirm(t.deleteFixedConfirm)) return;
@@ -446,22 +463,23 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
 
     {tab === "budget" ? <div className="fb-planning-cards">{!filteredBudgets.length ? <div className="fb-planning-empty"><Wallet size={30} /><h2>{t.emptyBudget}</h2><p>{t.emptyBudgetHint}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("budget")}><Plus size={17} />{t.addBudget}</button></div> : filteredBudgets.map((budget) => {
       const summary = budgetSummary(state, budget, today);
-      return <article key={budget.id} className="fb-budget-card"><div className="fb-planning-card-heading"><span className="fb-planning-icon"><Wallet size={20} /></span><div><h2>{budget.title}</h2><p>{walletName(budget.wallet)} · {budget.currency} · {budget.category || t.allCategories}</p></div><button type="button" className="fb-planning-delete" aria-label={`${t.delete}: ${budget.title}`} title={t.delete} onClick={() => deleteBudget(budget.id)}><Trash2 size={17} /></button></div><p className="fb-planning-period"><CalendarDays size={15} />{formatDate(summary.start)} – {formatDate(summary.end)}</p><div className="fb-budget-limit"><span>{t.limit}</span><b>{format(budget.amount, budget.currency)}</b></div><progress aria-label={t.actual} value={Math.max(0, Math.min(summary.actual, budget.amount))} max={budget.amount} /><dl className="fb-planning-numbers"><div><dt>{t.actual}</dt><dd>{format(summary.actual, budget.currency)}</dd></div><div><dt>{t.remaining}</dt><dd>{format(summary.remaining, budget.currency)}</dd></div><div><dt>{t.planned}</dt><dd>{format(summary.planned, budget.currency)}</dd></div><div><dt>{t.flexible}</dt><dd>{format(summary.allocationRemaining, budget.currency)}</dd></div></dl>{(!summary.matchingCurrency || state.wallets.find((item) => item.id === budget.wallet)?.archived) && <p className="fb-planning-warning">{t.mismatch}</p>}{summary.actual > budget.amount && <p className="fb-planning-warning">{t.overActual}</p>}{summary.actual >= budget.amount * 0.8 && summary.actual <= budget.amount && <p className="fb-planning-warning">{t.nearLimit}</p>}{summary.planned > budget.amount && <p className="fb-planning-warning">{t.overPlanned}</p>}<p className="fb-planning-note">{t.noDouble}</p><div className="fb-planning-card-actions"><button type="button" onClick={() => { setParentFilter(budget.id); setTab("fixed"); }}>{t.allocations}<ArrowRight size={15} /></button><button type="button" disabled={!summary.matchingCurrency || !!state.wallets.find((item) => item.id === budget.wallet)?.archived} onClick={() => open("fixed", budget.id)}><Plus size={16} />{t.addFixed}</button></div><button type="button" className="fb-planning-history" onClick={() => navigate("?tab=transactions&wallet=" + encodeURIComponent(budget.wallet) + "&type=expense&from=" + summary.start + "&to=" + summary.end + (budget.category ? "&category=" + encodeURIComponent(budget.category) : ""))}>{t.viewHistory}<ArrowRight size={14} /></button></article>;
+      return <article key={budget.id} className="fb-budget-card"><div className="fb-planning-card-heading"><span className="fb-planning-icon"><Wallet size={20} /></span><div><h2>{budget.title}</h2><p>{walletName(budget.wallet)} · {budget.currency} · {budget.category || t.allCategories}</p></div><button type="button" className="fb-planning-delete" aria-label={`${t.delete}: ${budget.title}`} title={t.delete} onClick={() => deleteBudget(budget.id)}><Trash2 size={17} /></button></div><p className="fb-planning-period"><CalendarDays size={15} />{formatDate(summary.start)} – {formatDate(summary.end)}</p><div className="fb-budget-limit"><span>{t.limit}</span><b>{format(budget.amount, budget.currency)}</b></div><progress aria-label={t.actual} value={Math.max(0, Math.min(summary.actual, budget.amount))} max={budget.amount} /><dl className="fb-planning-numbers"><div><dt>{t.actual}</dt><dd>{format(summary.actual, budget.currency)}</dd></div><div><dt>{t.remaining}</dt><dd>{format(summary.remaining, budget.currency)}</dd></div></dl>{(!summary.matchingCurrency || state.wallets.find((item) => item.id === budget.wallet)?.archived) && <p className="fb-planning-warning">{t.mismatch}</p>}{summary.actual > budget.amount && <p className="fb-planning-warning">{t.overActual}</p>}{summary.actual >= budget.amount * 0.8 && summary.actual <= budget.amount && <p className="fb-planning-warning">{t.nearLimit}</p>}{summary.planned > budget.amount && <p className="fb-planning-warning">{t.overPlanned}</p>}{summary.children.length > 0 && <div className="fb-planning-card-actions"><button type="button" onClick={() => { setParentFilter(budget.id); setTab("fixed"); }}>{t.allocations} ({summary.children.length})<ArrowRight size={15} /></button></div>}<button type="button" className="fb-planning-history" onClick={() => navigate("?tab=transactions&wallet=" + encodeURIComponent(budget.wallet) + "&type=expense&from=" + summary.start + "&to=" + summary.end + (budget.category ? "&category=" + encodeURIComponent(budget.category) : ""))}>{t.viewHistory}<ArrowRight size={14} /></button></article>;
     })}</div> : <div className="fb-fixed-list">{!filteredFixed.length ? <div className="fb-planning-empty"><ReceiptText size={30} /><h2>{t.emptyFixed}</h2><p>{budgets.length ? t.emptyFixedHint : t.emptyBudgetHint}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("fixed", parentFilter === "all" ? undefined : parentFilter)}><Plus size={17} />{budgets.length ? t.addFixed : t.addBudget}</button></div> : filteredFixed.map((expense) => {
       const parent = budgets.find((item) => item.id === expense.budgetId);
       const window = parent ? budgetSummary(state, parent, today) : undefined;
       const due = window ? plannedOccurrences(expense, window.start, window.end) : [];
       const currency = parent?.currency || state.wallets.find(w => w.id === expense.walletId)?.currency || "";
-      return <article className="fb-fixed-card" key={expense.id}><div className="fb-planning-card-heading"><span className="fb-planning-icon"><ArrowDownRight size={20} /></span><div><h2>{expense.title}</h2><p>{t.parent} · {parent?.title || (expense.budgetId ? t.noParent : unassigned)}</p><p>{walletName(parent?.wallet || expense.walletId || "")} · {currency} · {expense.category}</p></div><b>{format(expense.amount, currency)}</b><button type="button" className="fb-planning-delete" aria-label={`${t.delete}: ${expense.title}`} title={t.delete} onClick={() => deleteFixed(expense.id)}><Trash2 size={17} /></button></div><div className="fb-fixed-meta"><span className={expense.active ? "is-active" : ""}>{expense.active ? t.active : t.paused}</span><span>{expense.recurrence === "monthly" ? `${repeatMonths}: ${expense.intervalMonths || 1}` : t[expense.recurrence]}</span><span>{reminderLabel}: {expense.reminderDays ?? 3}</span><span>{formatDate(expense.dueDate)}</span>{due.length > 0 && <span>{due.map(formatDate).join(" · ")}</span>}</div><div className="fb-planning-card-actions"><button type="button" disabled={!!expense.budgetId && !parent} onClick={() => open("fixed", parent?.id, expense)}>{t.edit}</button><button type="button" onClick={() => updateState((current) => ({ ...current, fixedExpenses: (current.fixedExpenses || []).map((item) => item.id === expense.id ? { ...item, active: !item.active } : item) }))}>{expense.active ? t.pause : t.resume}</button></div></article>;
+      return <article className="fb-fixed-card" key={expense.id}><div className="fb-planning-card-heading"><span className="fb-planning-icon"><ArrowDownRight size={20} /></span><div><h2>{expense.title}</h2><p>{t.parent} · {parent?.title || (expense.budgetId ? t.noParent : unassigned)}</p><p>{walletName(parent?.wallet || expense.walletId || "")} · {currency} · {expense.category}</p></div><b>{format(expense.amount, currency)}</b><button type="button" className="fb-planning-delete" aria-label={`${t.delete}: ${expense.title}`} title={t.delete} onClick={() => deleteFixed(expense.id)}><Trash2 size={17} /></button></div><div className="fb-fixed-meta"><span className={expense.active ? "is-active" : ""}>{expense.active ? t.active : t.paused}</span><span>{expense.recurrence === "monthly" ? `${repeatMonths}: ${expense.intervalMonths || 1}` : t[expense.recurrence]}</span><span>{reminderLabel}: {expense.reminderDays ?? 3}</span><span>{formatDate(expense.dueDate)}</span>{due.length > 0 && <span>{due.map(formatDate).join(" · ")}</span>}</div><div className="fb-planning-card-actions"><button type="button" disabled={!!expense.budgetId && !parent} onClick={() => open("fixed", parent?.id, expense)}>{t.edit}</button><button type="button" onClick={() => updateState((current) => ({ ...current, fixedExpenses: (current.fixedExpenses || []).map((item) => item.id === expense.id ? { ...item, active: !item.active } : item) }))}>{expense.active ? t.pause : t.resume}</button></div><FixedExpenseActions expense={expense} lang={lang} navigate={navigate}/></article>;
     })}<p className="fb-planning-note">{t.noPayment}</p></div>}
     {state.goals.some((item) => item.kind === "savings") && <details className="fb-planning-legacy"><summary>{t.oldSavings}</summary><ul>{state.goals.filter((item) => item.kind === "savings").map((item) => <li key={item.id}>{item.title} · {format(item.saved, item.currency)} / {format(item.amount, item.currency)}</li>)}</ul></details>}
     {form && <Modal title={form === "budget" ? t.addBudget : editingId ? t.edit + " · " + t.fixed : t.addFixed} onClose={() => setForm("")}><form className="r-form fb-planning-form" onSubmit={save}>
       {form === "fixed" && <><label>{t.parent}<select value={parentId} onChange={(event) => selectParent(event.target.value)}><option value="">{unassigned}</option>{budgets.filter((item) => activeWallets.some((wallet) => wallet.id === item.wallet && wallet.currency === item.currency)).map((item) => <option key={item.id} value={item.id}>{item.title} · {item.currency}</option>)}</select></label>{selectedParent && <p className="fb-planning-note">{t.parentContext} {walletName(selectedParent.wallet)} · {selectedParent.currency}</p>}</>}
       <label>{t.name}<input aria-label={t.name} placeholder={form === "budget" ? t.budgetPlaceholder : t.fixedPlaceholder} required maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-      {(form === "budget" || !selectedParent) && <label>{t.wallet}<select value={walletId} required onChange={(event) => { setWalletId(event.target.value); setAmount(""); }}>{activeWallets.map((item) => <option key={item.id} value={item.id}>{walletName(item.id)} · {item.currency}</option>)}</select></label>}
+      {(form === "budget" || !selectedParent) && <label>{t.wallet}<select value={walletId} required onChange={(event) => { setWalletId(event.target.value); setCategory(""); setAmount(""); }}>{activeWallets.map((item) => <option key={item.id} value={item.id}>{walletName(item.id)} · {item.currency}</option>)}</select></label>}
       <label>{t.amount} · {form === "fixed" && selectedParent ? selectedParent.currency : selectedWallet?.currency}<input aria-label={t.amount} type="number" min="0.01" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
       {form === "fixed" && <><label>{repeatMonths}<input type="number" min={1} max={12} step={1} value={intervalMonths} onChange={event => setIntervalMonths(Number(event.target.value))} /></label><label>{reminderLabel}<input type="number" min={0} max={30} step={1} value={reminderDays} onChange={event => setReminderDays(Number(event.target.value))} /></label><label>{SETUP_COPY[lang].monthPosition}<select value={monthPosition} onChange={event => setMonthPosition(event.target.value as typeof monthPosition)}>{(["start", "end", "date"] as const).map((p, i) => <option key={p} value={p}>{SETUP_COPY[lang].positions[i]}</option>)}</select></label></>}
       <label>{t.category}<select value={form === "fixed" && selectedParent?.category ? selectedParent.category : category} disabled={form === "fixed" && !!selectedParent?.category} required={form === "fixed"} onChange={(event) => setCategory(event.target.value)}><option value="">{form === "budget" ? t.allCategories : t.chooseCategory}</option>{Array.from(new Set([...expenseCategories, ...(selectedParent?.category ? [selectedParent.category] : [])])).map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+      {!(form === "fixed" && selectedParent?.category) && <div className="fb-budget-new-category"><button type="button" onClick={() => setAddingCategory(!addingCategory)}><Plus size={15}/>{categoryCopy.add}</button>{addingCategory && <div><label>{categoryCopy.name}<input aria-label={categoryCopy.name} value={newCategory} maxLength={80} onChange={e => setNewCategory(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); createBudgetCategory(); } }}/></label><button type="button" onClick={createBudgetCategory}>{categoryCopy.save}</button><small>{categoryCopy.hint}</small>{categoryError && <p role="alert">{categoryError}</p>}</div>}</div>}
       {form === "budget" ? <><label>{t.start}<input type="date" required value={startDate} onInput={(event) => setStartDate(event.currentTarget.value)} /></label><label>{t.cycle}<select value={cycle} onChange={(event) => setCycle(event.target.value)}>{(["weekly", "monthly", "yearly"] as const).map((item) => <option value={item} key={item}>{t[item]}</option>)}</select></label></> : <><label>{t.due}<input type="date" required min={selectedParent?.date} value={dueDate} onInput={(event) => setDueDate(event.currentTarget.value)} /></label><label>{t.recurrence}<select value={recurrence} onChange={(event) => setRecurrence(event.target.value as FixedExpense["recurrence"])}>{(["once", "weekly", "monthly", "yearly"] as const).map((item) => <option value={item} key={item}>{t[item]}</option>)}</select></label></>}
       <p className="fb-planning-note">{t.noPayment}</p>{error && <p role="alert" className="fb-planning-warning">{error}</p>}<div className="fb-modal-actions"><button type="button" className="r-secondary" onClick={() => setForm("")}>{t.cancel}</button><button type="submit" className="r-primary">{t.save}</button></div>
     </form></Modal>}

@@ -1,5 +1,24 @@
 import type { Pool, PoolClient } from "pg";
 import { advanceSafety, emptySafetyDocument, type SafetyDocument, type SafetyEvent } from "./safety-model";
+import { safetySnapshot } from "./safety-model";
+import { readFinanceTables, writeAlertRules } from "./finance-tables";
+import type { AppState } from "../components/sites/rolly/replica/store";
+
+export async function safetyWorkspace(client: PoolClient, userId: string) {
+  const rows = await client.query("SELECT data,updated_at FROM finbridge_workspaces WHERE user_id=$1 FOR SHARE", [userId]);
+  if (!rows.rows[0]?.data) return null;
+  const data = await readFinanceTables(client, userId, rows.rows[0].data);
+  return { data, updatedAt: rows.rows[0].updated_at };
+}
+export function databaseSafety(doc: SafetyDocument, state: AppState, updatedAt: Date) {
+  try { doc.snapshot = safetySnapshot(state, String(state.settings.timeZone || "UTC")); } catch { doc.snapshot = null; }
+  doc.sourceId = "database"; doc.syncedAt = updatedAt.toISOString(); return doc;
+}
+export async function refreshSafetyFromWorkspace(client: PoolClient, userId: string, state: AppState, updatedAt: Date) {
+  await client.query("INSERT INTO finbridge_safety(user_id,document) VALUES($1,$2) ON CONFLICT(user_id) DO NOTHING", [userId, JSON.stringify(emptySafetyDocument())]);
+  const rows = await client.query<{ document: SafetyDocument }>("SELECT document FROM finbridge_safety WHERE user_id=$1 FOR UPDATE", [userId]);
+  await saveSafety(client, userId, advanceSafety(databaseSafety(rows.rows[0].document, state, updatedAt)));
+}
 
 export const SAFETY_SQL = `
 CREATE TABLE IF NOT EXISTS finbridge_safety (
@@ -47,6 +66,7 @@ async function events(client: Pool | PoolClient, userId: string) {
   return (await client.query<{ event: SafetyEvent }>("SELECT event FROM finbridge_safety_events WHERE user_id=$1 ORDER BY created_at DESC, id DESC LIMIT 100", [userId])).rows.map(r => r.event);
 }
 export async function saveSafety(client: PoolClient, userId: string, doc: SafetyDocument) {
+  await writeAlertRules(client, userId, doc.rules);
   for (const e of doc.events) await client.query("INSERT INTO finbridge_safety_events(id,user_id,event,created_at) VALUES($1,$2,$3,$4) ON CONFLICT(id) DO NOTHING", [e.id, userId, JSON.stringify(e), e.createdAt]);
   await client.query("UPDATE finbridge_safety SET document=$2::jsonb,updated_at=CURRENT_TIMESTAMP WHERE user_id=$1", [userId, JSON.stringify({ ...doc, events: [] })]);
 }
@@ -56,8 +76,10 @@ export function safetyRepository(pool: Pool): SafetyRepository {
       const client = await pool.connect();
       try {
         await client.query("BEGIN"); await activeUser(client, userId);
+        const workspace = await safetyWorkspace(client, userId);
         const row = await client.query<{ document: SafetyDocument }>("SELECT document FROM finbridge_safety WHERE user_id=$1", [userId]);
         const doc = row.rows[0]?.document || emptySafetyDocument();
+        if (workspace) databaseSafety(doc, workspace.data, workspace.updatedAt);
         doc.events = await events(client, userId);
         await client.query("COMMIT"); return doc;
       } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
@@ -66,6 +88,8 @@ export function safetyRepository(pool: Pool): SafetyRepository {
       const client = await pool.connect();
       try {
         await client.query("BEGIN"); await activeUser(client, userId);
+        const workspace = await safetyWorkspace(client, userId);
+        if (!workspace) throw new SafetyError("WORKSPACE_REQUIRED", 400);
         const limited = await client.query(`INSERT INTO finbridge_safety_limits(user_id) VALUES($1)
           ON CONFLICT(user_id) DO UPDATE SET
           requests=CASE WHEN finbridge_safety_limits.window_at < CURRENT_TIMESTAMP - INTERVAL '1 minute' THEN 1 ELSE finbridge_safety_limits.requests+1 END,
@@ -75,6 +99,7 @@ export function safetyRepository(pool: Pool): SafetyRepository {
         await client.query("INSERT INTO finbridge_safety(user_id,document) VALUES($1,$2) ON CONFLICT(user_id) DO NOTHING", [userId, JSON.stringify(emptySafetyDocument())]);
         const row = await client.query<{ document: SafetyDocument }>("SELECT document FROM finbridge_safety WHERE user_id=$1 FOR UPDATE", [userId]);
         const doc = row.rows[0].document;
+        databaseSafety(doc, workspace.data, workspace.updatedAt);
         if (doc.revision !== revision) throw new SafetyError("CONFLICT");
         const updated = change(doc);
         const next = advanceSafety({ ...updated, revision: doc.revision + 1 });

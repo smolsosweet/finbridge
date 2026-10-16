@@ -1389,6 +1389,10 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
       return {
         ...s,
         categories: s.categories.map((c) => (c === oldName ? newName : c)),
+        walletCategories: s.walletCategories ? Object.fromEntries(Object.entries(s.walletCategories).map(([id, names]) => [id, names.map(n => n === oldName ? newName : n)])) : undefined,
+        goals: s.goals.map(g => g.category === oldName ? { ...g, category: newName } : g),
+        fixedExpenses: s.fixedExpenses?.map(e => e.category === oldName ? { ...e, category: newName } : e),
+        recurring: s.recurring.map(t => t.category === oldName ? { ...t, category: newName } : t),
         categoryMeta: nextMeta,
         transactions: newName !== oldName
           ? s.transactions.map((t) => (t.category === oldName ? { ...t, category: newName } : t))

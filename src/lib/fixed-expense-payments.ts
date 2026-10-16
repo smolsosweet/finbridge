@@ -1,0 +1,52 @@
+import type { AppState, FixedExpense, Transaction } from "../components/sites/rolly/replica/store";
+import { plannedOccurrences } from "../components/sites/rolly/replica/planningModel";
+
+export function expenseWallet(state: AppState, expense: FixedExpense) {
+  const budget = state.goals.find(g => g.kind === "budget" && g.id === expense.budgetId);
+  return state.wallets.find(w => w.id === (budget?.wallet || expense.walletId));
+}
+export function fixedExpensePayment(state: AppState, expenseId: string, dueDate: string) {
+  return state.transactions.find(t => t.fixedExpenseId === expenseId && t.fixedExpenseDueDate === dueDate);
+}
+export function unpaidOccurrences(state: AppState, expense: FixedExpense, start: string, end: string) {
+  return plannedOccurrences(expense, start, end).filter(due => !fixedExpensePayment(state, expense.id, due));
+}
+export function nextExpenseDue(state: AppState, expense: FixedExpense, asOf: string) {
+  if (expense.recurrence === "once") return expense.dueDate;
+  const year = Number(asOf.slice(0, 4)) + 2;
+  return unpaidOccurrences(state, expense, asOf.slice(0, 7) + "-01", `${year}-12-31`)[0] || null;
+}
+export function recordFixedExpensePayment(state: AppState, expenseId: string, input: { dueDate: string; paidOn: string; amount: number; walletId: string; note: string; transactionId: string; existingTransactionId?: string }, asOf: string): AppState {
+  const expense = state.fixedExpenses?.find(e => e.id === expenseId), originalWallet = expense && expenseWallet(state, expense);
+  const existing=input.existingTransactionId?state.transactions.find(t=>t.id===input.existingTransactionId):undefined;
+  if(input.existingTransactionId){if(!existing||existing.type!=="expense"||(existing.fixedExpenseId&&(existing.fixedExpenseId!==expenseId||existing.fixedExpenseDueDate!==input.dueDate))||existing.category!==expense?.category)throw new Error("INVALID_BILL_PAYMENT");input={...input,amount:existing.amount,paidOn:existing.date.slice(0,10),walletId:existing.wallet,note:existing.note};}
+  const source = state.wallets.find(w => w.id === input.walletId && !w.archived);
+  const digits = source ? new Intl.NumberFormat("en",{style:"currency",currency:source.currency}).resolvedOptions().maximumFractionDigits ?? 2 : 2;
+  const validDate = (key: string) => {const d=new Date(key+"T12:00:00Z");return /^\d{4}-\d{2}-\d{2}$/.test(key)&&Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===key;};
+  if (!expense?.active || !originalWallet || !source || source.currency!==originalWallet.currency || !validDate(input.dueDate) || !plannedOccurrences(expense,input.dueDate,input.dueDate).length || !validDate(input.paidOn) || input.paidOn > asOf || !Number.isFinite(input.amount) || input.amount<=0 || input.amount>1e12 || Math.abs(input.amount*10**digits-Math.round(input.amount*10**digits))>1e-5 || input.note.length>10000) throw new Error("INVALID_BILL_PAYMENT");
+  if (fixedExpensePayment(state,expenseId,input.dueDate)) return state;
+  if(existing)return {...state,transactions:state.transactions.map(t=>t.id===existing.id?{...t,fixedExpenseId:expenseId,fixedExpenseDueDate:input.dueDate,paymentConfirmation:"user"}:t)};
+  if (!input.transactionId || input.transactionId.length>100 || state.transactions.some(t=>t.id===input.transactionId)) throw new Error("INVALID_BILL_PAYMENT");
+  const transaction: Transaction = {id:input.transactionId,title:expense.title,amount:input.amount,type:"expense",category:expense.category,wallet:source.id,date:input.paidOn,note:input.note,fixedExpenseId:expense.id,fixedExpenseDueDate:input.dueDate,paymentConfirmation:"user"};
+  return {...state,transactions:[...state.transactions,transaction]};
+}
+// Validate new/edited links on the server too. Historical payments survive removal
+// of their plan. Changes to amount/date remain possible through transaction editing.
+export function validateFixedPaymentChanges(previous: AppState | null, next: AppState) {
+  let timeZone=String(next.settings.timeZone||"UTC");try{new Intl.DateTimeFormat("en",{timeZone});}catch{timeZone="UTC";}
+  const parts=new Intl.DateTimeFormat("en",{timeZone,year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
+  const now=["year","month","day"].map(key=>parts.find(p=>p.type===key)!.value).join("-");
+  for (const tx of next.transactions.filter(t=>t.fixedExpenseId)) {
+    const currency=next.wallets.find(w=>w.id===tx.wallet)?.currency;
+    if(!currency||tx.date.slice(0,10)>now||tx.amount<=0)throw new Error("INVALID_BILL_PAYMENT");
+    const digits=new Intl.NumberFormat("en",{style:"currency",currency}).resolvedOptions().maximumFractionDigits??2;
+    if(Math.abs(tx.amount*10**digits-Math.round(tx.amount*10**digits))>1e-5)throw new Error("INVALID_BILL_PAYMENT");
+    const old = previous?.transactions.find(t=>t.id===tx.id);
+    if (old && old.fixedExpenseId===tx.fixedExpenseId && old.fixedExpenseDueDate===tx.fixedExpenseDueDate) {
+      if (previous?.wallets.find(w=>w.id===old.wallet)?.currency !== next.wallets.find(w=>w.id===tx.wallet)?.currency) throw new Error("INVALID_BILL_PAYMENT");
+      continue;
+    }
+    const expense = next.fixedExpenses?.find(e=>e.id===tx.fixedExpenseId), original = expense && expenseWallet(next,expense), source = next.wallets.find(w=>w.id===tx.wallet);
+    if (!expense || !original || !source || source.currency!==original.currency || !plannedOccurrences({...expense,active:true},tx.fixedExpenseDueDate!,tx.fixedExpenseDueDate!).length) throw new Error("INVALID_BILL_PAYMENT");
+  }
+}

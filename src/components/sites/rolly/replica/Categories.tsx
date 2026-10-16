@@ -40,7 +40,9 @@ export function Categories({ detail = false, name = "", wallet = "default", navi
       const metadata = { ...s.categoryMeta };
       if (modal === "edit") delete metadata[name];
       metadata[value] = { type: modal === "edit" ? s.categoryMeta[name]?.type || "expense" : type, icon, children: modal === "edit" ? children : [] };
-      return { ...s, categories: modal === "edit" ? s.categories.map((item) => item === name ? value : item) : [...s.categories, value], categoryMeta: metadata, transactions: modal === "edit" ? s.transactions.map((t) => t.category === name ? { ...t, category: value } : t) : s.transactions };
+      const rename = <T extends { category: string }>(row: T) => modal === "edit" && row.category === name ? { ...row, category: value } : row;
+      const walletCategories = Object.fromEntries(s.wallets.map(w => [w.id, modal === "edit" ? (s.walletCategories?.[w.id] || s.categories).map(n => n === name ? value : n) : [...new Set([...(s.walletCategories?.[w.id] || s.categories), ...(w.id === wallet ? [value] : [])])]]));
+      return { ...s, walletCategories, goals: s.goals.map(rename), fixedExpenses: s.fixedExpenses?.map(rename), recurring: s.recurring.map(rename), categories: modal === "edit" ? s.categories.map((item) => item === name ? value : item) : [...s.categories, value], categoryMeta: metadata, transactions: s.transactions.map(rename) };
     });
     setModal("");
     if (detail) navigate("categoryDetail?name=" + encodeURIComponent(value) + "&wallet=" + wallet);

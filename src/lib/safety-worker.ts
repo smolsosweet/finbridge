@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 import { advanceSafety, evaluateSafety, type SafetyDocument, type SafetyEvent } from "./safety-model";
-import { saveSafety } from "./safety-repository";
+import { saveSafety, safetyWorkspace, databaseSafety } from "./safety-repository";
 import { sendSafetyEmail } from "./safety-mail";
 
 export async function runSafetyWorker(pool: Pool, send = sendSafetyEmail, now = new Date()) {
@@ -16,10 +16,12 @@ export async function runSafetyWorker(pool: Pool, send = sendSafetyEmail, now = 
       try {
         await lock.query('SELECT id FROM "user" WHERE id=$1 FOR SHARE', [userId]);
         const inactive = await lock.query("SELECT 1 FROM finbridge_account_lifecycle WHERE user_id=$1", [userId]);
+        const workspace = await safetyWorkspace(lock, userId);
         const r = await lock.query<{ document: SafetyDocument }>("SELECT document FROM finbridge_safety WHERE user_id=$1 FOR UPDATE", [userId]);
         const doc = r.rows[0]?.document;
-        if (!inactive.rowCount && doc?.syncedAt && now.getTime() - Date.parse(doc.syncedAt) <= 86400000) {
-          await saveSafety(lock, userId, { ...advanceSafety(doc, now), revision: doc.revision + 1 }); count.evaluated++;
+        if (doc && workspace) databaseSafety(doc, workspace.data, workspace.updatedAt);
+        if (!inactive.rowCount && doc?.syncedAt && (doc.sourceId === "database" || now.getTime() - Date.parse(doc.syncedAt) <= 86400000)) {
+          await saveSafety(lock, userId, advanceSafety(doc, now)); count.evaluated++;
         } else await lock.query("UPDATE finbridge_safety SET updated_at=CURRENT_TIMESTAMP WHERE user_id=$1", [userId]);
         await lock.query("COMMIT");
       } catch (e) { await lock.query("ROLLBACK"); throw e; }
@@ -36,7 +38,7 @@ export async function runSafetyWorker(pool: Pool, send = sendSafetyEmail, now = 
         const row = await lock.query<{ document: SafetyDocument }>("SELECT document FROM finbridge_safety WHERE user_id=$1 FOR SHARE", [item.user_id]);
         const doc = row.rows[0]?.document, event = claim.rows[0].event;
         const rule = doc?.rules.find(r => r.id === event.ruleId && r.active && r.email);
-        const fresh = doc?.snapshot && doc.syncedAt && now.getTime() - Date.parse(doc.syncedAt) <= 86400000;
+        const fresh = doc?.snapshot && doc.syncedAt && (doc.sourceId === "database" || now.getTime() - Date.parse(doc.syncedAt) <= 86400000);
         const evaluation = fresh && rule ? evaluateSafety(rule, doc!.snapshot!, now) : null;
         const valid = !inactive.rowCount && user.rows[0]?.emailVerified && evaluation?.state === "alarm" && evaluation.limit === event.evaluation.limit && evaluation.start === event.evaluation.start && evaluation.end === event.evaluation.end;
         let status: SafetyEvent["emailStatus"] = "cancelled";

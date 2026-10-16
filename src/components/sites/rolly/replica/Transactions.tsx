@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import { Camera, Mic, Send, Settings, Plus, ArrowRightLeft, X, Trash2 } from "lucide-react";
 import { EmptyState, Field, Mascot, Modal, PageHeader, Toggle } from "./Ui";
-import { currencySymbol, money, today, updateState, useAppState, workspaceOwner, type AppState, type ChatMessage, type Transaction } from "./store";
+import { currencySymbol, money, today, updateState, useAppState, workspaceOwner, workspacePersistence, type AppState, type ChatMessage, type Transaction } from "./store";
 import { createTimeoutTransactionDraft, editDraftById, inferDraftCategory, isNewTransactionMessage, matchDraftCategoryAnswer, normalizeVietnameseMessage, readyDrafts, removeDraftById, requestedDraftCategory, validateAndCommitDrafts, validateDraftForState, type TransactionDraft } from "@/lib/transaction-drafts";
 import { answerFinancialQuery, type FinancialAction } from "@/lib/financial-chat";
 import { localPlanReply, modelHistory } from "@/lib/chat-local-plan";
@@ -219,6 +219,7 @@ export function TransactionForm({
     e.preventDefault();
     if (Number(amount) <= 0) return;
     const item: Transaction = {
+      ...existing,
       id: existing?.id || crypto.randomUUID(),
       type,
       title,
@@ -258,6 +259,7 @@ export function TransactionForm({
         <button
           type="button"
           className={type === "income" ? "active" : ""}
+          disabled={!!existing?.fixedExpenseId}
           onClick={() => setType("income")}
         >
           {t.income}
@@ -317,7 +319,7 @@ export function TransactionForm({
 
       <Field label={t.wallet}>
         <select value={wallet} onChange={(e) => setWallet(e.target.value)}>
-          {state.wallets.map((w) => (
+          {state.wallets.filter(w => !existing?.fixedExpenseId || w.currency === state.wallets.find(original => original.id === existing.wallet)?.currency).map((w) => (
             <option value={w.id} key={w.id}>
               {resolveWalletDisplayName(w.name, lang)}
             </option>
@@ -480,7 +482,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   }, []);
   useEffect(() => {
     try {
-      const raw = state.transactionChat ? null : localStorage.getItem(chatKey);
+      const raw = state.transactionChat || workspacePersistence() === "database" ? null : localStorage.getItem(chatKey);
       const saved = state.transactionChat || (raw ? JSON.parse(raw) as { messages?: ChatMessage[]; drafts?: TransactionDraft[]; clarifyingDraftId?: string | null } : null);
       if (saved) {
         if (Array.isArray(saved.messages) && Array.isArray(saved.drafts)) {
@@ -536,7 +538,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     }
   }, [state.wallets, wallet]);
   function resetConversation() {
-    localStorage.removeItem(chatKey);
+    if (workspacePersistence() !== "database") localStorage.removeItem(chatKey);
     receiptImages.current = {};
     failedReceipt.current = null;
     setMessages([{ role: "assistant", text: "Xin chào!👋 Hãy mô tả giao dịch; tôi sẽ tạo bản nháp để bạn kiểm tra trước khi lưu." }]);

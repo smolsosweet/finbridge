@@ -9,6 +9,7 @@ const date = z.string().refine(value => { const d = new Date(value + "T12:00:00Z
 const currency = z.string().regex(/^[A-Z]{3}$/).refine(value => Intl.supportedValuesOf("currency").includes(value));
 export const safetyRuleSchema = z.object({
   id, name, kind: z.enum(["budget", "reserve"]), targetId: id,
+  groupId: z.string().uuid().optional(), archived: z.boolean().optional(),
   basis: z.enum(["actual", "forecast"]), unit: z.enum(["percent", "amount"]),
   threshold: amount.refine(n => n > 0), email: z.boolean(), active: z.boolean(),
 }).strict().superRefine((r, ctx) => {
@@ -108,7 +109,7 @@ export function advanceSafety(doc: SafetyDocument, now = new Date()): SafetyDocu
   const ordered = [...next.rules].sort((a, b) => evaluations.get(b.id)!.limit - evaluations.get(a.id)!.limit);
   for (const rule of ordered) {
     const e = evaluations.get(rule.id)!;
-    if (!doc.syncedAt || now.getTime() - Date.parse(doc.syncedAt) > 86400000) { next.evaluated[rule.id] = { ...e, state: "unavailable", reason: "stale" }; continue; }
+    if (doc.sourceId !== "database" && (!doc.syncedAt || now.getTime() - Date.parse(doc.syncedAt) > 86400000)) { next.evaluated[rule.id] = { ...e, state: "unavailable", reason: "stale" }; continue; }
     next.evaluated[rule.id] = e;
     if (!rule.active || e.state === "unavailable") continue;
     const period = `${e.start}/${e.end}`, old = next.episodes[rule.id];
