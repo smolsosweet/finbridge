@@ -10,11 +10,21 @@ export function reserveAmounts(state: AppState): Record<string, number> {
     return Object.fromEntries(Object.entries(data).filter(([id, value]) => state.wallets.some(w => w.id === id) && typeof value === "number" && Number.isFinite(value) && value >= 0));
   } catch { return {}; }
 }
-export function trackedBalance(state: AppState, walletId: string) {
+export function trackedBalance(state: Pick<AppState, "wallets" | "transactions">, walletId: string, asOf?: string) {
   const wallet = state.wallets.find(w => w.id === walletId);
   if (!wallet) return { amount: 0, complete: false };
-  let total = cents(wallet.initial), complete = true;
+  let total = Number.isFinite(wallet.initial) ? cents(wallet.initial) : 0, complete = Number.isFinite(wallet.initial);
   for (const t of state.transactions) {
+    const transactionDate = t.date.slice(0, 10);
+    if (asOf && transactionDate > asOf) continue;
+    if (asOf && !/^\d{4}-\d{2}-\d{2}$/.test(transactionDate)) {
+      if (t.wallet === walletId || (t.type === "transfer" && t.targetWallet === walletId)) complete = false;
+      continue;
+    }
+    if (!Number.isFinite(t.amount) || t.amount < 0) {
+      if (t.wallet === walletId || (t.type === "transfer" && t.targetWallet === walletId)) complete = false;
+      continue;
+    }
     if (t.wallet === walletId) total += (t.type === "income" ? 1 : -1) * cents(t.amount);
     if (t.type === "transfer" && t.targetWallet === walletId) {
       if (state.wallets.find(w => w.id === t.wallet)?.currency === wallet.currency) total += cents(t.amount);
@@ -28,7 +38,7 @@ export function budgetPace(state: AppState, budget: Goal, asOf: string) {
   const totalDays = days(summary.start, summary.end) + 1;
   const elapsedDays = Math.min(totalDays, Math.max(0, days(summary.start, asOf) + 1));
   const remainingDays = Math.max(0, totalDays - elapsedDays);
-  const spent = state.transactions.filter(t => t.type === "expense" && t.wallet === budget.wallet && (!budget.category || t.category === budget.category) && t.date.slice(0, 10) >= summary.start && t.date.slice(0, 10) <= asOf && t.date.slice(0, 10) <= summary.end).reduce((s, t) => s + cents(t.amount), 0) / 100;
+  const spent = state.transactions.filter(t => t.type === "expense" && Number.isFinite(t.amount) && t.amount >= 0 && t.wallet === budget.wallet && (!budget.category || t.category === budget.category) && t.date.slice(0, 10) >= summary.start && t.date.slice(0, 10) <= asOf && t.date.slice(0, 10) <= summary.end).reduce((s, t) => s + cents(t.amount), 0) / 100;
   const remaining = Math.max(0, budget.amount - spent);
   let scale = 100;
   try { scale = 10 ** (new Intl.NumberFormat("en", { style: "currency", currency: budget.currency }).resolvedOptions().maximumFractionDigits ?? 2); } catch { /* Keep legacy currency formatting safe. */ }
@@ -46,7 +56,7 @@ export function financialOutlook(state: AppState, asOf: string) {
     const wallet = state.wallets.find(w => !w.archived && w.id === (budget?.wallet || expense.walletId));
     if (!wallet || (expense.budgetId && !budget) || (budget && wallet.currency !== budget.currency)) return [];
     const due = unpaidOccurrences(state, expense, asOf, end)[0]; if (!due) return [];
-    const balance = trackedBalance(state, wallet.id);
+    const balance = trackedBalance(state, wallet.id, asOf);
     const after = (cents(balance.amount) - cents(expense.amount)) / 100;
     return [{ expense, wallet, due, daysUntil: days(asOf, due), balance, after, reserve: reserves[wallet.id] || 0,
       belowReserve: balance.complete && after < (reserves[wallet.id] || 0), remind: days(asOf, due) <= (expense.reminderDays ?? 3) }];

@@ -359,6 +359,7 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
   return <main className="r-dashboard fb-home fb-history">
     <FinBridgeHeader
       lang={lang}
+      navigate={navigate}
       theme={String(state.settings?.theme || "light")}
       currentLanguage={String(state.settings?.language || "Tiếng Việt")}
       onOpenCalendar={() => setCalendarLedgerOpen(true)}

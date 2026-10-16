@@ -15,6 +15,7 @@ import { useAppState } from "./store";
 import { WelcomeScreen } from "../WelcomeScreen";
 import { Categories } from "./Categories";
 import { SafetyProvider } from "@/components/safety/SafetyProvider";
+import { NotificationCenter } from "./NotificationCenter";
 import { SafetyAlerts } from "@/components/safety/SafetyAlerts";
 import "./replica.css";
 
@@ -45,7 +46,7 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
   }[lang] as Array<[string, string, string]>;
 
   let content;
-  if (!screen) content = tab === "tools" ? <Planning navigate={navigate} /> : tab === "settings" ? <SettingsOverview navigate={navigate} /> : tab === "transactions" ? <TransactionHistory navigate={navigate} /> : <Dashboard key={tab} navigate={navigate} />;
+  if (!screen) content = tab === "tools" ? <Planning navigate={navigate} initialTab={params.get("plan") === "fixed" ? "fixed" : "budget"} /> : tab === "settings" ? <SettingsOverview navigate={navigate} /> : tab === "transactions" ? <TransactionHistory navigate={navigate} /> : <Dashboard key={tab} navigate={navigate} />;
   else if (["budget", "savings", "fixedExpenses", "createBudget", "createFixedExpense", "createSavingsGoal", "debt", "loanList", "challenge", "createDebtClerance", "createLoan", "createChallenge"].includes(screen)) content = <Planning key={screen} navigate={navigate} initialTab={["savings", "fixedExpenses", "createFixedExpense", "createSavingsGoal"].includes(screen) ? "fixed" : "budget"} initialForm={screen === "createBudget" ? "budget" : ["createFixedExpense", "createSavingsGoal"].includes(screen) ? "fixed" : ""} />;
   else if (tools.some((t) => t.path === screen)) content = <ToolPage key={screen} screen={screen} navigate={navigate} />;
   else if (tools.some((t) => t.create === screen)) content = <GoalForm key={screen} screen={screen} navigate={navigate} initialType={params.get("initialType") || undefined} />;
@@ -69,6 +70,7 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
 
   const isWelcome = screen === "welcome";
   const isAppShell = !isWelcome;
+  const hasSharedHeader = !screen || ["budget", "savings", "fixedExpenses", "createBudget", "createFixedExpense", "createSavingsGoal", "createDebtClerance", "createLoan", "createChallenge", "debt", "loanList", "challenge", "accountSettings", "homepageConfiguration", "createWallet1"].includes(screen);
 
   return (
     <SafetyProvider><div className={"r-app " + theme + (isAppShell ? " fb-home-shell has-sidebar" : "")}>
@@ -138,6 +140,8 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
       <div className="fb-app-viewport">
         {content}
       </div>
+
+      {!isWelcome && !hasSharedHeader && screen !== "safetyAlerts" && <NotificationCenter navigate={navigate} floating />}
 
       {!isWelcome && screen !== "addTransactionChatMode" && screen !== "safetyAlerts" && (
         <button

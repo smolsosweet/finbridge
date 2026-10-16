@@ -1,0 +1,78 @@
+import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
+import { z } from "zod";
+import { getSession } from "@/lib/auth-session";
+import { getGeminiTimeoutMs } from "@/lib/gemini-config";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const inputSchema = z.object({
+  language: z.enum(["vi", "en", "zh"]),
+  alerts: z.array(z.object({
+    id: z.string().min(1).max(200), kind: z.enum(["budget-exceeded", "budget-risk", "cash-shortfall", "fixed-due", "negative-balance"]),
+    problem: z.string().min(1).max(240), figures: z.string().min(1).max(400), when: z.string().min(1).max(80),
+    cause: z.string().min(1).max(400), priority: z.enum(["high", "medium", "low"]),
+    suggestedAction: z.string().min(1).max(300), assumptions: z.string().min(1).max(300),
+  }).strict()).min(1).max(30),
+}).strict();
+const outputSchema = z.object({ alerts: z.array(z.object({ id: z.string().min(1).max(200), explanation: z.string().trim().min(1).max(300), suggestion: z.string().trim().min(1).max(300) }).strict()).max(30) }).strict();
+
+function isLocalDemoRequest(request: Request) {
+  if (process.env.NODE_ENV !== "development" || process.env.FINBRIDGE_DEMO_MODE !== "true") return false;
+  const host = request.headers.get("host")?.split(":")[0];
+  const origin = request.headers.get("origin");
+  if (host !== "localhost" && host !== "127.0.0.1") return false;
+  try { return !!origin && new URL(origin).host === request.headers.get("host"); }
+  catch { return false; }
+}
+
+export async function POST(request: Request) {
+  if (!isLocalDemoRequest(request) && !(await getSession())) return Response.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED" }, { status: 503 });
+  let raw: unknown;
+  try { raw = await request.json(); }
+  catch { return Response.json({ error: "INVALID_REQUEST" }, { status: 400 }); }
+  const parsed = inputSchema.safeParse(raw);
+  if (!parsed.success || new Set(parsed.data.alerts.map((alert) => alert.id)).size !== parsed.data.alerts.length) return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
+  const { language, alerts } = parsed.data;
+  const allowedIds = new Set(alerts.map((alert) => alert.id));
+  const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite";
+  const timeoutMs = getGeminiTimeoutMs("GEMINI_FEED_TIMEOUT_MS", 6_000, 9_000);
+  const startedAt = Date.now();
+  try {
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { retryOptions: { attempts: 1 } } });
+    const result = await ai.models.generateContent({
+      model,
+      contents: [
+        `Write in ${language === "vi" ? "Vietnamese" : language === "zh" ? "Chinese" : "English"}. For each deterministic financial alert, write one concise explanation and one practical suggestion. Use only the supplied cause, figures and assumptions. Do not change the facts or priority, add amounts/dates/numbers, claim payment happened, or imply certainty for forecasts. Return every alert exactly once using its id.`,
+        JSON.stringify(alerts),
+      ].join("\n"),
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: { type: Type.OBJECT, properties: { alerts: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: {
+          id: { type: Type.STRING }, explanation: { type: Type.STRING }, suggestion: { type: Type.STRING },
+        }, required: ["id", "explanation", "suggestion"] } } }, required: ["alerts"] },
+        temperature: 0.2, maxOutputTokens: 1200,
+        ...(model.startsWith("gemini-3.") ? { thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL } } : {}),
+        abortSignal: AbortSignal.any([AbortSignal.timeout(timeoutMs), request.signal]),
+      },
+    });
+    let decoded: unknown;
+    try { decoded = JSON.parse(result.text || ""); }
+    catch { return Response.json({ error: "INVALID_AI_RESPONSE" }, { status: 502 }); }
+    const validated = outputSchema.safeParse(decoded);
+    if (!validated.success || validated.data.alerts.length !== alerts.length) return Response.json({ error: "INVALID_AI_RESPONSE" }, { status: 502 });
+    const seen = new Set<string>();
+    for (const item of validated.data.alerts) {
+      if (!allowedIds.has(item.id) || seen.has(item.id) || /[\d$€£¥₫]/.test(`${item.explanation} ${item.suggestion}`)) return Response.json({ error: "UNSAFE_AI_RESPONSE" }, { status: 502 });
+      seen.add(item.id);
+    }
+    console.info("[FinBridge AI] proactive feed explanations completed", { durationMs: Date.now() - startedAt, count: seen.size });
+    return Response.json({ alerts: validated.data.alerts });
+  } catch (error) {
+    const status = error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : null;
+    console.warn("[FinBridge AI] proactive feed explanations unavailable", { durationMs: Date.now() - startedAt, status, name: error instanceof Error ? error.name : "UnknownError" });
+    return Response.json({ error: status === 429 ? "AI_RATE_LIMITED" : "AI_UNAVAILABLE" }, { status: status === 429 ? 429 : 503 });
+  }
+}

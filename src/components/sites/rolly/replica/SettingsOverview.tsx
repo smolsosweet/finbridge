@@ -356,6 +356,7 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
     <main className="r-dashboard fb-home fb-settings">
       <FinBridgeHeader
         lang={lang}
+        navigate={navigate}
         theme={String(state.settings.theme || "light")}
         currentLanguage={String(state.settings.language || "Tiếng Việt")}
         onOpenCalendar={() => setCalendarLedgerOpen(true)}

@@ -9,6 +9,14 @@
 .panel button:focus-visible { outline: 2px solid #7b40f2; outline-offset: 3px; }
 .warning, .reminder { padding: 14px; border-radius: 12px; margin-top: 12px; background: #fff7ed; color: #8a4b17; }
 .reminder { background: #f5f3ff; color: #5930b5; }
+.alert { padding: 14px; border: 1px solid var(--r-line,#e2e8f0); border-radius: 14px; margin-top: 12px; background: var(--r-surface,#fff); }
+.high { border-left: 4px solid #dc5a52; }
+.medium { border-left: 4px solid #e9a23b; }
+.low { border-left: 4px solid #49a99a; }
+.priority { padding: 5px 8px; border-radius: 999px; background: #f1f5f9; font-size: 11px; white-space: nowrap; }
+.dismiss { display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.readStatus { padding: 4px 7px; border-radius: 999px; background: #f1f5f9; color: var(--r-muted,#64748b); font-size: 10px; white-space: nowrap; }
 .form { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
 .chatIntroduction { text-align: center; padding: 10px; color: #5930b5; font-size: 13px; }
 .chatIntroduction button { display: block; margin: 10px auto; padding: 10px 16px; min-height: 44px; border: 1px solid #ddd6fe; border-radius: 12px; background: #f5f3ff; cursor: pointer; }
