@@ -129,6 +129,59 @@
 .tabs button { display: inline-flex; align-items: center; gap: 8px; padding: 12px 2px; font-size: 13px; white-space: nowrap; color: var(--s-muted); border: none; background: transparent; border-bottom: 3px solid transparent; }
 .tabs button[aria-selected="true"] { color: var(--s-accent); border-bottom-color: var(--s-accent); font-weight: 650; }
 
+/* AWS-style Segmented Type Navigation Pills */
+.typePillRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.typePill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 500;
+  border: 1px solid var(--s-line);
+  background: var(--s-card);
+  color: var(--s-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.typePill:hover {
+  border-color: var(--s-accent);
+  color: var(--s-ink);
+}
+.typePillActive {
+  background: #eef2ff;
+  border-color: var(--s-accent) !important;
+  color: var(--s-accent) !important;
+  font-weight: 650;
+  box-shadow: 0 1px 3px rgba(99, 102, 241, 0.15);
+}
+:global(.r-dark) .typePillActive {
+  background: #1e1b4b;
+  border-color: #818cf8 !important;
+  color: #c7d2fe !important;
+}
+.typePillCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--s-soft);
+  color: inherit;
+  border: 1px solid var(--s-line);
+}
+
 .filters {
   display: flex;
   align-items: center;
@@ -212,9 +265,64 @@
   display: flex;
   flex-direction: column;
 }
-.configuration header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.configuration h2 { font-size: 17px; font-weight: 700; }
-.configuration p { font-size: 12px; margin-top: 3px; color: var(--s-muted); }
+.configuration header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.configuration h2 { font-size: 17px; font-weight: 700; margin: 0; }
+.configuration p { font-size: 12px; margin: 0; color: var(--s-muted); }
+
+/* Card Header Scope & Type Badges */
+.scopeTypeRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.cardTypeBadges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.typeBadgeActual, .typeBadgeForecast, .typeBadgeReserve {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 650;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.typeBadgeActual {
+  background: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+:global(.r-dark) .typeBadgeActual {
+  background: #082f49;
+  color: #7dd3fc;
+  border-color: #0369a1;
+}
+.typeBadgeForecast {
+  background: #f3e8ff;
+  color: #7e22ce;
+  border: 1px solid #e9d5ff;
+}
+:global(.r-dark) .typeBadgeForecast {
+  background: #3b0764;
+  color: #d8b4fe;
+  border-color: #6b21a8;
+}
+.typeBadgeReserve {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+:global(.r-dark) .typeBadgeReserve {
+  background: #451a03;
+  color: #fcd34d;
+  border-color: #92400e;
+}
 
 /* AWS Budgets Style Visual Progress Meter */
 .awsMeterSection {
@@ -227,10 +335,29 @@
 .awsMeterHeader {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 12px;
   margin-bottom: 8px;
   font-size: 13px;
+}
+.awsMeterCol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.awsMeterColRight {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-end;
+  text-align: right;
+}
+.awsMeterLabel {
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--s-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 .awsMeterSpend b {
   font-size: 15px;
@@ -240,22 +367,67 @@
   color: var(--s-muted);
   font-size: 12px;
 }
-.awsMeterPercent b {
-  font-size: 15px;
-  color: var(--s-ink);
+.awsMeterPctTag {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--s-muted);
+  margin-left: 4px;
 }
+.awsMeterForecastVal {
+  font-size: 14px;
+  color: #7c3aed;
+  font-weight: 700;
+}
+:global(.r-dark) .awsMeterForecastVal {
+  color: #c084fc;
+}
+.awsMeterForecastPct {
+  font-size: 12px;
+  font-weight: 600;
+  color: #9333ea;
+  margin-left: 4px;
+}
+:global(.r-dark) .awsMeterForecastPct {
+  color: #d8b4fe;
+}
+.forecastPendingText {
+  font-size: 11px;
+  color: var(--s-muted);
+  font-weight: 500;
+}
+
 .awsMeterTrack {
   position: relative;
   height: 9px;
   border-radius: 999px;
   background: var(--s-line);
   overflow: visible;
-  margin-bottom: 16px;
+  margin-bottom: 24px;
+}
+.awsForecastBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(147, 51, 234, 0.45),
+    rgba(147, 51, 234, 0.45) 5px,
+    rgba(147, 51, 234, 0.15) 5px,
+    rgba(147, 51, 234, 0.15) 10px
+  );
+  border: 1px dashed rgba(147, 51, 234, 0.7);
+  box-sizing: border-box;
+  transition: width 0.3s ease;
+  z-index: 1;
 }
 .awsMeterFill {
+  position: relative;
   height: 100%;
   border-radius: 999px;
   transition: width 0.3s ease;
+  z-index: 2;
 }
 .fillAlarm {
   background: linear-gradient(90deg, #f87171, #ef4444);
@@ -274,19 +446,36 @@
   flex-direction: column;
   align-items: center;
   pointer-events: none;
+  z-index: 3;
 }
 .awsThresholdPin {
   width: 2px;
   height: 15px;
-  background: var(--s-ink);
   border-radius: 1px;
+}
+.pinActual {
+  background: var(--s-ink);
+}
+.pinForecast {
+  background: #9333ea;
+  box-shadow: 0 0 4px rgba(147, 51, 234, 0.5);
 }
 .awsThresholdPinLabel {
   font-size: 9px;
-  font-weight: 700;
-  color: var(--s-muted);
+  font-weight: 750;
   margin-top: 1px;
+  white-space: nowrap;
 }
+.labelActual {
+  color: var(--s-ink);
+}
+.labelForecast {
+  color: #7c3aed;
+}
+:global(.r-dark) .labelForecast {
+  color: #c084fc;
+}
+
 .awsMeterFooter {
   display: flex;
   justify-content: space-between;
@@ -299,10 +488,54 @@
 .awsMeterFooter b {
   color: var(--s-ink);
 }
+.awsMeterFooterThresholds {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* Condition Tags & Collapsible Details */
 .conditionTags { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
-.conditionTags span { font-size: 11px; font-weight: 500; padding: 4px 9px; border-radius: 6px; color: var(--s-accent); background: var(--s-soft); border: 1px solid var(--s-line); }
+.conditionTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 550;
+  padding: 4px 10px;
+  border-radius: 7px;
+  transition: all 0.15s ease;
+}
+.tagActual {
+  color: #0369a1;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+}
+:global(.r-dark) .tagActual {
+  color: #7dd3fc;
+  background: #082f49;
+  border-color: #0369a1;
+}
+.tagForecast {
+  color: #7e22ce;
+  background: #faf5ff;
+  border: 1px solid #e9d5ff;
+}
+:global(.r-dark) .tagForecast {
+  color: #d8b4fe;
+  background: #3b0764;
+  border-color: #6b21a8;
+}
+.tagReserve {
+  color: #b45309;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+}
+:global(.r-dark) .tagReserve {
+  color: #fcd34d;
+  background: #451a03;
+  border-color: #92400e;
+}
 
 .unavailableWarning {
   margin: 6px 0 10px;
@@ -359,6 +592,38 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
+  transition: all 0.15s ease;
+}
+.configValueTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.configValueTop .configBasis {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  font-size: 11px;
+  font-weight: 650;
+}
+.configBadgeMini {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.configValueActual {
+  border-left: 3px solid #0284c7;
+}
+.configValueForecast {
+  border-left: 3px solid #9333ea;
+}
+.configValueReserve {
+  border-left: 3px solid #d97706;
 }
 .configBasis { font-size: 11px; font-weight: 600; color: var(--s-accent); margin-bottom: 2px; }
 .configLabel { font-size: 11px; color: var(--s-muted); }

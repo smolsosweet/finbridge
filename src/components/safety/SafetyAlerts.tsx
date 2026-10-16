@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, Bell, Check, CheckCircle2, ChevronDown, ChevronRight, CircleHelp, Database, Mail, PauseCircle, Plus, Search, ShieldCheck, Trash2, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Bell, Check, CheckCircle2, ChevronDown, ChevronRight, CircleHelp, Database, Mail, PauseCircle, Plus, Search, ShieldCheck, Trash2, TrendingUp, Wallet, Zap } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { FinBridgeHeader } from "@/components/sites/rolly/replica/FinBridgeHeader";
 import { setSetting, useAppState } from "@/components/sites/rolly/replica/store";
@@ -12,15 +12,18 @@ import styles from "./SafetyAlerts.module.css";
 const EXTRA = {
   en: {
     forecastReached: "Forecast reaches threshold", belowReserve: "Below reserve", reserveSafe: "Reserve maintained", reached: "Spending threshold reached", balanceLabel: "Recorded balance", below: "is below the reserve floor", above: "meets the reserve floor", actualLabel: "Recorded spending", thresholdLabel: "Alert threshold", database: "Saved to your account", conditions: "Alert conditions", both: "Choose actual spending, forecast spending, or both. Each condition has its own threshold.", add: "Add threshold", remove: "Remove threshold", unit: "Threshold unit", scope: "Scope & period", channels: "Notification channels", configuration: "Alert configurations", conditionCount: "conditions", history: "Forecast starts after 3 elapsed days and at least one expense in this scope. Actual-spend alerts remain available.", missing: "This wallet or budget is no longer available. Choose another scope.", currency: "The budget currency differs from its wallet. Correct the budget in Planning.", transfer: "A cross-currency transfer is missing its destination amount, so this balance cannot be evaluated.", period: "This budget period has not started or its cycle is unsupported.", overflow: "Amounts exceed the safe calculation range.", chooseOne: "Choose at least one alert condition.", preview: "Preview for each condition", savedNote: "Values come from your database records. No live bank connection.", category: "Category", groupEmpty: "Create one configuration with all the thresholds you need.", actualDefault: "Actual 80% + 100%", forecastDefault: "Forecast 100%", budgetLimit: "Budget limit", select: "Select a budget or wallet first.", unavailableEmail: "Email is not enabled on this installation. In-app alerts are available.", sourceTime: "Data updated", actions: "Actions",
-    kpiTotal: "Total rules", kpiTotalDesc: "Active configurations", kpiAlarm: "In alarm", kpiAlarmDesc: "Threshold reached", kpiOk: "OK", kpiOkDesc: "Within threshold", kpiPaused: "Paused", kpiPausedDesc: "Monitoring paused", percentUsed: "used", remaining: "Remaining", step1Desc: "Choose scope & name", step2Desc: "Set triggers & limits", step3Desc: "Notification channels", step4Desc: "Review and activate"
+    kpiTotal: "Total rules", kpiTotalDesc: "Active configurations", kpiAlarm: "In alarm", kpiAlarmDesc: "Threshold reached", kpiOk: "OK", kpiOkDesc: "Within threshold", kpiPaused: "Paused", kpiPausedDesc: "Monitoring paused", percentUsed: "used", remaining: "Remaining", step1Desc: "Choose scope & name", step2Desc: "Set triggers & limits", step3Desc: "Notification channels", step4Desc: "Review and activate",
+    typeFilter: "Type", typeAll: "All types", typeActual: "Actual spend", typeForecast: "Forecast", typeReserve: "Reserve floor", actualBadge: "Actual", forecastBadge: "Forecast", reserveBadge: "Reserve", actualSpendLabel: "Actual spend", forecastSpendLabel: "Forecast spend", pinActual: "Actual", pinForecast: "Forecast", pinReserve: "Reserve"
   },
   vi: {
     forecastReached: "Dự báo chạm ngưỡng", belowReserve: "Số dư dưới mức dự phòng", reserveSafe: "Đủ mức dự phòng", reached: "Chi tiêu đã chạm ngưỡng", balanceLabel: "Số dư đã ghi nhận", below: "thấp hơn mức dự phòng", above: "đạt mức dự phòng", actualLabel: "Chi tiêu đã ghi", thresholdLabel: "Ngưỡng cảnh báo", database: "Lưu trong tài khoản", conditions: "Điều kiện cảnh báo", both: "Chọn chi thực tế, dự báo hoặc cả hai. Mỗi điều kiện có ngưỡng riêng.", add: "Thêm ngưỡng", remove: "Bỏ ngưỡng", unit: "Đơn vị ngưỡng", scope: "Phạm vi & kỳ", channels: "Kênh thông báo", configuration: "Cấu hình cảnh báo", conditionCount: "điều kiện", history: "Dự báo bắt đầu khi kỳ đã qua ít nhất 3 ngày và có giao dịch chi trong phạm vi này. Cảnh báo chi thực tế vẫn hoạt động.", missing: "Ví hoặc ngân sách không còn phù hợp. Hãy chọn lại phạm vi.", currency: "Tiền tệ ngân sách không khớp ví. Hãy sửa ngân sách trong Kế hoạch.", transfer: "Giao dịch chuyển tiền khác tiền tệ thiếu số tiền nhận, nên chưa tính được số dư.", period: "Kỳ ngân sách chưa bắt đầu hoặc chu kỳ chưa được hỗ trợ.", overflow: "Số tiền vượt phạm vi tính toán an toàn.", chooseOne: "Hãy chọn ít nhất một điều kiện cảnh báo.", preview: "Xem trước từng điều kiện", savedNote: "Tính từ dữ liệu trong database, chưa phải số dư ngân hàng trực tiếp.", category: "Danh mục", groupEmpty: "Tạo một cấu hình gồm tất cả ngưỡng bạn cần.", actualDefault: "Thực tế 80% + 100%", forecastDefault: "Dự báo 100%", budgetLimit: "Hạn mức ngân sách", select: "Hãy chọn ngân sách hoặc ví trước.", unavailableEmail: "Bản cài đặt này chưa bật email. Bạn có thể nhận thông báo trong ứng dụng.", sourceTime: "Dữ liệu cập nhật", actions: "Thao tác",
-    kpiTotal: "Tổng quy tắc", kpiTotalDesc: "Cấu hình theo dõi", kpiAlarm: "Cần chú ý", kpiAlarmDesc: "Đã chạm ngưỡng", kpiOk: "Bình thường", kpiOkDesc: "Trong giới hạn an toàn", kpiPaused: "Tạm dừng", kpiPausedDesc: "Tạm dừng theo dõi", percentUsed: "đã dùng", remaining: "Còn lại", step1Desc: "Chọn đối tượng & tên", step2Desc: "Đặt điều kiện & ngưỡng", step3Desc: "Kênh nhận thông báo", step4Desc: "Kiểm tra & kích hoạt"
+    kpiTotal: "Tổng quy tắc", kpiTotalDesc: "Cấu hình theo dõi", kpiAlarm: "Cần chú ý", kpiAlarmDesc: "Đã chạm ngưỡng", kpiOk: "Bình thường", kpiOkDesc: "Trong giới hạn an toàn", kpiPaused: "Tạm dừng", kpiPausedDesc: "Tạm dừng theo dõi", percentUsed: "đã dùng", remaining: "Còn lại", step1Desc: "Chọn đối tượng & tên", step2Desc: "Đặt điều kiện & ngưỡng", step3Desc: "Kênh nhận thông báo", step4Desc: "Kiểm tra & kích hoạt",
+    typeFilter: "Loại cảnh báo", typeAll: "Tất cả", typeActual: "Chi tiêu thực tế", typeForecast: "Dự báo chi tiêu", typeReserve: "Dự phòng ví", actualBadge: "Thực tế", forecastBadge: "Dự báo", reserveBadge: "Dự phòng", actualSpendLabel: "Chi tiêu thực tế", forecastSpendLabel: "Dự báo cuối kỳ", pinActual: "Thực tế", pinForecast: "Dự báo", pinReserve: "Sàn ví"
   },
   zh: {
     forecastReached: "预测将达到阈值", belowReserve: "余额低于备用金", reserveSafe: "备用金充足", reached: "支出已达阈值", balanceLabel: "已记录余额", below: "低于备用金下限", above: "达到备用金下限", actualLabel: "已记录支出", thresholdLabel: "提醒阈值", database: "存储于 PostgreSQL", conditions: "提醒条件", both: "可选择实际支出、预测支出或两者。每个条件有独立阈值。", add: "添加阈值", remove: "移除阈值", unit: "阈值单位", scope: "范围与周期", channels: "通知渠道", configuration: "提醒配置", conditionCount: "个条件", history: "周期至少经过3天且此范围有支出记录后才开始预测。实际支出提醒仍可使用。", missing: "钱包或预算不可用，请重新选择范围。", currency: "预算与钱包币种不同，请在计划中修改。", transfer: "跨币种转账缺少收款金额，无法评估余额。", period: "预算周期尚未开始或不受支持。", overflow: "金额超出安全计算范围。", chooseOne: "请至少选择一个提醒条件。", preview: "预览各条件", savedNote: "按数据库记录计算，并非银行实时余额。", category: "类别", groupEmpty: "在一个配置中添加所需的所有阈值。", actualDefault: "实际80%及100%", forecastDefault: "预测100%", budgetLimit: "预算限额", select: "请先选择预算或钱包。", unavailableEmail: "此环境未启用邮件，可使用应用内提醒。", sourceTime: "数据更新时间", actions: "操作",
-    kpiTotal: "全部规则", kpiTotalDesc: "监控配置", kpiAlarm: "需要关注", kpiAlarmDesc: "已达提醒阈值", kpiOk: "正常", kpiOkDesc: "未超限", kpiPaused: "已暂停", kpiPausedDesc: "已停止监控", percentUsed: "已使用", remaining: "剩余", step1Desc: "选择监控对象与名称", step2Desc: "设置触发条件与阈值", step3Desc: "通知渠道", step4Desc: "核对并启用规则"
+    kpiTotal: "全部规则", kpiTotalDesc: "监控配置", kpiAlarm: "需要关注", kpiAlarmDesc: "已达提醒阈值", kpiOk: "正常", kpiOkDesc: "未超限", kpiPaused: "已暂停", kpiPausedDesc: "已停止监控", percentUsed: "已使用", remaining: "剩余", step1Desc: "选择监控对象与名称", step2Desc: "设置触发条件与阈值", step3Desc: "通知渠道", step4Desc: "核对并启用规则",
+    typeFilter: "提醒类型", typeAll: "全部", typeActual: "实际支出", typeForecast: "预测支出", typeReserve: "钱包备用金", actualBadge: "实际", forecastBadge: "预测", reserveBadge: "备用金", actualSpendLabel: "实际支出", forecastSpendLabel: "预测支出", pinActual: "实际", pinForecast: "预测", pinReserve: "底线"
   },
 };
 
@@ -35,7 +38,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
   const state = useAppState(), lang = safetyLanguage(state.settings.language), t = SAFETY_COPY[lang], x = EXTRA[lang];
   const safety = useSafety(), params = useSearchParams();
   const [view, setView] = useState(["preferences", "history"].includes(params.get("view") || "") ? params.get("view")! : "rules");
-  const [query, setQuery] = useState(""), [filter, setFilter] = useState("all"), [draft, setDraft] = useState<Draft | null>(null), [step, setStep] = useState(0), [error, setError] = useState("");
+  const [query, setQuery] = useState(""), [filter, setFilter] = useState("all"), [typeFilter, setTypeFilter] = useState<"all" | "actual" | "forecast" | "reserve">("all"), [draft, setDraft] = useState<Draft | null>(null), [step, setStep] = useState(0), [error, setError] = useState("");
   const heading = useRef<HTMLHeadingElement>(null), field = useId();
   const snapshot = useMemo(() => { try { return safetySnapshot(state, String(state.settings.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone)); } catch { return null; } }, [state]);
   useEffect(() => { heading.current?.focus(); }, [step, draft?.groupId]);
@@ -111,7 +114,18 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
 
   const err = error || safety.error;
   const errorText = err === "NO_CONDITION" ? x.chooseOne : err === "WORKSPACE_CONFLICT" ? t.errors.CONFLICT : t.errors[err as keyof typeof t.errors] || t.errors.UNAVAILABLE;
-  const shown = groups.filter(g => g.rows[0].name.toLocaleLowerCase().includes(query.toLocaleLowerCase()) && (filter === "all" || status(g.rows) === filter));
+  const shown = groups.filter(g => {
+    const matchesQuery = g.rows[0].name.toLocaleLowerCase().includes(query.toLocaleLowerCase());
+    const matchesStatus = filter === "all" || status(g.rows) === filter;
+    const matchesType = typeFilter === "all"
+      ? true
+      : typeFilter === "actual"
+        ? g.rows.some(r => r.kind === "budget" && r.basis === "actual")
+        : typeFilter === "forecast"
+          ? g.rows.some(r => r.kind === "budget" && r.basis === "forecast")
+          : g.rows.some(r => r.kind === "reserve");
+    return matchesQuery && matchesStatus && matchesType;
+  });
 
   return (
     <main className={`r-dashboard fb-home ${styles.page}`} lang={lang}>
@@ -446,6 +460,51 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
 
           {view === "rules" && (
             <>
+              {/* AWS Budgets Style Segmented Type Navigation Pills */}
+              <div className={styles.typePillRow} role="group" aria-label={x.typeFilter}>
+                <button
+                  type="button"
+                  className={`${styles.typePill} ${typeFilter === "all" ? styles.typePillActive : ""}`}
+                  onClick={() => setTypeFilter("all")}
+                >
+                  <span>{x.typeAll}</span>
+                  <span className={styles.typePillCount}>{groups.length}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.typePill} ${typeFilter === "actual" ? styles.typePillActive : ""}`}
+                  onClick={() => setTypeFilter("actual")}
+                >
+                  <Zap size={13} />
+                  <span>{x.typeActual}</span>
+                  <span className={styles.typePillCount}>
+                    {groups.filter(g => g.rows.some(r => r.kind === "budget" && r.basis === "actual")).length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.typePill} ${typeFilter === "forecast" ? styles.typePillActive : ""}`}
+                  onClick={() => setTypeFilter("forecast")}
+                >
+                  <TrendingUp size={13} />
+                  <span>{x.typeForecast}</span>
+                  <span className={styles.typePillCount}>
+                    {groups.filter(g => g.rows.some(r => r.kind === "budget" && r.basis === "forecast")).length}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.typePill} ${typeFilter === "reserve" ? styles.typePillActive : ""}`}
+                  onClick={() => setTypeFilter("reserve")}
+                >
+                  <Wallet size={13} />
+                  <span>{x.typeReserve}</span>
+                  <span className={styles.typePillCount}>
+                    {groups.filter(g => g.rows.some(r => r.kind === "reserve")).length}
+                  </span>
+                </button>
+              </div>
+
               <div className={styles.filters}>
                 <label>
                   <Search size={17}/>
@@ -474,21 +533,43 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                     const targetObj = r.kind === "budget"
                       ? budgets.find(b => b.id === r.targetId)
                       : wallets.find(w => w.id === r.targetId);
-                    const primaryEval = doc.evaluated[r.id];
+
+                    const actualRow = group.rows.find(row => row.basis === "actual");
+                    const forecastRow = group.rows.find(row => row.basis === "forecast");
+                    const reserveRow = group.rows.find(row => row.kind === "reserve");
+
+                    const actualEval = actualRow ? doc.evaluated[actualRow.id] : null;
+                    const forecastEval = forecastRow ? doc.evaluated[forecastRow.id] : null;
+                    const reserveEval = reserveRow ? doc.evaluated[reserveRow.id] : null;
+
+                    const primaryEval = actualEval || reserveEval || forecastEval || doc.evaluated[r.id];
                     const budgetLimit = targetObj && "amount" in targetObj ? targetObj.amount : (primaryEval?.limit || 0);
-                    const currentVal = primaryEval?.value ?? 0;
-                    const percentUsed = budgetLimit > 0 ? Math.min(100, Math.round((currentVal / budgetLimit) * 100)) : 0;
-                    const remainingAmt = budgetLimit > 0 ? Math.max(0, budgetLimit - currentVal) : null;
-                    const thresholdPercents = group.rows
-                      .filter(row => row.unit === "percent")
-                      .map(row => row.threshold);
+
+                    const currentActual = r.kind === "reserve"
+                      ? (reserveEval?.value ?? 0)
+                      : (actualEval?.value ?? (primaryEval?.actual ?? primaryEval?.value ?? 0));
+
+                    const percentActual = budgetLimit > 0 ? Math.min(100, Math.round((currentActual / budgetLimit) * 100)) : 0;
+                    const remainingAmt = budgetLimit > 0 ? Math.max(0, budgetLimit - currentActual) : null;
+
+                    const forecastVal = forecastEval?.value;
+                    const percentForecast = (budgetLimit > 0 && typeof forecastVal === "number" && forecastVal > 0)
+                      ? Math.min(100, Math.round((forecastVal / budgetLimit) * 100))
+                      : 0;
 
                     return (
                       <article key={group.id} className={styles.configuration}>
                         <header>
                           <div>
                             <h2>{r.name}</h2>
-                            <p>{t[r.kind]} · {doc.evaluated[r.id]?.currency || targetObj?.currency}</p>
+                            <div className={styles.scopeTypeRow}>
+                              <p>{t[r.kind]} · {doc.evaluated[r.id]?.currency || targetObj?.currency}</p>
+                              <div className={styles.cardTypeBadges}>
+                                {actualRow && <span className={styles.typeBadgeActual}><Zap size={10}/> {x.actualBadge}</span>}
+                                {forecastRow && <span className={styles.typeBadgeForecast}><TrendingUp size={10}/> {x.forecastBadge}</span>}
+                                {reserveRow && <span className={styles.typeBadgeReserve}><Wallet size={10}/> {x.reserveBadge}</span>}
+                              </div>
+                            </div>
                           </div>
                           <span className={`${styles.badge} ${styles[s]}`}>
                             {r.kind === "reserve"
@@ -505,33 +586,93 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                         {primaryEval && primaryEval.state !== "unavailable" && (
                           <div className={styles.awsMeterSection}>
                             <div className={styles.awsMeterHeader}>
-                              <span className={styles.awsMeterSpend}>
-                                <b>{money(currentVal, primaryEval.currency)}</b>
-                                {budgetLimit > 0 && <small> / {money(budgetLimit, primaryEval.currency)}</small>}
-                              </span>
-                              <span className={styles.awsMeterPercent}>
-                                <b>{percentUsed}%</b> {x.percentUsed}
-                              </span>
-                            </div>
-                            <div className={styles.awsMeterTrack} role="progressbar" aria-valuenow={percentUsed} aria-valuemin={0} aria-valuemax={100}>
-                              <div
-                                className={`${styles.awsMeterFill} ${s === "alarm" ? styles.fillAlarm : percentUsed >= 80 ? styles.fillWarning : styles.fillOk}`}
-                                style={{ width: `${percentUsed}%` }}
-                              />
-                              {thresholdPercents.map((pct, idx) => (
-                                <div
-                                  key={idx}
-                                  className={styles.awsThresholdMarker}
-                                  style={{ left: `${Math.min(100, Math.max(0, pct))}%` }}
-                                  title={`${x.thresholdLabel}: ${pct}%`}
-                                >
-                                  <span className={styles.awsThresholdPin} />
-                                  <span className={styles.awsThresholdPinLabel}>{pct}%</span>
+                              <div className={styles.awsMeterCol}>
+                                <small className={styles.awsMeterLabel}>
+                                  {r.kind === "reserve" ? x.balanceLabel : x.actualSpendLabel}
+                                </small>
+                                <span className={styles.awsMeterSpend}>
+                                  <b>{money(currentActual, primaryEval.currency)}</b>
+                                  {budgetLimit > 0 && <small> / {money(budgetLimit, primaryEval.currency)}</small>}
+                                  {budgetLimit > 0 && <span className={styles.awsMeterPctTag}>({percentActual}%)</span>}
+                                </span>
+                              </div>
+
+                              {forecastRow && (
+                                <div className={styles.awsMeterColRight}>
+                                  <small className={styles.awsMeterLabel}>{x.forecastSpendLabel}</small>
+                                  <span className={styles.awsMeterForecastVal}>
+                                    {forecastEval && forecastEval.state !== "unavailable" && typeof forecastVal === "number" ? (
+                                      <>
+                                        <b>{money(forecastVal, primaryEval.currency)}</b>
+                                        <span className={styles.awsMeterForecastPct}>({percentForecast}%)</span>
+                                      </>
+                                    ) : (
+                                      <small className={styles.forecastPendingText}>
+                                        {forecastEval?.state === "unavailable" ? reason(forecastEval) : "—"}
+                                      </small>
+                                    )}
+                                  </span>
                                 </div>
-                              ))}
+                              )}
                             </div>
+
+                            <div
+                              className={styles.awsMeterTrack}
+                              role="progressbar"
+                              aria-valuenow={percentActual}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                            >
+                              {percentForecast > percentActual && (
+                                <div
+                                  className={styles.awsForecastBar}
+                                  style={{ width: `${percentForecast}%` }}
+                                  title={`${x.forecastSpendLabel}: ${money(forecastVal ?? null, primaryEval.currency)} (${percentForecast}%)`}
+                                />
+                              )}
+                              <div
+                                className={`${styles.awsMeterFill} ${s === "alarm" ? styles.fillAlarm : percentActual >= 80 ? styles.fillWarning : styles.fillOk}`}
+                                style={{ width: `${percentActual}%` }}
+                              />
+                              {(() => {
+                                const map = new Map<number, { isForecast: boolean; isReserve: boolean; text: string }[]>();
+                                for (const row of group.rows) {
+                                  const isPercent = row.unit === "percent";
+                                  const pct = isPercent ? row.threshold : budgetLimit > 0 ? (row.threshold / budgetLimit) * 100 : null;
+                                  if (pct === null) continue;
+                                  const rounded = Math.min(100, Math.max(0, Math.round(pct)));
+                                  if (!map.has(rounded)) map.set(rounded, []);
+                                  const isForecast = row.basis === "forecast";
+                                  const isReserve = row.kind === "reserve";
+                                  const pinText = isForecast ? `${x.pinForecast} ${row.threshold}%` : isReserve ? `${x.pinReserve}` : `${x.pinActual} ${isPercent ? row.threshold + "%" : money(row.threshold, primaryEval.currency)}`;
+                                  const icon = isForecast ? "📈 " : isReserve ? "🛡️ " : "⚡ ";
+                                  map.get(rounded)!.push({ isForecast, isReserve, text: `${icon}${pinText}` });
+                                }
+                                return Array.from(map.entries()).map(([pct, items]) => {
+                                  const hasForecast = items.some(i => i.isForecast);
+                                  const alignStyle = pct >= 92 ? { left: `${pct}%`, transform: "translateX(-85%)" } : pct <= 8 ? { left: `${pct}%`, transform: "translateX(-15%)" } : { left: `${pct}%` };
+                                  return (
+                                    <div
+                                      key={pct}
+                                      className={`${styles.awsThresholdMarker} ${hasForecast ? styles.markerForecast : styles.markerActual}`}
+                                      style={alignStyle}
+                                      title={items.map(i => i.text).join(" · ")}
+                                    >
+                                      <span className={`${styles.awsThresholdPin} ${hasForecast ? styles.pinForecast : styles.pinActual}`} />
+                                      <span className={`${styles.awsThresholdPinLabel} ${hasForecast ? styles.labelForecast : styles.labelActual}`}>
+                                        {items.map(i => i.text).join(" ")}
+                                      </span>
+                                    </div>
+                                  );
+                                });
+                              })()}
+                            </div>
+
                             <div className={styles.awsMeterFooter}>
-                              <span>{x.thresholdLabel}: {group.rows.map(row => row.unit === "percent" ? `${row.threshold}%` : money(row.threshold, primaryEval.currency)).join(", ")}</span>
+                              <span className={styles.awsMeterFooterThresholds}>
+                                {x.thresholdLabel}:{" "}
+                                {group.rows.map(row => `${row.basis === "forecast" ? x.pinForecast : row.kind === "reserve" ? x.pinReserve : x.pinActual} ${row.unit === "percent" ? `${row.threshold}%` : money(row.threshold, primaryEval.currency)}`).join(", ")}
+                              </span>
                               {remainingAmt !== null && (
                                 <span>{x.remaining}: <b>{money(remainingAmt, primaryEval.currency)}</b></span>
                               )}
@@ -540,7 +681,19 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                         )}
 
                         <div className={styles.conditionTags}>
-                          {group.rows.map(row => <span key={row.id}>{conditionLabel(row)}</span>)}
+                          {group.rows.map(row => {
+                            const isForecast = row.basis === "forecast";
+                            const isReserve = row.kind === "reserve";
+                            return (
+                              <span
+                                key={row.id}
+                                className={`${styles.conditionTag} ${isReserve ? styles.tagReserve : isForecast ? styles.tagForecast : styles.tagActual}`}
+                              >
+                                {isReserve ? <Wallet size={12} /> : isForecast ? <TrendingUp size={12} /> : <Zap size={12} />}
+                                <span>{conditionLabel(row)}</span>
+                              </span>
+                            );
+                          })}
                         </div>
 
                         {group.rows.some(row => doc.evaluated[row.id]?.state === "unavailable") && (
@@ -563,8 +716,16 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                             {group.rows.map(row => {
                               const e = doc.evaluated[row.id];
                               return (
-                                <div key={row.id} className={styles.configValueCard}>
-                                  <small className={styles.configBasis}>{conditionLabel(row)}</small>
+                                <div key={row.id} className={`${styles.configValueCard} ${row.basis === "forecast" ? styles.configValueForecast : row.kind === "reserve" ? styles.configValueReserve : styles.configValueActual}`}>
+                                  <div className={styles.configValueTop}>
+                                    <small className={styles.configBasis}>
+                                      {row.kind === "reserve" ? <Wallet size={12}/> : row.basis === "forecast" ? <TrendingUp size={12}/> : <Zap size={12}/>}
+                                      <span>{conditionLabel(row)}</span>
+                                    </small>
+                                    <span className={`${styles.configBadgeMini} ${e?.state === "alarm" ? styles.alarm : e?.state === "ok" ? styles.ok : styles.neutral}`}>
+                                      {e?.state ? t[e.state] : "—"}
+                                    </span>
+                                  </div>
                                   <small className={styles.configLabel}>{row.kind === "reserve" ? x.balanceLabel : row.basis === "forecast" ? t.forecast : x.actualLabel}</small>
                                   <b className={styles.configAmount}>{e ? money(e.value, e.currency) : "—"}</b>
                                   {e && e.state !== "unavailable" && <p className={styles.configThreshold}>{x.thresholdLabel}: {money(e.limit, e.currency)}</p>}
