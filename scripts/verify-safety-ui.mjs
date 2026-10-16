@@ -106,7 +106,12 @@ try {
   await secondPage.getByRole("button", { name: "Add category", exact: true }).click();
   await secondPage.getByLabel("New category name", { exact: true }).fill("Synthetic Books");
   await secondPage.getByRole("button", { name: "Add and select", exact: true }).click();
-  await secondPage.waitForFunction(() => [...document.querySelectorAll('[role="status"]')].some(el => el.textContent === "Saved to your account"));
+  // The global success banner is intentionally omitted after saving. Assert
+  // durable storage directly instead of relying on that presentation detail.
+  for (let attempt=0;attempt<80;attempt++) {
+    if ((await pool.query("SELECT 1 FROM finbridge_categories WHERE user_id=$1 AND name='Synthetic Books' AND deleted_at IS NULL",[owner])).rowCount) break;
+    await pause(150);
+  }
   assert.equal((await pool.query("SELECT 1 FROM finbridge_categories WHERE user_id=$1 AND name='Synthetic Books'", [owner])).rowCount,1);
   assert.equal((await pool.query("SELECT 1 FROM finbridge_wallet_categories l JOIN finbridge_categories c ON c.user_id=l.user_id AND c.id=l.category_id WHERE l.user_id=$1 AND c.name='Synthetic Books' AND l.deleted_at IS NULL", [owner])).rowCount,1);
   await secondPage.reload();

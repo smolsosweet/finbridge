@@ -68,6 +68,7 @@ const component = compile("Planning.tsx", (name) => {
   if (name === "react") return testReact;
   if (name === "./planningModel") return model;
   if (name === "./FinancialOutlook") return outlookUI;
+  if (name === "@/lib/fixed-expense-payments") return paymentsModel;
   if (name === "@/lib/setup-copy") return setupCopy;
   if (name === "@/lib/scenario-planner") return scenarioModel;
   if (name === "@/lib/budget-categories") return budgetCategories;
@@ -78,7 +79,7 @@ const component = compile("Planning.tsx", (name) => {
   if (name === "./CalendarLedgerModal") return { CalendarLedgerModal: () => null };
   if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams() };
   if (name === "./Ui") return { Modal: ({ children }) => React.createElement("div", { role: "dialog" }, children) };
-  if (name === "./store") return { useAppState: () => state, workspaceOwner: () => "synthetic", workspacePersistence: () => "browser", getWorkspaceState: () => state, updateState: (update) => { state = update(state); } };
+  if (name === "./store") return { useAppState: () => state, workspaceOwner: () => "synthetic", workspacePersistence: () => "browser", flushWorkspace: async () => {}, getWorkspaceState: () => state, updateState: (update) => { state = update(state); } };
   return requireLocal(name);
 }).Planning;
 let props = { navigate: () => {} };
@@ -91,6 +92,7 @@ function set(label, value) {
   const handler = field.props.onInput || field.props.onChange;
   handler({ target: { value }, currentTarget: { value } });
 }
+async function main() {
 const snapshot = JSON.stringify(transactions);
 let html = render();
 assert.match(html, /fb-brand-mark/);
@@ -102,12 +104,12 @@ state.settings.language = "English";
 const today = weeks.localDateKey(new Date());
 state = { ...state, goals: [], fixedExpenses: [] }; slots = []; props = { navigate: () => {}, initialForm: "budget" };
 render(); set("Name", "Monthly essentials"); set("Amount", "8000000");
-find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit({ preventDefault() {} });
+await find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit({ preventDefault() {} });
 assert.equal(state.goals.length, 1); assert.equal(state.goals[0].currency, "VND");
 const createdBudget = state.goals[0];
 slots = []; props = { navigate: () => {}, initialTab: "fixed", initialForm: "fixed" };
-render(); set("Name", "Phone plan"); set("Amount", "250000"); set("Category", "Food");
-find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit({ preventDefault() {} });
+render(); set("Linked budget (optional)", createdBudget.id); set("Name", "Phone plan"); set("Amount", "250000"); set("Category", "Food");
+await find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit({ preventDefault() {} });
 assert.equal(state.fixedExpenses.length, 1);
 assert.equal(state.fixedExpenses[0].budgetId, state.goals[0].id);
 assert.equal(state.fixedExpenses[0].dueDate, today);
@@ -115,10 +117,10 @@ assert.equal(JSON.stringify(state.transactions), snapshot);
 assert.equal(JSON.stringify(state.wallets), JSON.stringify(wallets));
 // A parent removed while the form is open causes rejection with zero writes.
 slots = []; props = { navigate: () => {}, initialTab: "fixed", initialForm: "fixed" };
-render(); set("Name", "Another bill"); set("Amount", "100000"); set("Category", "Food");
-const staleSubmit = find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit;
+render(); set("Linked budget (optional)", createdBudget.id); set("Name", "Another bill"); set("Amount", "100000"); set("Category", "Food");
+const staleSubmit = await find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit;
 state = { ...state, goals: [] };
-staleSubmit({ preventDefault() {} });
+await staleSubmit({ preventDefault() {} });
 assert.equal(state.fixedExpenses.length, 1);
 assert.equal(JSON.stringify(state.transactions), snapshot);
 // Edit and pause modify only a plan, with no duplicate plan or financial entry.
@@ -126,7 +128,7 @@ state = { ...state, goals: [createdBudget] }; slots = []; props = { navigate: ()
 render();
 find(tree(), (node) => node.type === "button" && node.props.children === "Edit").props.onClick();
 set("Name", "Phone plan updated"); set("Amount", "300000");
-find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit({ preventDefault() {} });
+await find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit({ preventDefault() {} });
 assert.equal(state.fixedExpenses.length, 1);
 assert.equal(state.fixedExpenses[0].amount, 300000);
 find(tree(), (node) => node.type === "button" && node.props.children === "Pause").props.onClick();
@@ -138,8 +140,11 @@ state = { ...state, goals: [createdBudget, { ...createdBudget, id: "cny-budget",
 find(tree(), (node) => node.type === "button" && node.props.children === "Edit").props.onClick();
 set("Linked budget (optional)", "cny-budget");
 assert.equal(find(tree(), (node) => node.type === "input" && node.props["aria-label"] === "Amount").props.value, "", "changing currency never reuses an unconverted amount");
-find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit({ preventDefault() {} });
+await find(tree(), (node) => node.type === "form" && node.props.className?.includes("fb-planning-form")).props.onSubmit({ preventDefault() {} });
 assert.equal(state.fixedExpenses[0].budgetId, createdBudget.id);
 assert.equal(JSON.stringify(state.transactions), snapshot);
 assert.equal(JSON.stringify(state.wallets), JSON.stringify(wallets));
 console.log("PASS: actual spending, no double counting, wallet/currency isolation, recurring dates, invalid/stale parents, VI/EN/ZH UI, create/edit/pause/resume and zero financial writes.");
+
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });

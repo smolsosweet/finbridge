@@ -15,7 +15,7 @@ const COPY = {
 type Language = keyof typeof COPY;
 type AiNote = { explanation: string; suggestion: string };
 
-export function FinancialOutlook({ editable = false, compact = false, navigate }: { editable?: boolean; compact?: boolean; navigate?: (path: string) => void }) {
+export function FinancialOutlook({ editable = false, compact = false, notifications = false, unreadOnly = false, asOfDate, navigate }: { editable?: boolean; compact?: boolean; notifications?: boolean; unreadOnly?: boolean; asOfDate?: string; navigate?: (path: string) => void }) {
   const state = useAppState();
   const lang: Language = /中文|zh/i.test(String(state.settings.language)) ? "zh" : /Tiếng Việt|vi/i.test(String(state.settings.language)) ? "vi" : "en";
   const t = COPY[lang];
@@ -29,13 +29,14 @@ export function FinancialOutlook({ editable = false, compact = false, navigate }
     return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); };
   }, []);
   const dismissedRaw = String(state.settings.dismissedFinancialAlerts || "[]");
-  const alerts = useMemo(() => detectProactiveAlerts(state, asOf, readDismissedAlertIds(dismissedRaw)), [state, asOf, dismissedRaw]);
+  const alerts = useMemo(() => detectProactiveAlerts(state, asOfDate || asOf, readDismissedAlertIds(dismissedRaw), notifications), [state, asOf, asOfDate, dismissedRaw, notifications]);
+  const handledIds = new Set(readDismissedAlertIds(dismissedRaw));
   const readSet = useMemo(() => new Set(notificationReadIds(state.settings.readFinancialAlertIds)), [state.settings.readFinancialAlertIds]);
   useEffect(() => {
     if (compact) return;
-    const pending = alerts.filter((alert) => !attemptedIds.current.has(alert.id));
+    const pending = alerts.filter((alert) => !attemptedIds.current.has(`${lang}:${alert.id}`));
     if (!pending.length) return;
-    pending.forEach((alert) => attemptedIds.current.add(alert.id));
+    pending.forEach((alert) => attemptedIds.current.add(`${lang}:${alert.id}`));
     const language = lang;
     const payload = pending.map(({ id, kind, problem, figures, when, cause, priority, suggestedAction, assumptions }) => ({ id, kind, problem, figures, when, cause, priority, suggestedAction, assumptions }));
     void fetch("/api/ai/proactive-feed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ language, alerts: payload }) })
@@ -49,7 +50,7 @@ export function FinancialOutlook({ editable = false, compact = false, navigate }
           const note = item as { id?: unknown; explanation?: unknown; suggestion?: unknown };
           if (typeof note.id !== "string" || !allowed.has(note.id) || typeof note.explanation !== "string" || typeof note.suggestion !== "string"
             || /[\d$€£¥₫]/.test(`${note.explanation} ${note.suggestion}`)) continue;
-          parsed[note.id] = { explanation: note.explanation, suggestion: note.suggestion };
+          parsed[`${language}:${note.id}`] = { explanation: note.explanation, suggestion: note.suggestion };
         }
         if (Object.keys(parsed).length) setAiNotes((previous) => ({ ...previous, ...parsed }));
       }).catch(() => undefined);
@@ -57,8 +58,11 @@ export function FinancialOutlook({ editable = false, compact = false, navigate }
 
   const reserves = reserveAmounts(state);
   const dismiss = (alert: FinancialAlert) => {
-    const next = [...new Set([...readDismissedAlertIds(dismissedRaw), alert.id])].slice(-300);
-    updateState((current) => ({ ...current, settings: { ...current.settings, dismissedFinancialAlerts: JSON.stringify(next) } }));
+    updateState(current => ({ ...current, settings: {
+      ...current.settings,
+      dismissedFinancialAlerts: JSON.stringify([...new Set([...readDismissedAlertIds(current.settings.dismissedFinancialAlerts), alert.id])].slice(-300)),
+      readFinancialAlertIds: JSON.stringify([...new Set([...notificationReadIds(current.settings.readFinancialAlertIds), alert.id])].slice(-1000)),
+    } }));
   };
   const markRead = (id: string) => updateState((current) => {
     const ids = notificationReadIds(current.settings.readFinancialAlertIds);
@@ -66,14 +70,15 @@ export function FinancialOutlook({ editable = false, compact = false, navigate }
   });
   const priorityLabel = (priority: FinancialAlert["priority"]) => priority === "high" ? t.high : priority === "medium" ? t.medium : t.low;
   const dashboardAlerts = alerts.filter((alert) => alert.priority === "high" || alert.priority === "medium").slice(0, 3);
-  const visibleAlerts = compact ? dashboardAlerts : alerts;
+  const visibleAlerts = (compact ? dashboardAlerts : alerts).filter(alert => !unreadOnly || !readSet.has(alert.id));
   if (!editable && !visibleAlerts.length) return null;
-  return <section className={styles.panel} aria-label={t.title}>
-    <header><h2><ShieldCheck size={20} />{t.title}</h2>{editable && <button type="button" onClick={() => { setEditing((value) => !value); setDraft(Object.fromEntries(state.wallets.filter((wallet) => !wallet.archived).map((wallet) => [wallet.id, String(reserves[wallet.id] || 0)]))); setError(""); }}>{t.reserve}</button>}</header>
-    {!visibleAlerts.length && <p>{t.empty}</p>}
+  return <section className={`${styles.panel}${notifications ? ` ${styles.notifications}` : ""}`} aria-label={t.title}>
+    <header>{!notifications && <h2><ShieldCheck size={20} />{t.title}</h2>}{editable && <button type="button" onClick={() => { setEditing((value) => !value); setDraft(Object.fromEntries(state.wallets.filter((wallet) => !wallet.archived).map((wallet) => [wallet.id, String(reserves[wallet.id] || 0)]))); setError(""); }}>{t.reserve}</button>}</header>
+    {editing && <form onSubmit={(event) => { event.preventDefault(); const values = Object.fromEntries(Object.entries(draft).map(([id, amount]) => [id, Number(amount)])); if (Object.values(values).some((amount) => !Number.isFinite(amount) || amount < 0 || amount > 1e12)) { setError(t.invalid); return; } updateState((current) => ({ ...current, settings: { ...current.settings, reserveByWallet: JSON.stringify(values) } })); setEditing(false); }} className={styles.form}>{state.wallets.filter((wallet) => !wallet.archived).map((wallet) => <label key={wallet.id}>{wallet.name} · {wallet.currency}<input type="number" min={0} max={1e12} step="0.01" required value={draft[wallet.id] ?? "0"} onChange={(event) => setDraft((value) => ({ ...value, [wallet.id]: event.target.value }))} /></label>)}{error && <p role="alert">{error}</p>}<button type="submit">{t.save}</button></form>}
+    {!visibleAlerts.length && !notifications && <p>{t.empty}</p>}
     {visibleAlerts.map((alert) => {
       const Icon = alert.kind === "fixed-due" ? Bell : alert.kind === "budget-risk" ? TrendingUp : AlertTriangle;
-      const ai = aiNotes[alert.id];
+      const ai = aiNotes[`${lang}:${alert.id}`];
       const isRead = readSet.has(alert.id);
       const origin = alert.projected ? t.forecast : alert.kind === "fixed-due" ? t.schedule : t.actual;
       if (compact) return <article key={alert.id} className={`${styles.alert} ${styles[alert.priority]}`}>
@@ -81,16 +86,24 @@ export function FinancialOutlook({ editable = false, compact = false, navigate }
         <p>{alert.figures}</p><small>{origin} · {alert.when}</small>
         <div className={styles.actions}>{!isRead && <button type="button" className={styles.dismiss} onClick={() => markRead(alert.id)}>{t.markRead}</button>}{navigate && <button type="button" className={styles.dismiss} onClick={() => { markRead(alert.id); navigate(notificationDestination(alert)); }}>{t.details}</button>}</div>
       </article>;
-      return <article key={alert.id} className={`${styles.alert} ${styles[alert.priority]}`}>
-        <header><h3><Icon size={16} />{alert.problem}</h3><span className={styles.priority}>{t.priority}: {priorityLabel(alert.priority)}</span><span className={styles.readStatus}>{isRead ? t.read : t.unread}</span></header>
+      const detail = <>
         <div><b>{t.figures}</b><p>{alert.figures}</p><p>{origin} · {alert.when}</p></div>
         <div><b>{t.cause}</b><p>{ai?.explanation || alert.cause}</p></div>
         <div><b>{t.action}</b><p>{ai?.suggestion || alert.suggestedAction}</p></div>
         <small>{t.assumptions}: {alert.assumptions}</small>
-        <div className={styles.actions}>{!isRead && <button type="button" className={styles.dismiss} onClick={() => markRead(alert.id)}>{t.markRead}</button>}{navigate && <button type="button" className={styles.dismiss} onClick={() => { markRead(alert.id); navigate(notificationDestination(alert)); }}>{t.details}</button>}<button type="button" className={styles.dismiss} onClick={() => dismiss(alert)}><Check size={15} />{t.handled}</button></div>
+        <div className={styles.actions}>{!isRead && <button type="button" className={styles.dismiss} onClick={() => markRead(alert.id)}>{t.markRead}</button>}{navigate && <button type="button" className={styles.dismiss} onClick={() => { markRead(alert.id); navigate(notificationDestination(alert)); }}>{t.details}</button>}<button type="button" disabled={handledIds.has(alert.id)} className={styles.dismiss} onClick={() => dismiss(alert)}><Check size={15} />{t.handled}</button></div>
+      </>;
+      const heading = <><h3><Icon size={16} />{alert.problem}</h3><span className={styles.priority}>{t.priority}: {priorityLabel(alert.priority)}</span><span className={styles.readStatus}>{isRead ? t.read : t.unread}{handledIds.has(alert.id) ? ` · ${t.handled}` : ""}</span></>;
+      if (notifications) return <article key={alert.id} className={`${styles.alert} ${styles[alert.priority]}${!isRead ? ` ${styles.unread}` : ""}`}>
+        <details onToggle={event => { if (event.currentTarget.open && !isRead && !unreadOnly) markRead(alert.id); }}>
+          <summary><div className={styles.summaryHeading}>{heading}</div><p>{alert.figures}</p><small>{origin} · {alert.when}</small></summary>
+          <div className={styles.detail}>{detail}</div>
+        </details>
+      </article>;
+      return <article key={alert.id} className={`${styles.alert} ${styles[alert.priority]}`}>
+        <header>{heading}</header>{detail}
       </article>;
     })}
-    {editing && <form onSubmit={(event) => { event.preventDefault(); const values = Object.fromEntries(Object.entries(draft).map(([id, amount]) => [id, Number(amount)])); if (Object.values(values).some((amount) => !Number.isFinite(amount) || amount < 0 || amount > 1e12)) { setError(t.invalid); return; } updateState((current) => ({ ...current, settings: { ...current.settings, reserveByWallet: JSON.stringify(values) } })); setEditing(false); }} className={styles.form}>{state.wallets.filter((wallet) => !wallet.archived).map((wallet) => <label key={wallet.id}>{wallet.name} · {wallet.currency}<input type="number" min={0} max={1e12} step="0.01" required value={draft[wallet.id] ?? "0"} onChange={(event) => setDraft((value) => ({ ...value, [wallet.id]: event.target.value }))} /></label>)}{error && <p role="alert">{error}</p>}<button type="submit">{t.save}</button></form>}
-    <small>{t.note}</small>
+    {(!notifications || visibleAlerts.length > 0) && <small>{t.note}</small>}
   </section>;
 }

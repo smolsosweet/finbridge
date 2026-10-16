@@ -5,6 +5,7 @@ import { emptyWorkspaceRecord, parseWorkspace, type WorkspaceRecord } from "./wo
 import { refreshSafetyFromWorkspace } from "./safety-repository";
 import { readFinanceTables, writeFinanceTables } from "./finance-tables";
 import { validateFixedPaymentChanges } from "./fixed-expense-payments";
+import { validatePlanningChanges } from "./planning-validation";
 export const WORKSPACE_SQL = `
 CREATE TABLE IF NOT EXISTS finbridge_workspaces (
  user_id TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE RESTRICT,
@@ -64,7 +65,9 @@ export function workspaceRepository(pool: Pool): WorkspaceRepository {
           await client.query("COMMIT"); return { revision: replay.rows[0].revision, data, updatedAt: previous.updated_at.toISOString() };
         }
         if (previous.revision !== input.revision) throw new WorkspaceError("WORKSPACE_CONFLICT");
-        try { validateFixedPaymentChanges(previous.data, data); } catch { throw new WorkspaceError("INVALID_BILL_PAYMENT", 400); }
+        const previousData = previous.data ? parseWorkspace(await readFinanceTables(client, owner, previous.data)) : null;
+        try { validatePlanningChanges(previousData, data); } catch { throw new WorkspaceError("INVALID_PLANNING_CHANGE", 400); }
+        try { validateFixedPaymentChanges(previousData, data); } catch { throw new WorkspaceError("INVALID_BILL_PAYMENT", 400); }
         const allowed = await client.query(`INSERT INTO finbridge_workspace_limits(user_id) VALUES($1)
           ON CONFLICT(user_id) DO UPDATE SET requests=CASE WHEN finbridge_workspace_limits.window_at < CURRENT_TIMESTAMP - INTERVAL '1 minute' THEN 1 ELSE finbridge_workspace_limits.requests+1 END,
           window_at=CASE WHEN finbridge_workspace_limits.window_at < CURRENT_TIMESTAMP - INTERVAL '1 minute' THEN CURRENT_TIMESTAMP ELSE finbridge_workspace_limits.window_at END

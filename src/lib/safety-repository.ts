@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 import { advanceSafety, emptySafetyDocument, type SafetyDocument, type SafetyEvent } from "./safety-model";
-import { safetySnapshot } from "./safety-model";
+import { evaluateSafety, safetySnapshot } from "./safety-model";
 import { readFinanceTables, writeAlertRules } from "./finance-tables";
 import type { AppState } from "../components/sites/rolly/replica/store";
 
@@ -56,7 +56,7 @@ export class SafetyError extends Error {
 }
 export type SafetyRepository = {
   read(userId: string): Promise<SafetyDocument>;
-  mutate(userId: string, revision: number, action: string, change: (doc: SafetyDocument) => SafetyDocument): Promise<SafetyDocument>;
+  mutate(userId: string, revision: number, action: string, change: (doc: SafetyDocument) => SafetyDocument, readIds?: readonly string[]): Promise<SafetyDocument>;
 };
 async function activeUser(client: PoolClient, userId: string) {
   const user = await client.query('SELECT id FROM "user" WHERE id=$1 FOR SHARE', [userId]);
@@ -80,11 +80,14 @@ export function safetyRepository(pool: Pool): SafetyRepository {
         const row = await client.query<{ document: SafetyDocument }>("SELECT document FROM finbridge_safety WHERE user_id=$1", [userId]);
         const doc = row.rows[0]?.document || emptySafetyDocument();
         if (workspace) databaseSafety(doc, workspace.data, workspace.updatedAt);
+        // Refresh today's values without creating events or changing revisions.
+        // Event delivery remains the worker's responsibility.
+        if (doc.snapshot) doc.evaluated = Object.fromEntries(doc.rules.map(rule => [rule.id, evaluateSafety(rule, doc.snapshot!)]));
         doc.events = await events(client, userId);
         await client.query("COMMIT"); return doc;
       } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
     },
-    async mutate(userId, revision, action, change) {
+    async mutate(userId, revision, action, change, readIds) {
       const client = await pool.connect();
       try {
         await client.query("BEGIN"); await activeUser(client, userId);
@@ -103,7 +106,7 @@ export function safetyRepository(pool: Pool): SafetyRepository {
         if (doc.revision !== revision) throw new SafetyError("CONFLICT");
         const updated = change(doc);
         const next = advanceSafety({ ...updated, revision: doc.revision + 1 });
-        if (action === "read") await client.query("UPDATE finbridge_safety_events SET event=jsonb_set(event,'{read}','true') WHERE user_id=$1 AND event->>'read'='false'", [userId]);
+        if (action === "read") await client.query("UPDATE finbridge_safety_events SET event=jsonb_set(event,'{read}','true') WHERE user_id=$1 AND event->>'read'='false' AND ($2::text[] IS NULL OR id=ANY($2::text[]))", [userId, readIds ?? null]);
         // A paused/removed rule must not leave a queued email behind.
         await client.query("UPDATE finbridge_safety_events SET event=jsonb_set(event,'{emailStatus}','\"cancelled\"') WHERE user_id=$1 AND event->>'emailStatus'='pending' AND NOT(event->>'ruleId'=ANY($2::text[]))", [userId, next.rules.filter(r => r.active && r.email).map(r => r.id)]);
         await saveSafety(client, userId, next);

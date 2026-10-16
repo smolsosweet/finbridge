@@ -1,10 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Link from "next/link";
-import { Bell, CalendarDays, Moon, ShieldAlert, Sun } from "lucide-react";
-import { useSafety } from "@/components/safety/SafetyProvider";
-import { SAFETY_COPY } from "@/components/safety/safety-copy";
+import { CalendarDays, Moon, Sun } from "lucide-react";
 import { NotificationCenter } from "./NotificationCenter";
 
 export interface FinBridgeHeaderProps {
@@ -28,8 +25,6 @@ export function FinBridgeHeader({
   onSelectLanguage,
   children,
 }: FinBridgeHeaderProps) {
-  const safety = useSafety();
-  const unread = safety?.doc.events.filter(e => !e.read).length || 0;
   const isDark = theme === "dark";
   const calLabel = lang === "vi" ? "Lịch thu chi" : lang === "zh" ? "收支日历" : "Calendar";
   const themeLabel = lang === "vi" ? "Chọn chủ đề" : lang === "zh" ? "选择主题" : "Choose theme";
@@ -66,7 +61,6 @@ export function FinBridgeHeader({
       </div>
 
       <div className="fb-header-actions">
-        {safety && <Link className="fb-alert-bell" href="/app/safetyAlerts?view=history" aria-label={`${SAFETY_COPY[lang].history}${unread ? ` (${unread})` : ""}`} title={SAFETY_COPY[lang].history}><ShieldAlert size={20} />{unread > 0 && <span>{unread}</span>}</Link>}
         {onOpenCalendar && (
           <button
             type="button"

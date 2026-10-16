@@ -36,6 +36,8 @@
     "auth:migrate": "node --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/migrate-auth.mjs",
     "test:auth": "node --test scripts/verify-auth-unit.cjs",
     "test:workspace": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-workspace.mjs",
+    "test:planning": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-planning-workflows.mjs",
+    "test:planning:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-planning-workflows-postgres.mjs",
     "test:bill-payments": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-bill-payments.mjs",
     "test:bill-payments:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-bill-payments-postgres.mjs",
     "test:workspace:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-workspace-postgres.mjs",
@@ -47,6 +49,7 @@
     "test:scenario-planner": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-scenario-planner.mjs",
     "test:proactive-alerts": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-proactive-alerts.mjs",
     "test:notification-center": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-notification-center.mjs",
+    "test:notification-center:ui": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/verify-planning-notifications-ui.mjs",
     "test:localization": "node --test scripts/verify-localization.cjs",
     "test:localization:e2e": "node scripts/verify-localization-e2e.mjs"
   },

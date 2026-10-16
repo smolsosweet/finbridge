@@ -13,7 +13,7 @@ await workspaces.save(owner,{revision:0,mutationId:randomUUID(),data:workspaceFi
 const saved=()=>repo.read(owner);
 async function request(body,{id=owner,trusted=true,emailAvailable=true}={}) {
  const revision=(await repo.read(id)).revision;
- return handleSafety(new Request(origin+"/api/safety",{method:"POST",headers:{"content-type":"application/json",origin:trusted?origin:"https://foreign.invalid"},body:JSON.stringify({revision,...body})}),id,origin,repo,emailAvailable);
+ return handleSafety(new Request(origin+"/api/safety",{method:"POST",headers:{"content-type":"application/json","x-finbridge-workspace-owner":id,origin:trusted?origin:"https://foreign.invalid"},body:JSON.stringify({revision,...body})}),id,origin,repo,emailAvailable);
 }
 after(async()=>{await cleanupFinance(pool,[owner,other]);await pool.end();});
 test("schema migration preserves rows and reads authoritative database financial records",async()=>{await pool.query(SAFETY_SQL);const doc=await saved();assert.equal(doc.revision,0);assert.equal(doc.sourceId,"database");assert.equal(doc.snapshot.transactions[0].amount,850);});
@@ -37,7 +37,21 @@ test("forged identity, invalid target, duplicate conditions, mixed groups and un
  assert.equal((await request({action:"save",rule:{...ruleFixture(),email:true}},{emailAvailable:false})).status,400);assert.equal((await saved()).revision,before);
 });
 test("concurrent rule edits conflict instead of overwriting",async()=>{const revision=(await saved()).revision;const responses=await Promise.all([request({action:"saveGroup",revision,groupId,rules:groupRules.map(r=>({...r,name:"A"}))}),request({action:"saveGroup",revision,groupId,rules:groupRules.map(r=>({...r,name:"B"}))})]);assert.deepEqual(responses.map(r=>r.status).sort(),[200,409]);});
-test("GET has no writes and marking read retains financial data",async()=>{const before=await saved();assert.equal((await handleSafety(new Request(origin+"/api/safety"),owner,origin,repo,true)).status,200);assert.equal((await saved()).revision,before.revision);assert.equal((await request({action:"read"})).status,200);assert.ok((await saved()).events.every(e=>e.read));});
+test("selected read touches only the requested event belonging to this account",async()=>{
+ const original=(await saved()).events[0], first=randomUUID(), second=randomUUID(), foreign=randomUUID();
+ for(const [id,userId] of [[first,owner],[second,owner],[foreign,other]]){const event={...original,id,ruleId:"synthetic-selected",read:false,emailStatus:"off"};await pool.query("INSERT INTO finbridge_safety_events(id,user_id,event,created_at) VALUES($1,$2,$3,$4)",[id,userId,JSON.stringify(event),event.createdAt]);}
+ const rules=JSON.stringify((await saved()).rules), before=(await saved()).revision;
+ assert.equal((await request({action:"read",ids:[]})).status,400);
+ assert.equal((await request({action:"read",ids:Array(101).fill(first)})).status,400);
+ assert.equal((await saved()).revision,before);
+ assert.equal((await request({action:"read",ids:[first,foreign]})).status,200);
+ const rows=(await pool.query("SELECT id,event FROM finbridge_safety_events WHERE id=ANY($1::text[])",[[first,second,foreign]])).rows;
+ assert.equal(rows.find(row=>row.id===first).event.read,true);
+ assert.equal(rows.find(row=>row.id===second).event.read,false);
+ assert.equal(rows.find(row=>row.id===foreign).event.read,false);
+ assert.equal(JSON.stringify((await saved()).rules),rules);
+});
+test("GET has no writes and marking read retains financial data",async()=>{const before=await saved();assert.equal((await handleSafety(new Request(origin+"/api/safety",{headers:{"x-finbridge-workspace-owner":owner}}),owner,origin,repo,true)).status,200);assert.equal((await saved()).revision,before.revision);assert.equal((await request({action:"read"})).status,200);assert.ok((await saved()).events.every(e=>e.read));});
 test("worker sends each generic reminder once and accepts database data even after 24 hours",async()=>{
  await pool.query("UPDATE finbridge_safety SET document=jsonb_set(document,'{syncedAt}',to_jsonb($2::text)) WHERE user_id=$1",[owner,new Date(Date.now()-26*3600000).toISOString()]);
  let calls=0;await runSafetyWorker(pool,async(to,language)=>{calls++;assert.equal(to,owner+"@example.invalid");assert.equal(language,"en");return "accepted";});assert.ok(calls>=1);const accepted=calls;

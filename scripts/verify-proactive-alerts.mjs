@@ -35,7 +35,7 @@ test("reports upcoming fixed costs by date and suppresses a paid occurrence", ()
   const due = detectProactiveAlerts(state, "2026-10-15").filter((alert) => alert.kind === "fixed-due");
   assert.equal(due.length, 1);
   assert.equal(due[0].when, "2026-10-17");
-  state.transactions.push(expense("paid-rent", 300, "2026-10-17"));
+  state.transactions.push({ ...expense("paid-rent", 295, "2026-10-14"), fixedExpenseId: "rent", fixedExpenseDueDate: "2026-10-17", paymentConfirmation: "user" });
   assert.equal(detectProactiveAlerts(state, "2026-10-15").some((alert) => alert.kind === "fixed-due"), false);
 });
 

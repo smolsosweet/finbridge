@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { buildNotificationFeed, notificationDestination } from "../src/lib/notification-center.ts";
+import { buildNotificationFeed, combineNotificationFeeds, notificationDestination } from "../src/lib/notification-center.ts";
 import { detectProactiveAlerts } from "../src/lib/proactive-alerts.ts";
 
 const state = () => ({
@@ -48,6 +48,25 @@ test("notification links target the matching budget or fixed expense in Planning
 
 test("empty notification source returns a zero unread count", () => {
   assert.deepEqual(buildNotificationFeed([], "[]", "[]"), { items: [], unreadCount: 0 });
+});
+
+test("one badge combines both sources without losing items whose IDs happen to match", () => {
+  const financial = buildNotificationFeed(detectProactiveAlerts(state(), "2026-10-15", [], true), "[]", "[]");
+  const first = { id: financial.items[0].id, read: false, createdAt: "2026-10-15T12:00:00Z" };
+  const seen = { id: "seen", read: true, createdAt: "2026-10-16T12:00:00Z" };
+  const second = { id: "second", read: false, createdAt: "2026-10-16T10:00:00Z" };
+  const feed = combineNotificationFeeds(financial, [first, seen, second, first]);
+  assert.equal(feed.unreadCount, financial.unreadCount + 2);
+  assert.deepEqual(feed.safety.map(event => event.id), ["second", first.id, "seen"]);
+  assert.equal(feed.financial.items.length, financial.items.length);
+});
+
+test("read threshold history never counts as new or changes a financial reminder's handled state", () => {
+  const alerts = detectProactiveAlerts(state(), "2026-10-15", [], true);
+  const financial = buildNotificationFeed(alerts, JSON.stringify(alerts.map(alert => alert.id)), "[]");
+  const combined = combineNotificationFeeds(financial, [{ id: "old", read: true, createdAt: "2026-10-15T12:00:00Z" }]);
+  assert.equal(combined.unreadCount, 0);
+  assert.ok(combined.financial.items.every(item => item.read && !item.handled));
 });
 
 test("small-screen notification panel has a viewport-bounded responsive layout", async () => {

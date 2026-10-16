@@ -72,7 +72,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
   const errorText = err === "NO_CONDITION" ? x.chooseOne : err === "WORKSPACE_CONFLICT" ? t.errors.CONFLICT : t.errors[err as keyof typeof t.errors] || t.errors.UNAVAILABLE;
   const shown = groups.filter(g => g.rows[0].name.toLocaleLowerCase().includes(query.toLocaleLowerCase()) && (filter === "all" || status(g.rows) === filter));
   return <main className={`r-dashboard fb-home ${styles.page}`} lang={lang}>
-    <FinBridgeHeader lang={lang} theme={String(state.settings.theme)} currentLanguage={String(state.settings.language)} onSelectLanguage={value => setSetting("language", value)} onToggleTheme={() => setSetting("theme", state.settings.theme === "dark" ? "light" : "dark")} />
+    <FinBridgeHeader lang={lang} navigate={navigate} theme={String(state.settings.theme)} currentLanguage={String(state.settings.language)} onSelectLanguage={value => setSetting("language", value)} onToggleTheme={() => setSetting("theme", state.settings.theme === "dark" ? "light" : "dark")} />
     <nav className={styles.breadcrumb} aria-label={t.planning}><button onClick={() => navigate("?tab=tools")}>{t.planning}</button><ChevronRight size={14}/><span>{t.title}</span></nav>
     <div className={styles.titleRow}><div><h1>{t.title}</h1><p>{t.subtitle}</p></div>{!draft && <button className={styles.primary} onClick={create} disabled={loading || busy}><Plus size={17}/>{t.create}</button>}</div>
     <div className={styles.databaseNote}><Database size={16}/><b>{x.database}</b><span>{x.sourceTime}: {time(doc.syncedAt)}</span></div>

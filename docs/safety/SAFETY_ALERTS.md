@@ -1,7 +1,10 @@
 # Safety thresholds and alerts
 
 Planning → Safety thresholds & alerts is the primary entry. Settings links to
-notification preferences, and the shared header bell opens history. The editor
+notification preferences. One shared header bell combines threshold event history
+and current financial reminders, with All/Unread filters and a combined unread badge.
+Reading an event affects only its read state; it does not resolve a condition, pause
+a rule or record a payment. The center links to alert settings and full history. The editor
 follows scope → threshold → notifications → review, in EN/VI/ZH.
 
 ## Conditions and calculations
@@ -12,8 +15,8 @@ follows scope → threshold → notifications → review, in EN/VI/ZH.
 - There is no FX conversion, real bank connection or automatic payment/blocking.
 - Forecasts extrapolate total recorded spending pace. At least three elapsed days
   and a recorded expense are required while the period has remaining days.
-  Scheduled bills are not added separately: reliable paid-occurrence matching is
-  not in the current ledger. Scenario Planner's bill scenarios remain distinct;
+  Scheduled bills are not added separately to the recorded spending pace.
+  Bill payment tracking uses explicit user-confirmed occurrence links. Scenario Planner's bill scenarios remain distinct;
   their results must not be presented as the same model as pace alerts.
 - Future transactions, income and transfers do not count as actual expenses.
   Future income does not count toward current reserve balances. Unknown incoming
@@ -77,7 +80,7 @@ closure. A PostgreSQL advisory lock serializes worker invocations.
 Each invocation evaluates at most 50 accounts and sends at most 10 queued emails;
 scheduling capacity must match usage. No real email or scheduler is enabled by
 local feature development. Push/SMS, digests, arbitrary recipients, real-time
-collaborative editing, bill-payment matching and delivery webhooks are outside this version.
+collaborative editing, automatic bank reconciliation and delivery webhooks are outside this version.
 
 ## Verification
 

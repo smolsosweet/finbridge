@@ -6,13 +6,16 @@ export const safetyCommand = z.discriminatedUnion("action", [
   z.object({ action: z.literal("save"), revision: z.number().int().nonnegative(), rule: safetyRuleSchema }).strict(),
   z.object({ action: z.literal("saveGroup"), revision: z.number().int().nonnegative(), groupId: z.string().uuid(), replaceIds: z.array(z.string().min(1).max(100)).max(10).optional(), rules: z.array(safetyRuleSchema).min(1).max(10) }).strict(),
   z.object({ action: z.literal("archive"), revision: z.number().int().nonnegative(), id: z.string().min(1).max(100) }).strict(),
-  z.object({ action: z.literal("read"), revision: z.number().int().nonnegative() }).strict(),
+  z.object({ action: z.literal("read"), revision: z.number().int().nonnegative(), ids: z.array(z.string().min(1).max(200)).min(1).max(100).optional() }).strict(),
 ]);
 export type SafetyCommand = z.infer<typeof safetyCommand>;
 export async function handleSafety(request: Request, userId: string | null, origin: string, repo: SafetyRepository, emailAvailable: boolean) {
   const respond = (value: unknown, status = 200) => Response.json(value, { status, headers: { "Cache-Control": "no-store" } });
   if (!userId) return respond({ error: "UNAUTHENTICATED" }, 401);
   if (request.method !== "GET" && request.headers.get("origin") !== origin) return respond({ error: "INVALID_ORIGIN" }, 403);
+  // Session identity is authoritative; this header only detects an old tab
+  // whose cookie now belongs to a different signed-in account.
+  if (request.headers.get("x-finbridge-workspace-owner") !== userId) return respond({ error: "WORKSPACE_OWNER_CHANGED" }, 409);
   try {
     if (request.method === "GET") return respond(publicSafety(await repo.read(userId), emailAvailable));
     if (request.method !== "POST") return respond({ error: "METHOD_NOT_ALLOWED" }, 405);
@@ -49,7 +52,7 @@ export async function handleSafety(request: Request, userId: string | null, orig
         doc.rules = doc.rules.map(r => r.id === command.id ? { ...r, active: false, email: false } : r);
       }
       return doc;
-    });
+    }, command.action === "read" ? command.ids : undefined);
     return respond(publicSafety(doc, emailAvailable));
   } catch (error) {
     return error instanceof SafetyError ? respond({ error: error.code }, error.status) : respond({ error: "UNAVAILABLE" }, 503);

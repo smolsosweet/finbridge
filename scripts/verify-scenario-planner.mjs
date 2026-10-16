@@ -55,7 +55,7 @@ test("weekly actuals reconcile to the month-to-date budget and exclude later-dat
     ["w1-a", 50_000, "2026-10-02"], ["w1-b", 60_000, "2026-10-05"],
     ["w2", 70_000, "2026-10-09"], ["fixed", 92_000, "2026-10-12"], ["w3", 20_000, "2026-10-15"],
     ["future", 500_000, "2026-10-21"],
-  ].map(([id, amount, date]) => ({ id, title: id, amount, type: "expense", category: id === "fixed" ? "Rent" : "Food", date, wallet: "vnd", note: "" }));
+  ].map(([id, amount, date]) => ({ id, title: id, amount, type: "expense", category: id === "fixed" ? "Rent" : "Food", date, wallet: "vnd", note: "", ...(id === "fixed" ? { fixedExpenseId: "rent", fixedExpenseDueDate: "2026-10-12", paymentConfirmation: "user" } : {}) }));
   app.fixedExpenses = [{ id: "rent", budgetId: budget.id, title: "Rent", amount: 92_000, category: "Rent", dueDate: "2026-10-12", recurrence: "once", active: true }];
 
   const rows = weeklySpendingRows(app, [budget], "2026-10", "2026-10-15", "vnd");
