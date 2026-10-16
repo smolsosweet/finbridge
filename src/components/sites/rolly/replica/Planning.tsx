@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ArrowDownRight, ArrowRight, CalendarDays, ChevronDown, ChevronLeft, Plus, ReceiptText, Wallet, Sparkles, Send, Trash2, RotateCcw } from "lucide-react";
+import { ArrowDownRight, ArrowRight, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Plus, ReceiptText, Wallet, Sparkles, Send, Trash2, RotateCcw } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { FinBridgeHeader } from "./FinBridgeHeader";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
@@ -60,6 +60,8 @@ const COPY = {
     title: "Kế hoạch chi tiêu", intro: "Theo dõi hạn mức chi và các khoản đến hạn. Có thể liên kết khoản chi với ngân sách khi cần.",
     budget: "Ngân sách", fixed: "Khoản chi cố định", addBudget: "Tạo ngân sách", addFixed: "Thêm khoản chi cố định",
     budgetHint: "Hạn mức theo ví, danh mục và kỳ.", fixedHint: "Tiền nhà, học phí và các khoản dự kiến phải trả.",
+    overviewTab: "Tổng quan & Dự báo", backToOverview: "Quay lại Tổng quan",
+    viewBudgets: "Xem danh sách ngân sách", viewFixed: "Xem danh sách khoản chi", nextBill: "Khoản kế tiếp",
     flow: "Ngân sách → Khoản chi cố định → Giao dịch thực tế",
     flowHint: "Khoản chi cố định là kế hoạch trong ngân sách. Khi phát sinh, ghi giao dịch qua chat; lịch sử sẽ cập nhật chi thực tế.",
     wallet: "Ví nguồn", allWallets: "Tất cả ví", allBudgets: "Tất cả ngân sách", parent: "Liên kết ngân sách (tùy chọn)",
@@ -80,11 +82,14 @@ const COPY = {
     viewHistory: "Xem giao dịch thực tế", countBudget: "ngân sách", countFixed: "khoản đang áp dụng", mainWallet: "Ví chính",
     noParent: "Ngân sách không còn trong danh sách", allocations: "Xem khoản chi cố định", budgetPlaceholder: "Ví dụ: Sinh hoạt tháng", fixedPlaceholder: "Ví dụ: Tiền thuê nhà",
     delete: "Xóa", deleteBudgetConfirm: "Xóa ngân sách này? Các khoản chi cố định vẫn được giữ và sẽ bỏ liên kết ngân sách.", deleteFixedConfirm: "Xóa khoản chi cố định này?", resetChat: "Xóa hội thoại", resetChatConfirm: "Xóa toàn bộ hội thoại mô phỏng này?",
+    dueThisPeriod: "Đến hạn kỳ này", firstDue: "Bắt đầu từ",
   },
   en: {
     title: "Spending plan", intro: "Track spending limits and upcoming bills. Link a bill to a budget when useful.",
     budget: "Budgets", fixed: "Fixed expenses", addBudget: "Create budget", addFixed: "Add fixed expense",
     budgetHint: "A limit by wallet, category and period.", fixedHint: "Rent, tuition and other planned bills.",
+    overviewTab: "Overview & Forecast", backToOverview: "Back to Overview",
+    viewBudgets: "View all budgets", viewFixed: "View all fixed expenses", nextBill: "Next bill",
     flow: "Budget → Fixed expenses → Recorded transactions",
     flowHint: "Fixed expenses are budget plans. When spending happens, record it in chat; history updates actual spending.",
     wallet: "Source wallet", allWallets: "All wallets", allBudgets: "All budgets", parent: "Linked budget (optional)",
@@ -105,11 +110,14 @@ const COPY = {
     viewHistory: "View actual transactions", countBudget: "budgets", countFixed: "active expenses", mainWallet: "Main wallet",
     noParent: "Budget no longer listed", allocations: "View fixed expenses", budgetPlaceholder: "For example: Monthly living costs", fixedPlaceholder: "For example: Rent",
     delete: "Delete", deleteBudgetConfirm: "Delete this budget? Linked fixed expenses will be kept without a budget link.", deleteFixedConfirm: "Delete this fixed expense?", resetChat: "Reset conversation", resetChatConfirm: "Delete this scenario conversation?",
+    dueThisPeriod: "Due this period", firstDue: "First due",
   },
   zh: {
     title: "支出计划", intro: "跟踪支出限额和应付账单，需要时可将账单关联到预算。",
     budget: "预算", fixed: "固定支出", addBudget: "创建预算", addFixed: "添加固定支出",
     budgetHint: "按钱包、类别和周期设置限额。", fixedHint: "房租、学费及其他计划账单。",
+    overviewTab: "总览与预测", backToOverview: "返回总览",
+    viewBudgets: "查看预算列表", viewFixed: "查看支出列表", nextBill: "下一笔待付",
     flow: "预算 → 固定支出 → 实际交易",
     flowHint: "固定支出属于预算计划。实际付款后，通过聊天记录交易，历史记录将更新实际支出。",
     wallet: "来源钱包", allWallets: "全部钱包", allBudgets: "全部预算", parent: "关联预算（选填）",
@@ -130,8 +138,101 @@ const COPY = {
     viewHistory: "查看实际交易", countBudget: "项预算", countFixed: "项启用支出", mainWallet: "主钱包",
     noParent: "预算已不在列表中", allocations: "查看固定支出", budgetPlaceholder: "例如：每月生活费", fixedPlaceholder: "例如：房租",
     delete: "删除", deleteBudgetConfirm: "删除此预算？关联的固定支出将保留并取消预算关联。", deleteFixedConfirm: "删除此固定支出？", resetChat: "清除对话", resetChatConfirm: "清除此情景对话？",
+    dueThisPeriod: "本期到期", firstDue: "首次到期",
   },
 };
+
+interface DropdownOption {
+  value: string;
+  label: string;
+}
+
+function PlanningDropdown({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: DropdownOption[];
+  ariaLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const current = options.find((o) => o.value === value) || options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="fb-dropdown-container">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={`fb-dropdown-trigger ${open ? "is-open" : ""}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+      >
+        <span className="fb-dropdown-label">{current?.label || value}</span>
+        <ChevronDown size={14} className={`fb-dropdown-chevron ${open ? "is-open" : ""}`} aria-hidden="true" />
+      </button>
+      {open && (
+        <ul role="listbox" className="fb-dropdown-menu">
+          {options.map((option) => {
+            const active = option.value === value;
+            return (
+              <li key={option.value}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                  className={`fb-dropdown-item ${active ? "is-active" : ""}`}
+                >
+                  <span className="fb-dropdown-item-text">{option.label}</span>
+                  {active && <Check size={14} className="fb-dropdown-check" aria-hidden="true" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        tabIndex={-1}
+        aria-hidden="true"
+        className="fb-dropdown-native-hidden"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 export function Planning({ navigate, initialTab = "budget", initialForm = "" }: { navigate: (screen: string) => void; initialTab?: "budget" | "fixed"; initialForm?: "budget" | "fixed" | "" }) {
   const state = useAppState();
@@ -143,7 +244,10 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const fixed = state.fixedExpenses || [];
   const activeWallets = state.wallets.filter((item) => !item.archived);
   const [calendarLedgerOpen, setCalendarLedgerOpen] = useState(false);
-  const [tab, setTab] = useState(initialTab);
+  const initialView = params.get("view") === "budget" ? "budget" : params.get("view") === "fixed" || initialTab === "fixed" || params.get("budget") ? "fixed" : "overview";
+  const [view, setView] = useState<"overview" | "budget" | "fixed">(initialView);
+  const tab = view === "fixed" ? "fixed" : "budget";
+  const setTab = (nextTab: "budget" | "fixed") => setView(nextTab);
   const [walletFilter, setWalletFilter] = useState("all");
   const [parentFilter, setParentFilter] = useState(params.get("budget") || "all");
   const [form, setForm] = useState<"budget" | "fixed" | "">(initialForm);
@@ -262,9 +366,21 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
     const nextHistory: PlannerMessage[] = [...plannerMessages, { role: "user", text: lang === "vi" ? `Chọn ví ${wallet.name === "." ? t.mainWallet : wallet.name} · ${wallet.currency}` : `Use ${wallet.name === "." ? t.mainWallet : wallet.name} · ${wallet.currency}` }];
     void sendToPlanner(prompt.pendingScenario, walletId, priorMessages, nextHistory);
   };
-  const open = (type: "budget" | "fixed", parent?: string, expense?: FixedExpense) => {
+  const open = (type: "budget" | "fixed", parent?: string, expense?: FixedExpense, targetBudget?: Goal) => {
     setAddingCategory(false); setNewCategory(""); setCategoryError("");
-    setError(""); setEditingId(expense?.id || ""); setTitle(expense?.title || ""); setAmount(expense ? String(expense.amount) : "");
+    setError("");
+    if (type === "budget" && targetBudget) {
+      setEditingId(targetBudget.id);
+      setTitle(targetBudget.title);
+      setAmount(String(targetBudget.amount));
+      setWalletId(targetBudget.wallet);
+      setStartDate(targetBudget.date || today);
+      setCycle((targetBudget.cycle as "monthly" | "weekly" | "yearly") || "monthly");
+      setCategory(targetBudget.category || "");
+      setForm("budget");
+      return;
+    }
+    setEditingId(expense?.id || ""); setTitle(expense?.title || ""); setAmount(expense ? String(expense.amount) : "");
     setWalletId(expense?.walletId || activeWallets[0]?.id || ""); setStartDate(today); setCycle("monthly");
     const budget = expense && !expense.budgetId ? undefined : budgets.find((item) => item.id === (parent || expense?.budgetId)) || budgets[0];
     setParentId(budget?.id || ""); setCategory(expense?.category || (type === "fixed" ? budget?.category || "" : ""));
@@ -282,13 +398,40 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
     event.preventDefault(); setError("");
     if (form === "budget") {
       if (!selectedWallet || !title.trim() || !Number.isFinite(Number(amount)) || Number(amount) <= 0 || !startDate || !["monthly", "weekly", "yearly"].includes(cycle)) { setError(t.invalid); return; }
-      const goal: Goal = { id: crypto.randomUUID(), kind: "budget", title: title.trim(), amount: Number(amount), saved: 0, currency: selectedWallet.currency, date: startDate, cycle, category, wallet: selectedWallet.id, direction: "", person: "" };
+      const existing = budgets.find((item) => item.id === editingId);
+      const goal: Goal = {
+        ...(existing || {}),
+        id: editingId || crypto.randomUUID(),
+        kind: "budget",
+        title: title.trim(),
+        amount: Number(amount),
+        saved: existing?.saved ?? 0,
+        currency: selectedWallet.currency,
+        date: startDate,
+        cycle,
+        category,
+        wallet: selectedWallet.id,
+        direction: existing?.direction || "",
+        person: existing?.person || "",
+      };
       if (!validBudget(state, goal)) { setError(t.invalid); return; }
       let saved = false;
       updateState((current) => {
-        if (!validBudget(current, goal)) return current;
+        if (!validBudget(current, goal) || (editingId && !current.goals.some((item) => item.id === editingId))) return current;
         saved = true;
-        return { ...current, goals: [...current.goals, goal] };
+        return {
+          ...current,
+          goals: editingId
+            ? current.goals.map((item) => item.id === editingId ? goal : item)
+            : [...current.goals, goal],
+          fixedExpenses: editingId
+            ? (current.fixedExpenses || []).map((fe) =>
+                fe.budgetId === editingId
+                  ? { ...fe, category: goal.category || fe.category, walletId: goal.wallet }
+                  : fe
+              )
+            : current.fixedExpenses,
+        };
       });
       if (!saved) { setError(t.invalid); return; }
       setForm(""); setTab("budget"); return;
@@ -325,6 +468,21 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   };
   const filteredBudgets = budgets.filter((item) => walletFilter === "all" || item.wallet === walletFilter);
   const filteredFixed = fixed.filter((item) => { const parent = budgets.find((budget) => budget.id === item.budgetId); return (parentFilter === "all" || item.budgetId === parentFilter) && (walletFilter === "all" || (parent?.wallet || item.walletId) === walletFilter); });
+  const budgetCurrencies = Array.from(new Set(filteredBudgets.map(b => b.currency)));
+  const isSingleCurrencyBudgets = budgetCurrencies.length === 1;
+  const budgetCurrency = budgetCurrencies[0] || "";
+  const totalBudgetLimit = filteredBudgets.reduce((s, b) => s + (Number(b.amount) || 0), 0);
+  const totalBudgetActual = filteredBudgets.reduce((s, b) => s + budgetSummary(state, b, today).actual, 0);
+  const totalBudgetRemaining = filteredBudgets.reduce((s, b) => s + budgetSummary(state, b, today).remaining, 0);
+
+  const fixedCurrencies = Array.from(new Set(filteredFixed.map(f => {
+    const parent = budgets.find(b => b.id === f.budgetId);
+    return parent?.currency || state.wallets.find(w => w.id === f.walletId)?.currency || "";
+  }).filter(Boolean)));
+  const isSingleCurrencyFixed = fixedCurrencies.length === 1;
+  const fixedCurrency = fixedCurrencies[0] || "";
+  const totalFixedAmount = filteredFixed.filter(f => f.active).reduce((s, f) => s + (Number(f.amount) || 0), 0);
+
   const renderScenarioResult = (scenario: FinancialScenario) => {
     const missing = !canCalculateScenario(scenario, state);
     const result = missing ? null : calculateScenario(state, scenario, today);
@@ -395,84 +553,348 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       onSelectLanguage={(val) => updateState((s) => ({ ...s, settings: { ...s?.settings, language: val } }))}
     />
 
-    <button type="button" className="fb-safety-planning-link" onClick={() => navigate("safetyAlerts")}><span>{SAFETY_COPY[lang].title}<small>{SAFETY_COPY[lang].subtitle}</small></span><ArrowRight size={20} /></button>
     <div className="fb-home-intro fb-planning-header">
       <div>
         <p className="fb-eyebrow">{lang === "vi" ? "KẾ HOẠCH CHI TIÊU" : lang === "zh" ? "支出计划" : "SPENDING PLAN"}</p>
         <h1>{t.title}</h1>
         <p>{t.intro}</p>
       </div>
-      <button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open(tab)}>
-        <Plus size={18} />
-        <span>{tab === "budget" ? t.addBudget : t.addFixed}</span>
+      {view === "overview" && (
+        <button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("budget")}>
+          <Plus size={18} />
+          <span>{t.addBudget}</span>
+        </button>
+      )}
+    </div>
+
+    <button type="button" className="fb-safety-planning-link" onClick={() => navigate("safetyAlerts")}><span>{SAFETY_COPY[lang].title}<small>{SAFETY_COPY[lang].subtitle}</small></span><ArrowRight size={20} /></button>
+
+    <div className="fb-planning-nav-tabs" role="tablist" aria-label={t.title}>
+      <button type="button" role="tab" aria-selected={view === "overview"} className={`fb-planning-nav-tab ${view === "overview" ? "is-active" : ""}`} onClick={() => setView("overview")}>
+        <Sparkles size={16} />
+        <span>{t.overviewTab}</span>
+      </button>
+      <button type="button" role="tab" aria-selected={view === "budget"} className={`fb-planning-nav-tab ${view === "budget" ? "is-active" : ""}`} onClick={() => setView("budget")}>
+        <Wallet size={16} />
+        <span>{t.budget}</span>
+        <span className="fb-tab-badge">{budgets.length}</span>
+      </button>
+      <button type="button" role="tab" aria-selected={view === "fixed"} className={`fb-planning-nav-tab ${view === "fixed" ? "is-active" : ""}`} onClick={() => setView("fixed")}>
+        <ReceiptText size={16} />
+        <span>{t.fixed}</span>
+        <span className="fb-tab-badge">{fixed.filter((item) => item.active).length}</span>
       </button>
     </div>
 
-    <FinancialOutlook editable />
-    <section className="fb-scenario-planner" aria-labelledby="fb-scenario-title">
-      <div className="fb-scenario-heading"><span className="fb-planning-icon"><Sparkles size={19} /></span><div><h2 id="fb-scenario-title">{lang === "vi" ? "Dự báo và mô phỏng tài chính" : lang === "zh" ? "AI 财务情景规划" : "Financial forecast and scenarios"}</h2><p>{lang === "vi" ? "Hỏi: “Nếu tôi tiếp tục chi như tháng này, cuối tháng còn bao nhiêu?” FinBridge đối chiếu số dư, ngân sách và khoản cố định; mô phỏng không thay đổi dữ liệu." : lang === "zh" ? "询问本月消费速度下月底还剩多少钱。模拟不会修改数据。" : "Ask: “If I keep spending at this pace, how much will I have left at month end?” FinBridge checks balances, budgets and fixed costs without changing your data."}</p></div>{plannerMessages.length > 0 && <button type="button" className="fb-scenario-reset" onClick={resetPlanner}><RotateCcw size={15} />{t.resetChat}</button>}</div>
-      {plannerMessages.length > 0 && <div className="fb-scenario-conversation" aria-live="polite">{plannerMessages.map((item, index) => <article className={`fb-scenario-message is-${item.role}`} key={`${index}-${item.text.slice(0, 20)}`}>
-        {!(item.role === "assistant" && item.scenarios?.length) && <p className={item.role === "assistant" ? "fb-scenario-answer" : undefined}>{item.text}</p>}
-        {item.clarification && <p className="fb-scenario-clarification">{item.clarification}</p>}
-        {item.walletChoices?.length ? <div className="fb-scenario-wallet-choices" role="group" aria-label={lang === "vi" ? "Chọn ví để mô phỏng" : "Choose a wallet for the simulation"}>{item.walletChoices.map((wallet) => <button type="button" key={wallet.id} disabled={plannerLoading} onClick={() => choosePlannerWallet(index, wallet.id)}>{wallet.name} · {wallet.currency}</button>)}</div> : null}
-        {item.scenarios?.length ? <div className={`fb-scenario-comparison${item.scenarios.length > 1 ? " has-alternatives" : ""}`}>{item.scenarios.map(renderScenarioResult)}</div> : null}
-      </article>)}</div>}
-      <form className="fb-scenario-form" onSubmit={submitScenario}><textarea aria-label={lang === "vi" ? "Mô tả kịch bản tài chính" : "Describe a financial scenario"} rows={2} maxLength={1200} value={plannerInput} onChange={(event) => setPlannerInput(event.target.value)} placeholder={lang === "vi" ? "Ví dụ: Nếu ngày mai đóng 1 triệu học phí thì tháng này tôi còn đủ tiền sinh hoạt không?" : "For example: If I pay $500 tuition tomorrow, can I cover living costs this month?"} /><button type="submit" disabled={plannerLoading || plannerReadyKey !== plannerStorageKey || !plannerInput.trim()}><Send size={16} />{plannerLoading ? (lang === "vi" ? "Đang phân tích…" : "Analyzing…") : (lang === "vi" ? "Mô phỏng" : "Simulate")}</button></form>
-      {error && <p className="fb-planning-warning" role="alert">{error}</p>}
-      <p className="fb-planning-note">{lang === "vi" ? "Số liệu được tính từ dữ liệu ví, giao dịch, ngân sách và khoản cố định hiện có. AI chỉ diễn giải yêu cầu; không tự tính số dư." : "Results use current wallet, transaction, budget and fixed-expense data. AI interprets the request; deterministic app code calculates projections."}</p>
-    </section>
-
-    <div className="fb-planning-toolbar">
-      <div className="fb-planning-tabs" role="tablist">
-        <button type="button" role="tab" aria-selected={tab === "budget"} onClick={() => setTab("budget")}>
-          <b>{t.budget}</b>
-          <small>{t.budgetHint}</small>
-          <span>{budgets.length} {t.countBudget}</span>
-        </button>
-        <button type="button" role="tab" aria-selected={tab === "fixed"} onClick={() => setTab("fixed")}>
-          <b>{t.fixed}</b>
-          <small>{t.fixedHint}</small>
-          <span>{fixed.filter((item) => item.active).length} {t.countFixed}</span>
-        </button>
-      </div>
-      <div className="fb-planning-filters">
-        <label>
-          <span>{t.wallet}</span>
-          <div className="fb-select-wrap">
-            <select value={walletFilter} onChange={(event) => { setWalletFilter(event.target.value); setParentFilter("all"); }}>
-              <option value="all">{t.allWallets}</option>
-              {state.wallets.map((item) => <option key={item.id} value={item.id}>{walletName(item.id)} · {item.currency}</option>)}
-            </select>
-            <ChevronDown size={14} className="fb-select-chevron" aria-hidden="true" />
-          </div>
-        </label>
-        {tab === "fixed" && (
-          <label>
-            <span>{t.parent}</span>
-            <div className="fb-select-wrap">
-              <select value={parentFilter} onChange={(event) => setParentFilter(event.target.value)}>
-                <option value="all">{t.allBudgets}</option>
-                {filteredBudgets.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-              </select>
-              <ChevronDown size={14} className="fb-select-chevron" aria-hidden="true" />
+    {view === "overview" && (
+      <>
+        <div className="fb-planning-hub-grid">
+          <article className="fb-planning-hub-card" onClick={() => setView("budget")}>
+            <div className="fb-planning-hub-top">
+              <div className="fb-planning-hub-icon-title">
+                <span className="fb-planning-icon"><Wallet size={20} /></span>
+                <div>
+                  <h3>{t.budget}</h3>
+                  <small className="fb-tab-badge">{budgets.length} {t.countBudget}</small>
+                </div>
+              </div>
+              <ChevronRight size={18} className="fb-planning-hub-arrow" />
             </div>
-          </label>
-        )}
-      </div>
-    </div>
+            <p className="fb-planning-hub-subtitle">{t.budgetHint}</p>
+            <div className="fb-planning-hub-metrics">
+              {budgets.length > 0 ? (
+                <>
+                  <div className="fb-planning-hub-metric-row">
+                    <span>{t.limit}</span>
+                    <b>{format(budgets.reduce((s, b) => s + (Number(b.amount) || 0), 0), budgets[0]?.currency || "VND")}</b>
+                  </div>
+                  <div className="fb-planning-hub-metric-row">
+                    <span>{t.actual}</span>
+                    <b>{format(budgets.reduce((s, b) => s + (Number(budgetSummary(state, b, today).actual) || 0), 0), budgets[0]?.currency || "VND")}</b>
+                  </div>
+                </>
+              ) : (
+                <p className="fb-planning-note">{t.emptyBudgetHint}</p>
+              )}
+            </div>
+            <div className="fb-planning-hub-footer" onClick={(e) => e.stopPropagation()}>
+              <button type="button" className="fb-planning-hub-link" onClick={() => setView("budget")}>
+                <span>{t.viewBudgets}</span>
+                <ArrowRight size={14} />
+              </button>
+              <button type="button" className="fb-planning-hub-quick-add" disabled={!activeWallets.length} onClick={() => open("budget")}>
+                <Plus size={14} />
+                <span>{t.addBudget}</span>
+              </button>
+            </div>
+          </article>
 
-    {tab === "budget" ? <div className="fb-planning-cards">{!filteredBudgets.length ? <div className="fb-planning-empty"><Wallet size={30} /><h2>{t.emptyBudget}</h2><p>{t.emptyBudgetHint}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("budget")}><Plus size={17} />{t.addBudget}</button></div> : filteredBudgets.map((budget) => {
-      const summary = budgetSummary(state, budget, today);
-      return <article key={budget.id} className="fb-budget-card"><div className="fb-planning-card-heading"><span className="fb-planning-icon"><Wallet size={20} /></span><div><h2>{budget.title}</h2><p>{walletName(budget.wallet)} · {budget.currency} · {budget.category || t.allCategories}</p></div><button type="button" className="fb-planning-delete" aria-label={`${t.delete}: ${budget.title}`} title={t.delete} onClick={() => deleteBudget(budget.id)}><Trash2 size={17} /></button></div><p className="fb-planning-period"><CalendarDays size={15} />{formatDate(summary.start)} – {formatDate(summary.end)}</p><div className="fb-budget-limit"><span>{t.limit}</span><b>{format(budget.amount, budget.currency)}</b></div><progress aria-label={t.actual} value={Math.max(0, Math.min(summary.actual, budget.amount))} max={budget.amount} /><dl className="fb-planning-numbers"><div><dt>{t.actual}</dt><dd>{format(summary.actual, budget.currency)}</dd></div><div><dt>{t.remaining}</dt><dd>{format(summary.remaining, budget.currency)}</dd></div></dl>{(!summary.matchingCurrency || state.wallets.find((item) => item.id === budget.wallet)?.archived) && <p className="fb-planning-warning">{t.mismatch}</p>}{summary.actual > budget.amount && <p className="fb-planning-warning">{t.overActual}</p>}{summary.actual >= budget.amount * 0.8 && summary.actual <= budget.amount && <p className="fb-planning-warning">{t.nearLimit}</p>}{summary.planned > budget.amount && <p className="fb-planning-warning">{t.overPlanned}</p>}{summary.children.length > 0 && <div className="fb-planning-card-actions"><button type="button" onClick={() => { setParentFilter(budget.id); setTab("fixed"); }}>{t.allocations} ({summary.children.length})<ArrowRight size={15} /></button></div>}<button type="button" className="fb-planning-history" onClick={() => navigate("?tab=transactions&wallet=" + encodeURIComponent(budget.wallet) + "&type=expense&from=" + summary.start + "&to=" + summary.end + (budget.category ? "&category=" + encodeURIComponent(budget.category) : ""))}>{t.viewHistory}<ArrowRight size={14} /></button></article>;
-    })}</div> : <div className="fb-fixed-list">{!filteredFixed.length ? <div className="fb-planning-empty"><ReceiptText size={30} /><h2>{t.emptyFixed}</h2><p>{budgets.length ? t.emptyFixedHint : t.emptyBudgetHint}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("fixed", parentFilter === "all" ? undefined : parentFilter)}><Plus size={17} />{budgets.length ? t.addFixed : t.addBudget}</button></div> : filteredFixed.map((expense) => {
-      const parent = budgets.find((item) => item.id === expense.budgetId);
-      const window = parent ? budgetSummary(state, parent, today) : undefined;
-      const due = window ? plannedOccurrences(expense, window.start, window.end) : [];
-      const currency = parent?.currency || state.wallets.find(w => w.id === expense.walletId)?.currency || "";
-      return <article className="fb-fixed-card" key={expense.id}><div className="fb-planning-card-heading"><span className="fb-planning-icon"><ArrowDownRight size={20} /></span><div><h2>{expense.title}</h2><p>{t.parent} · {parent?.title || (expense.budgetId ? t.noParent : unassigned)}</p><p>{walletName(parent?.wallet || expense.walletId || "")} · {currency} · {expense.category}</p></div><b>{format(expense.amount, currency)}</b><button type="button" className="fb-planning-delete" aria-label={`${t.delete}: ${expense.title}`} title={t.delete} onClick={() => deleteFixed(expense.id)}><Trash2 size={17} /></button></div><div className="fb-fixed-meta"><span className={expense.active ? "is-active" : ""}>{expense.active ? t.active : t.paused}</span><span>{expense.recurrence === "monthly" ? `${repeatMonths}: ${expense.intervalMonths || 1}` : t[expense.recurrence]}</span><span>{reminderLabel}: {expense.reminderDays ?? 3}</span><span>{formatDate(expense.dueDate)}</span>{due.length > 0 && <span>{due.map(formatDate).join(" · ")}</span>}</div><div className="fb-planning-card-actions"><button type="button" disabled={!!expense.budgetId && !parent} onClick={() => open("fixed", parent?.id, expense)}>{t.edit}</button><button type="button" onClick={() => updateState((current) => ({ ...current, fixedExpenses: (current.fixedExpenses || []).map((item) => item.id === expense.id ? { ...item, active: !item.active } : item) }))}>{expense.active ? t.pause : t.resume}</button></div><FixedExpenseActions expense={expense} lang={lang} navigate={navigate}/></article>;
-    })}<p className="fb-planning-note">{t.noPayment}</p></div>}
-    {state.goals.some((item) => item.kind === "savings") && <details className="fb-planning-legacy"><summary>{t.oldSavings}</summary><ul>{state.goals.filter((item) => item.kind === "savings").map((item) => <li key={item.id}>{item.title} · {format(item.saved, item.currency)} / {format(item.amount, item.currency)}</li>)}</ul></details>}
-    {form && <Modal title={form === "budget" ? t.addBudget : editingId ? t.edit + " · " + t.fixed : t.addFixed} onClose={() => setForm("")}><form className="r-form fb-planning-form" onSubmit={save}>
+          <article className="fb-planning-hub-card" onClick={() => setView("fixed")}>
+            <div className="fb-planning-hub-top">
+              <div className="fb-planning-hub-icon-title">
+                <span className="fb-planning-icon"><ReceiptText size={20} /></span>
+                <div>
+                  <h3>{t.fixed}</h3>
+                  <small className="fb-tab-badge">{fixed.filter((item) => item.active).length} {t.countFixed}</small>
+                </div>
+              </div>
+              <ChevronRight size={18} className="fb-planning-hub-arrow" />
+            </div>
+            <p className="fb-planning-hub-subtitle">{t.fixedHint}</p>
+            <div className="fb-planning-hub-metrics">
+              {fixed.filter((item) => item.active).length > 0 ? (
+                <>
+                  <div className="fb-planning-hub-metric-row">
+                    <span>{t.planned}</span>
+                    <b>{format(fixed.filter((item) => item.active).reduce((s, f) => s + (Number(f.amount) || 0), 0), state.wallets[0]?.currency || "VND")}</b>
+                  </div>
+                  {(() => {
+                    const nextBill = [...fixed.filter((item) => item.active)].sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""))[0];
+                    return nextBill ? (
+                      <div className="fb-planning-hub-metric-row">
+                        <span>{t.nextBill}</span>
+                        <b>{nextBill.title} · {formatDate(nextBill.dueDate)}</b>
+                      </div>
+                    ) : null;
+                  })()}
+                </>
+              ) : (
+                <p className="fb-planning-note">{t.emptyFixedHint}</p>
+              )}
+            </div>
+            <div className="fb-planning-hub-footer" onClick={(e) => e.stopPropagation()}>
+              <button type="button" className="fb-planning-hub-link" onClick={() => setView("fixed")}>
+                <span>{t.viewFixed}</span>
+                <ArrowRight size={14} />
+              </button>
+              <button type="button" className="fb-planning-hub-quick-add" disabled={!activeWallets.length} onClick={() => open("fixed")}>
+                <Plus size={14} />
+                <span>{t.addFixed}</span>
+              </button>
+            </div>
+          </article>
+        </div>
+
+        <FinancialOutlook editable />
+        <section className="fb-scenario-planner" aria-labelledby="fb-scenario-title">
+          <div className="fb-scenario-heading"><span className="fb-planning-icon"><Sparkles size={19} /></span><div><h2 id="fb-scenario-title">{lang === "vi" ? "Dự báo và mô phỏng tài chính" : lang === "zh" ? "AI 财务情景规划" : "Financial forecast and scenarios"}</h2><p>{lang === "vi" ? "Hỏi: “Nếu tôi tiếp tục chi như tháng này, cuối tháng còn bao nhiêu?” FinBridge đối chiếu số dư, ngân sách và khoản cố định; mô phỏng không thay đổi dữ liệu." : lang === "zh" ? "询问本月消费速度下月底还剩多少钱。模拟不会修改数据。" : "Ask: “If I keep spending at this pace, how much will I have left at month end?” FinBridge checks balances, budgets and fixed costs without changing your data."}</p></div>{plannerMessages.length > 0 && <button type="button" className="fb-scenario-reset" onClick={resetPlanner}><RotateCcw size={15} />{t.resetChat}</button>}</div>
+          {plannerMessages.length > 0 && <div className="fb-scenario-conversation" aria-live="polite">{plannerMessages.map((item, index) => <article className={`fb-scenario-message is-${item.role}`} key={`${index}-${item.text.slice(0, 20)}`}>
+            {!(item.role === "assistant" && item.scenarios?.length) && <p className={item.role === "assistant" ? "fb-scenario-answer" : undefined}>{item.text}</p>}
+            {item.clarification && <p className="fb-scenario-clarification">{item.clarification}</p>}
+            {item.walletChoices?.length ? <div className="fb-scenario-wallet-choices" role="group" aria-label={lang === "vi" ? "Chọn ví để mô phỏng" : "Choose a wallet for the simulation"}>{item.walletChoices.map((wallet) => <button type="button" key={wallet.id} disabled={plannerLoading} onClick={() => choosePlannerWallet(index, wallet.id)}>{wallet.name} · {wallet.currency}</button>)}</div> : null}
+            {item.scenarios?.length ? <div className={`fb-scenario-comparison${item.scenarios.length > 1 ? " has-alternatives" : ""}`}>{item.scenarios.map(renderScenarioResult)}</div> : null}
+          </article>)}</div>}
+          <form className="fb-scenario-form" onSubmit={submitScenario}><textarea aria-label={lang === "vi" ? "Mô tả kịch bản tài chính" : "Describe a financial scenario"} rows={2} maxLength={1200} value={plannerInput} onChange={(event) => setPlannerInput(event.target.value)} placeholder={lang === "vi" ? "Ví dụ: Nếu ngày mai đóng 1 triệu học phí thì tháng này tôi còn đủ tiền sinh hoạt không?" : "For example: If I pay $500 tuition tomorrow, can I cover living costs this month?"} /><button type="submit" disabled={plannerLoading || plannerReadyKey !== plannerStorageKey || !plannerInput.trim()}><Send size={16} />{plannerLoading ? (lang === "vi" ? "Đang phân tích…" : "Analyzing…") : (lang === "vi" ? "Mô phỏng" : "Simulate")}</button></form>
+          {error && <p className="fb-planning-warning" role="alert">{error}</p>}
+          <p className="fb-planning-note">{lang === "vi" ? "Số liệu được tính từ dữ liệu ví, giao dịch, ngân sách và khoản cố định hiện có. AI chỉ diễn giải yêu cầu; không tự tính số dư." : "Results use current wallet, transaction, budget and fixed-expense data. AI interprets the request; deterministic app code calculates projections."}</p>
+        </section>
+      </>
+    )}
+
+    {view === "budget" && (
+      <div className="fb-planning-subview">
+        <div className="fb-subview-header-card">
+          <div className="fb-subview-header-main">
+            <div className="fb-subview-left">
+              <div className="fb-subview-title-wrap">
+                <h2>{t.budget}</h2>
+                <span className="fb-tab-badge">{filteredBudgets.length}</span>
+              </div>
+            </div>
+
+            <div className="fb-subview-right">
+              <div className="fb-subview-filter-group">
+                <label>
+                  <span>{t.wallet}</span>
+                  <PlanningDropdown
+                    value={walletFilter}
+                    onChange={(val) => { setWalletFilter(val); setParentFilter("all"); }}
+                    options={[
+                      { value: "all", label: t.allWallets },
+                      ...state.wallets.map((item) => ({ value: item.id, label: `${walletName(item.id)} · ${item.currency}` })),
+                    ]}
+                    ariaLabel={t.wallet}
+                  />
+                </label>
+              </div>
+
+              <button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("budget")}>
+                <Plus size={16} />
+                <span>{t.addBudget}</span>
+              </button>
+            </div>
+          </div>
+
+          {filteredBudgets.length > 0 && isSingleCurrencyBudgets && (
+            <div className="fb-subview-kpis">
+              <div className="fb-subview-kpi-item">
+                <span className="fb-subview-kpi-label">{t.limit}</span>
+                <b className="fb-subview-kpi-val">{format(totalBudgetLimit, budgetCurrency)}</b>
+              </div>
+              <div className="fb-subview-kpi-divider" aria-hidden="true" />
+              <div className="fb-subview-kpi-item">
+                <span className="fb-subview-kpi-label">{t.actual}</span>
+                <b className="fb-subview-kpi-val">{format(totalBudgetActual, budgetCurrency)}</b>
+              </div>
+              <div className="fb-subview-kpi-divider" aria-hidden="true" />
+              <div className="fb-subview-kpi-item">
+                <span className="fb-subview-kpi-label">{t.remaining}</span>
+                <b className="fb-subview-kpi-val is-remaining">{format(totalBudgetRemaining, budgetCurrency)}</b>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="fb-planning-cards">{!filteredBudgets.length ? <div className="fb-planning-empty"><Wallet size={30} /><h2>{t.emptyBudget}</h2><p>{t.emptyBudgetHint}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("budget")}><Plus size={17} />{t.addBudget}</button></div> : filteredBudgets.map((budget) => {
+          const summary = budgetSummary(state, budget, today);
+          const percentUsed = budget.amount > 0 ? Math.min(100, Math.round((summary.actual / budget.amount) * 100)) : 0;
+          return <article key={budget.id} className="fb-budget-card">
+            <div className="fb-planning-card-heading">
+              <span className="fb-planning-icon"><Wallet size={20} /></span>
+              <div className="fb-card-heading-body">
+                <h2>{budget.title}</h2>
+                <div className="fb-card-tags">
+                  <span className="fb-card-tag">{walletName(budget.wallet)} · {budget.currency}</span>
+                  <span className="fb-card-tag">{budget.category || t.allCategories}</span>
+                </div>
+              </div>
+              <button type="button" className="fb-planning-delete" aria-label={`${t.delete}: ${budget.title}`} title={t.delete} onClick={() => deleteBudget(budget.id)}><Trash2 size={16} /></button>
+            </div>
+            <p className="fb-planning-period"><CalendarDays size={14} /><span>{formatDate(summary.start)} – {formatDate(summary.end)}</span></p>
+            <div className="fb-budget-meter-wrap">
+              <div className="fb-budget-limit"><span>{t.limit}</span><b>{format(budget.amount, budget.currency)}</b></div>
+              <progress aria-label={t.actual} value={Math.max(0, Math.min(summary.actual, budget.amount))} max={budget.amount} />
+              <div className="fb-budget-percent-row"><span>{percentUsed}%</span><span>{summary.actual > budget.amount ? t.overActual : ""}</span></div>
+            </div>
+            <dl className="fb-planning-numbers">
+              <div className="fb-stat-tile"><dt>{t.actual}</dt><dd>{format(summary.actual, budget.currency)}</dd></div>
+              <div className="fb-stat-tile"><dt>{t.remaining}</dt><dd className="is-remaining">{format(summary.remaining, budget.currency)}</dd></div>
+            </dl>
+            {(!summary.matchingCurrency || state.wallets.find((item) => item.id === budget.wallet)?.archived) && <p className="fb-planning-warning">{t.mismatch}</p>}
+            {summary.actual > budget.amount && <p className="fb-planning-warning">{t.overActual}</p>}
+            {summary.actual >= budget.amount * 0.8 && summary.actual <= budget.amount && <p className="fb-planning-warning">{t.nearLimit}</p>}
+            {summary.planned > budget.amount && <p className="fb-planning-warning">{t.overPlanned}</p>}
+            <div className="fb-planning-card-actions">
+              <button type="button" onClick={() => open("budget", undefined, undefined, budget)}>{t.edit}</button>
+              {summary.children.length > 0 ? (
+                <button type="button" onClick={() => { setParentFilter(budget.id); setView("fixed"); }}>{t.allocations} ({summary.children.length})<ArrowRight size={14} /></button>
+              ) : (
+                <button type="button" onClick={() => open("fixed", budget.id)}>+ {t.addFixed}</button>
+              )}
+            </div>
+            <button type="button" className="fb-planning-history" onClick={() => navigate("?tab=transactions&wallet=" + encodeURIComponent(budget.wallet) + "&type=expense&from=" + summary.start + "&to=" + summary.end + (budget.category ? "&category=" + encodeURIComponent(budget.category) : ""))}><span>{t.viewHistory}</span><ArrowRight size={14} /></button>
+          </article>;
+        })}</div>
+        {state.goals.some((item) => item.kind === "savings") && <details className="fb-planning-legacy"><summary>{t.oldSavings}</summary><ul>{state.goals.filter((item) => item.kind === "savings").map((item) => <li key={item.id}>{item.title} · {format(item.saved, item.currency)} / {format(item.amount, item.currency)}</li>)}</ul></details>}
+      </div>
+    )}
+
+    {view === "fixed" && (
+      <div className="fb-planning-subview">
+        <div className="fb-subview-header-card">
+          <div className="fb-subview-header-main">
+            <div className="fb-subview-left">
+              <div className="fb-subview-title-wrap">
+                <h2>{t.fixed}</h2>
+                <span className="fb-tab-badge">{filteredFixed.length}</span>
+              </div>
+            </div>
+
+            <div className="fb-subview-right">
+              <div className="fb-subview-filter-group">
+                <label>
+                  <span>{t.wallet}</span>
+                  <PlanningDropdown
+                    value={walletFilter}
+                    onChange={(val) => { setWalletFilter(val); setParentFilter("all"); }}
+                    options={[
+                      { value: "all", label: t.allWallets },
+                      ...state.wallets.map((item) => ({ value: item.id, label: `${walletName(item.id)} · ${item.currency}` })),
+                    ]}
+                    ariaLabel={t.wallet}
+                  />
+                </label>
+                <label>
+                  <span>{t.budget}</span>
+                  <PlanningDropdown
+                    value={parentFilter}
+                    onChange={(val) => setParentFilter(val)}
+                    options={[
+                      { value: "all", label: t.allBudgets },
+                      ...filteredBudgets.map((item) => ({ value: item.id, label: item.title })),
+                    ]}
+                    ariaLabel={t.budget}
+                  />
+                </label>
+              </div>
+
+              <button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("fixed", parentFilter === "all" ? undefined : parentFilter)}>
+                <Plus size={16} />
+                <span>{budgets.length ? t.addFixed : t.addBudget}</span>
+              </button>
+            </div>
+          </div>
+
+          {filteredFixed.length > 0 && isSingleCurrencyFixed && (
+            <div className="fb-subview-kpis">
+              <div className="fb-subview-kpi-item">
+                <span className="fb-subview-kpi-label">{t.active}</span>
+                <b className="fb-subview-kpi-val">{filteredFixed.filter(f => f.active).length} / {filteredFixed.length}</b>
+              </div>
+              <div className="fb-subview-kpi-divider" aria-hidden="true" />
+              <div className="fb-subview-kpi-item">
+                <span className="fb-subview-kpi-label">{t.amount}</span>
+                <b className="fb-subview-kpi-val">{format(totalFixedAmount, fixedCurrency)}</b>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="fb-fixed-list">{!filteredFixed.length ? <div className="fb-planning-empty"><ReceiptText size={30} /><h2>{t.emptyFixed}</h2><p>{budgets.length ? t.emptyFixedHint : t.emptyBudgetHint}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("fixed", parentFilter === "all" ? undefined : parentFilter)}><Plus size={17} />{budgets.length ? t.addFixed : t.addBudget}</button></div> : filteredFixed.map((expense) => {
+          const parent = budgets.find((item) => item.id === expense.budgetId);
+          const window = parent ? budgetSummary(state, parent, today) : undefined;
+          const due = window ? plannedOccurrences(expense, window.start, window.end) : [];
+          const currency = parent?.currency || state.wallets.find(w => w.id === expense.walletId)?.currency || "";
+          return <article className="fb-fixed-card" key={expense.id}>
+            <div className="fb-planning-card-heading">
+              <span className="fb-planning-icon"><ArrowDownRight size={20} /></span>
+              <div className="fb-card-heading-body">
+                <h2>{expense.title}</h2>
+                <div className="fb-card-tags">
+                  <span className="fb-card-tag">{parent ? `${t.parent}: ${parent.title}` : (expense.budgetId ? t.noParent : unassigned)}</span>
+                  <span className="fb-card-tag">{walletName(parent?.wallet || expense.walletId || "")} · {currency}</span>
+                  <span className="fb-card-tag">{parent ? parent.category : expense.category}</span>
+                </div>
+              </div>
+              <button type="button" className="fb-planning-delete" aria-label={`${t.delete}: ${expense.title}`} title={t.delete} onClick={() => deleteFixed(expense.id)}><Trash2 size={16} /></button>
+            </div>
+            <div className="fb-fixed-amount-strip">
+              <div className="fb-fixed-amount-main">
+                <span className="fb-fixed-amount-label">{t.amount}</span>
+                <b>{format(expense.amount, currency)}</b>
+              </div>
+              <span className={`fb-status-pill ${expense.active ? "is-active" : ""}`}>
+                {expense.active ? t.active : t.paused}
+              </span>
+            </div>
+            <div className="fb-fixed-meta">
+              <span>{expense.recurrence === "monthly" ? `${repeatMonths}: ${expense.intervalMonths || 1}` : t[expense.recurrence]}</span>
+              <span>{reminderLabel}: {expense.reminderDays ?? 3}</span>
+              <span>
+                <CalendarDays size={13} />
+                {due.length > 0 ? `${t.dueThisPeriod}: ${due.map(formatDate).join(" · ")}` : `${t.firstDue}: ${formatDate(expense.dueDate)}`}
+              </span>
+            </div>
+            <div className="fb-planning-card-actions">
+              <button type="button" disabled={!!expense.budgetId && !parent} onClick={() => open("fixed", parent?.id, expense)}>{t.edit}</button>
+              <button type="button" onClick={() => updateState((current) => ({ ...current, fixedExpenses: (current.fixedExpenses || []).map((item) => item.id === expense.id ? { ...item, active: !item.active } : item) }))}>{expense.active ? t.pause : t.resume}</button>
+            </div>
+            <FixedExpenseActions expense={expense} lang={lang} navigate={navigate}/>
+          </article>;
+        })}</div>
+      </div>
+    )}
+    {form && <Modal title={form === "budget" ? (editingId ? t.edit + " · " + t.budget : t.addBudget) : editingId ? t.edit + " · " + t.fixed : t.addFixed} onClose={() => setForm("")}><form className="r-form fb-planning-form" onSubmit={save}>
       {form === "fixed" && <><label>{t.parent}<select value={parentId} onChange={(event) => selectParent(event.target.value)}><option value="">{unassigned}</option>{budgets.filter((item) => activeWallets.some((wallet) => wallet.id === item.wallet && wallet.currency === item.currency)).map((item) => <option key={item.id} value={item.id}>{item.title} · {item.currency}</option>)}</select></label>{selectedParent && <p className="fb-planning-note">{t.parentContext} {walletName(selectedParent.wallet)} · {selectedParent.currency}</p>}</>}
       <label>{t.name}<input aria-label={t.name} placeholder={form === "budget" ? t.budgetPlaceholder : t.fixedPlaceholder} required maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
       {(form === "budget" || !selectedParent) && <label>{t.wallet}<select value={walletId} required onChange={(event) => { setWalletId(event.target.value); setCategory(""); setAmount(""); }}>{activeWallets.map((item) => <option key={item.id} value={item.id}>{walletName(item.id)} · {item.currency}</option>)}</select></label>}
