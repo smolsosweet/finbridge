@@ -8,13 +8,17 @@ FinBridge is a multilingual personal finance workspace for wallets, transactions
 - First-account setup: preferred name, wallets, opening balances, categories, fixed costs and reserves.
 - Cash-flow summaries per currency, weekly charts per wallet and filtered transaction history.
 - Budgets linked to fixed expenses, due-date guidance and reserve warnings.
+- [Fixed-bill payments](docs/FIXED_BILL_PAYMENTS.md): local VietQR reading, editable saved recipients, bank-app handoff and user-confirmed expense recording per occurrence.
+- [Safety thresholds and alerts](docs/safety/SAFETY_ALERTS.md): actual/forecast budget rules, wallet floors, protected history and optional private email reminders.
 - Gemini-assisted transaction entry and financial scenario planning, with review before recording changes.
 
 Wallets are manually tracked. The application does not connect to banks, move real money or convert wallet balances between currencies.
 
 ## Data and security
 
-PostgreSQL stores accounts, sessions, verification records and completed initial setup. Subsequent financial records use account-scoped browser storage; full history synchronization across devices is not implemented.
+PostgreSQL stores authenticated financial workspaces in relational tables: wallets, categories and wallet assignments, transactions, budgets, goals, fixed expenses, recurring entries, preferences, onboarding drafts, conversations and alert rules/history. Account-scoped foreign keys, transactional saves, revision checks and idempotency protect writes. Removed business records are soft deleted; workspace revisions retain earlier versions. See [database structure and pgAdmin](docs/DATABASE.md).
+
+Existing account-owned browser records are offered for a one-time explicit import; the original stays unchanged. Authenticated edits no longer write the financial workspace to browser storage. Language preference and the explicit local demo still use browser storage. Devices load current records when opening the app; concurrent edits cause a visible conflict instead of silent merging.
 
 Email needs a configured Brevo HTTPS or SMTP sender. Local outbox mode is development-only. Secrets belong in ignored environment files or hosting settings.
 
@@ -43,6 +47,8 @@ On the current Windows machine, PostgreSQL runs separately on port 5434. See [da
 | `npm run auth:migrate` | Database schema |
 | `npm run test:auth` | Auth unit tests |
 | `npm run test:auth:postgres` | Isolated database tests |
+| `npm run test:workspace` | Workspace validation and retry/conflict behavior |
+| `npm run test:workspace:postgres` | Relational finance persistence and account isolation |
 | `npm run test:onboarding` | First-account setup |
 | `npm run test:localization` | Wallet/transaction language checks |
 | `npm run test:transaction-ai` | AI transaction fixtures |

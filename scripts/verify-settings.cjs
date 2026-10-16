@@ -65,7 +65,12 @@ const store = {
   updateState(update) { writes++; state = update(state); },
   setSetting(key, value) { writes++; state.settings[key] = value; },
 };
-const header = compile("FinBridgeHeader.tsx");
+const safetyCopy = compile("../../../safety/safety-copy.ts");
+const header = compile("FinBridgeHeader.tsx", name => {
+  if (name === "@/components/safety/SafetyProvider") return { useSafety: () => null };
+  if (name === "@/components/safety/safety-copy") return safetyCopy;
+  return localRequire(name);
+});
 const ui = {
   Icon: () => React.createElement("span"),
   Field: ({ label, children }) => React.createElement("label", null, label, children),
@@ -76,6 +81,7 @@ const ui = {
 };
 
 const overview = compile("SettingsOverview.tsx", (name) => {
+  if (name === "@/components/safety/safety-copy") return safetyCopy;
   if (name === "react") return testReact;
   if (name === "./store") return store;
   if (name === "./FinBridgeHeader") return header;

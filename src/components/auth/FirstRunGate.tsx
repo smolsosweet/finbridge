@@ -27,7 +27,7 @@ export function FirstRunGate({ children }: { children: ReactNode }) {
   }, [userId, attempt]);
   function completed(profile: OnboardingRecord) {
     if (workspaceOwner() !== userId) return;
-    updateState(s => applyOnboarding(s, profile)); setStatus("complete");
+    updateState(s => ({ ...applyOnboarding(s, profile), onboardingDraft: undefined })); setStatus("complete");
   }
   if (status === "complete") return children;
   if (status === "setup" && user) return <OnboardingWizard userId={user.id} name={user.name} state={state} onComplete={completed} />;

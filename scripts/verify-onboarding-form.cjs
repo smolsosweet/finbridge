@@ -9,6 +9,7 @@ let slots = [], cursor = 0, storage = new Map(), requests = [], completed = [], 
 const fakeReact = { ...React, useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = typeof initial === "function" ? initial() : initial; return [slots[i], value => { slots[i] = typeof value === "function" ? value(slots[i]) : value; }]; }, useRef(initial) { const i = cursor++; if (!(i in slots)) slots[i] = { current: initial }; return slots[i]; }, useEffect(effect) { effect(); } };
 const { OnboardingWizard } = compile("src/components/auth/OnboardingWizard.tsx", name => {
   if (name === "react") return fakeReact;
+  if (name === "@/components/sites/rolly/replica/store") return { workspacePersistence: () => "browser", getWorkspaceState: () => props.state, updateState: () => {} };
   if (name === "@/lib/onboarding") return setup;
   if (name === "@/lib/setup-copy") return copy;
   if (name === "@/lib/auth-copy") return authCopy;

@@ -10,6 +10,7 @@ import { rememberPreferredLanguage } from "@/lib/language-preference";
 import { signOutGoogle } from "@/lib/sign-out";
 import { LanguageSelector } from "@/components/sites/rolly/LanguageSelector";
 import type { AppState } from "@/components/sites/rolly/replica/store";
+import { getWorkspaceState, updateState, workspacePersistence } from "@/components/sites/rolly/replica/store";
 import theme from "@/components/sites/rolly/WelcomeScreen.module.css";
 import styles from "./OnboardingWizard.module.css";
 
@@ -24,7 +25,7 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
   const initialLanguage = authLanguage(/中文|zh/.test(String(state.settings.language)) ? "zh" : /Việt|vi/.test(String(state.settings.language)) ? "vi" : "en");
   const key = "finbridge-setup-draft:" + encodeURIComponent(userId);
   const [data, setData] = useState<OnboardingData>(() => {
-    try { const draft = onboardingDraftSchema.safeParse(JSON.parse(localStorage.getItem(key) || "null")); if (draft.success) return draft.data; } catch { /* Malformed drafts cannot become setup data. */ }
+    try { const draft = onboardingDraftSchema.safeParse(workspacePersistence() === "database" ? getWorkspaceState().onboardingDraft : JSON.parse(localStorage.getItem(key) || "null")); if (draft.success) return draft.data; } catch { /* Malformed drafts cannot become setup data. */ }
     return { version: 1, displayName: String(state.settings.name || name) === "." ? name : String(state.settings.name || name), occupation: "not_specified", language: initialLanguage,
       wallets: isStarterWorkspace(state) || !state.wallets.some(w => !w.archived) ? [{ id: crypto.randomUUID(), name: "", currency: initialLanguage === "vi" ? "VND" : initialLanguage === "zh" ? "CNY" : "USD", initial: 0 }] : state.wallets.filter(w => !w.archived).map(w => ({ id: w.id, name: w.name, currency: w.currency, initial: w.initial })),
       expenseCategories: [], incomeCategories: [], commitments: [], reserves: [] };
@@ -36,7 +37,7 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
   const [exiting, setExiting] = useState(false), [exitError, setExitError] = useState("");
   const exitText = EXIT_COPY[lang];
   const [bill, setBill] = useState({ title: "", amount: "", walletId: data.wallets[0]?.id || "", category: "", dueDate: "", intervalMonths: 1, monthPosition: "date" as "start" | "end" | "date", reminderDays: 3 });
-  useEffect(() => { try { localStorage.setItem(key, JSON.stringify(data)); } catch { /* Setup remains editable if browser storage is full. */ } }, [data, key]);
+  useEffect(() => { if (workspacePersistence() === "database") updateState(s => ({ ...s, onboardingDraft: data })); else { try { localStorage.setItem(key, JSON.stringify(data)); } catch { /* Demo setup remains editable. */ } } }, [data, key]);
   const wallet = data.wallets[walletIndex];
   const updateWallet = (patch: Partial<OnboardingData["wallets"][number]>) => setData(d => ({ ...d, wallets: d.wallets.map((w, i) => i === walletIndex ? { ...w, ...patch } : w) }));
   const setReserve = (walletId: string, value: number) => setData(d => ({ ...d, reserves: [...d.reserves.filter(r => r.walletId !== walletId), { walletId, amount: value }] }));
@@ -71,7 +72,7 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
       const response = await fetch("/api/onboarding", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(parsed.data), signal: AbortSignal.timeout(15000) });
       const result = await response.json();
       if (!response.ok || !result.profile || !onboardingSchema.safeParse(result.profile.data).success) throw new Error("SETUP_UNAVAILABLE");
-      onComplete(result.profile); localStorage.removeItem(key);
+      onComplete(result.profile); if (workspacePersistence() !== "database") localStorage.removeItem(key);
     } catch { setError(t.unavailable); } finally { inFlight.current = false; setSaving(false); }
   }
   async function exitSetup() {

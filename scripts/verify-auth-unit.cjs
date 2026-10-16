@@ -23,7 +23,7 @@ test("account deactivation clears only the closed owner's local data after serve
   const helper = compile("src/lib/deactivate-account.ts", name => {
     if (name === "./auth-client") return { authClient: { async signOut() { signedOut++; } } };
     if (name === "./workspace-storage") return storage;
-    if (name === "@/components/sites/rolly/replica/store") return { workspaceOwner: () => owner, clearUserWorkspace: id => { assert.equal(id, "A"); cleared = true; } };
+    if (name === "@/components/sites/rolly/replica/store") return { flushWorkspace: async () => {}, workspaceOwner: () => owner, clearUserWorkspace: id => { assert.equal(id, "A"); cleared = true; } };
     return require(name);
   });
   try {

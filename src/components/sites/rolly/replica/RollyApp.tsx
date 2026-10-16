@@ -14,6 +14,8 @@ import { Icon, PageHeader } from "./Ui";
 import { useAppState } from "./store";
 import { WelcomeScreen } from "../WelcomeScreen";
 import { Categories } from "./Categories";
+import { SafetyProvider } from "@/components/safety/SafetyProvider";
+import { SafetyAlerts } from "@/components/safety/SafetyAlerts";
 import "./replica.css";
 
 export function RollyApp({ screen = "" }: { screen?: string }) {
@@ -48,6 +50,7 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
   else if (tools.some((t) => t.path === screen)) content = <ToolPage key={screen} screen={screen} navigate={navigate} />;
   else if (tools.some((t) => t.create === screen)) content = <GoalForm key={screen} screen={screen} navigate={navigate} initialType={params.get("initialType") || undefined} />;
   else if (screen === "goalDetails") content = <GoalDetails id={params.get("id") || ""} navigate={navigate} />;
+  else if (screen === "safetyAlerts") content = <SafetyAlerts navigate={navigate} />;
   else if (screen === "accountSettings") content = <AccountSettings key={params.get("option")} initialOption={params.get("option") || ""} navigate={navigate} />;
   else if (screen === "walletSettings") content = <Dashboard key={screen} walletSettingsMode navigate={navigate} />;
   else if (screen === "homepageConfiguration") content = <HomepageConfiguration navigate={navigate} />;
@@ -68,7 +71,7 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
   const isAppShell = !isWelcome;
 
   return (
-    <div className={"r-app " + theme + (isAppShell ? " fb-home-shell has-sidebar" : "")}>
+    <SafetyProvider><div className={"r-app " + theme + (isAppShell ? " fb-home-shell has-sidebar" : "")}>
       {!isWelcome && (
         <aside className="fb-desktop-sidebar" aria-label="Điều hướng máy tính">
           <div>
@@ -92,7 +95,7 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
                 const isActive =
                   (!screen && tab === id) ||
                   (id === "settings" && ["accountSettings", "featureRequest", "featureRequestCompleted"].includes(screen)) ||
-                  (id === "tools" && ["budget", "savings", "fixedExpenses", "createBudget", "createFixedExpense"].includes(screen));
+                  (id === "tools" && ["budget", "savings", "fixedExpenses", "createBudget", "createFixedExpense", "safetyAlerts"].includes(screen));
                 return (
                   <button
                     key={id}
@@ -136,7 +139,7 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
         {content}
       </div>
 
-      {!isWelcome && screen !== "addTransactionChatMode" && (
+      {!isWelcome && screen !== "addTransactionChatMode" && screen !== "safetyAlerts" && (
         <button
           type="button"
           className="r-fab fb-global-fab"
@@ -164,6 +167,6 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
           ))}
         </nav>
       )}
-    </div>
+    </div></SafetyProvider>
   );
 }

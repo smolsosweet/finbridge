@@ -5,13 +5,13 @@
 - Branch: `main` (Google and email login have both been merged).
 - Checkout: `D:\ai-website-cloner-codex`.
 - App: http://localhost:3000/
-- First visit: Jack welcome screen. Returning-user link opens Google login.
+- First visit: Jake welcome screen. Returning-user link opens login.
 - Google callback succeeds -> /app (Home). Valid returning sessions skip welcome.
 - Email/password registration, verification and recovery are now documented in
   [email setup](EMAIL_PASSWORD_SETUP.md). Apple is not included.
 - Accounts and sessions: PostgreSQL, not a simulated login.
-- Financial data remains local browser data, partitioned by authenticated user ID.
-  It is NOT synchronized to PostgreSQL or another device. RBAC is not implemented.
+- Authenticated financial records now use account-owned PostgreSQL business tables.
+  See [database structure and migration](../DATABASE.md). Administrative RBAC is not implemented.
 
 ## Local database already prepared on this machine
 

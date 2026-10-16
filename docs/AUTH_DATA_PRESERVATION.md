@@ -1,5 +1,9 @@
 # Authentication data preservation plan
 
+Historical plan for the initial login feature. Authenticated financial storage has
+since moved to PostgreSQL; see [current database behavior](DATABASE.md). Unclaimed
+legacy browser data remains untouched and is never assigned automatically.
+
 The login branch starts from main 765dd33 in a separate worktree. It does not
 edit the original checkout or its browser storage.
 

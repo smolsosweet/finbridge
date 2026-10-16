@@ -31,13 +31,7 @@ not current balances; imported history is retained. Negative opening balances
 are permitted for overdrafts rather than forcing fabricated zero balances.
 Reserves remain non-negative; fixed costs must be positive. Rehydration is idempotent.
 
-Unfinished drafts stay in account-scoped browser storage. Completed initial setup
-and its financial configuration are saved in PostgreSQL. Subsequent workspace
-transactions, profile edits, wallet changes and reserve edits still use the
-existing per-account browser store: this is not full cross-device finance sync.
-On a new device, the original setup can be reconstructed, but later financial
-history is not automatically synchronized. Full workspace persistence and an
-editable server profile remain follow-up work.
+Authenticated drafts, completed setup and subsequent financial edits now persist in PostgreSQL. Wallets, categories, budgets, transactions, preferences and chats have account-owned business tables. Existing account-owned browser records require an explicit one-time import. See [database structure](DATABASE.md).
 
 ## Forecasts and AI boundary
 
@@ -62,7 +56,7 @@ It does not debit money or change budget limits.
 Gemini retains its existing intent-routing responsibilities. Budget questions
 use the locally computed spending guidance; the chat also has a View spending
 plan button that works without Gemini. Preferred-name greetings and these new
-planning results stay in the browser. Planning chat messages carry `localOnly`
+planning results are stored in the account database. Planning chat messages carry `localOnly`
 and are excluded from subsequent model history, including after restoration.
 No new onboarding name or financial-planning payload is sent to Gemini.
 
