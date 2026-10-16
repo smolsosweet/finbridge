@@ -69,6 +69,7 @@ const safetyCopy = compile("../../../safety/safety-copy.ts");
 const header = compile("FinBridgeHeader.tsx", name => {
   if (name === "@/components/safety/SafetyProvider") return { useSafety: () => null };
   if (name === "@/components/safety/safety-copy") return safetyCopy;
+  if (name === "./NotificationCenter") return { NotificationCenter: () => null };
   return localRequire(name);
 });
 const ui = {

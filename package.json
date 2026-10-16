@@ -45,6 +45,8 @@
     "test:auth:postgres": "node --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-auth-postgres.mjs",
     "test:transaction-ai": "node --experimental-strip-types --test scripts/verify-transaction-ai.mjs",
     "test:scenario-planner": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-scenario-planner.mjs",
+    "test:proactive-alerts": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-proactive-alerts.mjs",
+    "test:notification-center": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-notification-center.mjs",
     "test:localization": "node --test scripts/verify-localization.cjs",
     "test:localization:e2e": "node scripts/verify-localization-e2e.mjs"
   },

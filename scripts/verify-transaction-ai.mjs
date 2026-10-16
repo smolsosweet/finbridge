@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createTimeoutTransactionDraft, editDraftById, inferDraftCategory, isNewTransactionMessage, matchDraftCategoryAnswer, readyDrafts, removeDraftById, requestedDraftCategory, validateAndCommitDrafts, validateDraftForState } from "../src/lib/transaction-drafts.ts";
+import { inferTransactionCurrency, resolveExplicitWallet, resolveUniqueCurrencyWallet } from "../src/lib/transaction-currency.ts";
 
 const state = () => ({
   wallets: [{ id: "cash", currency: "VND" }, { id: "usd", currency: "USD" }, { id: "old", currency: "VND", archived: true }],
@@ -91,4 +92,26 @@ test("timeout fallback drafts preserve explicit amount and date, and request mis
   assert.equal(transport?.title, "đi xe bus");
   assert.equal(transport?.category, null);
   assert.equal(createTimeoutTransactionDraft("hôm qua ăn trưa", "timeout-batch-3", "2026-10-13", app), null, "fallback requires a stated amount");
+});
+
+test("detects Vietnamese currency wording without confusing ordinary words", () => {
+  assert.equal(inferTransactionCurrency("hôm nay ăn sáng hết 25k"), "VND");
+  assert.equal(inferTransactionCurrency("chi 25 nghìn tiền ăn"), "VND");
+  assert.equal(inferTransactionCurrency("trả 10 đô la"), "USD");
+  assert.equal(inferTransactionCurrency("spent 20 dollars"), "USD");
+  assert.equal(inferTransactionCurrency("mua đồ giá 5 tệ"), "CNY");
+  assert.equal(inferTransactionCurrency("do tôi quên mang ví"), null);
+  assert.equal(inferTransactionCurrency("25k và 10 đô"), null, "conflicting cues require review");
+});
+
+test("auto-selects only a unique active wallet matching the detected currency", () => {
+  const wallets = [{ id: "cash", name: "Ví tiền mặt", currency: "VND" }, { id: "usd", name: "AmericaBank", currency: "USD" }, { id: "yuan", name: "Ví Trung Quốc", currency: "CNY" }];
+  assert.deepEqual(resolveUniqueCurrencyWallet("ăn sáng 25k", wallets), { currency: "VND", walletId: "cash", ambiguous: false });
+  assert.deepEqual(resolveUniqueCurrencyWallet("nhận 10 đô", wallets), { currency: "USD", walletId: "usd", ambiguous: false });
+  assert.deepEqual(resolveUniqueCurrencyWallet("5 tệ", wallets), { currency: "CNY", walletId: "yuan", ambiguous: false });
+  assert.deepEqual(resolveUniqueCurrencyWallet("25k", [...wallets, { id: "vnd2", currency: "VND" }]), { currency: "VND", walletId: null, ambiguous: true });
+  assert.deepEqual(resolveUniqueCurrencyWallet("25k và 10 đô", wallets), { currency: null, walletId: null, ambiguous: true });
+  assert.deepEqual(resolveUniqueCurrencyWallet("10 euro", wallets), { currency: null, walletId: null, ambiguous: false });
+  assert.equal(resolveExplicitWallet("chi từ AmericaBank", wallets), "usd");
+  assert.equal(resolveExplicitWallet("ghi vào ví tiền mặt", wallets), "cash");
 });

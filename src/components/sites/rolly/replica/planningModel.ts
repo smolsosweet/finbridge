@@ -58,15 +58,92 @@ export function plannedOccurrences(expense: FixedExpense, start: string, end: st
   }
   return results;
 }
-export function budgetSummary(state: AppState, budget: Goal, asOf: string) {
+export function budgetSummary(state: Pick<AppState, "wallets" | "transactions" | "fixedExpenses">, budget: Goal, asOf: string) {
   const window = budgetWindow(budget, asOf);
   const wallet = state.wallets.find((item) => item.id === budget.wallet);
   const matchingCurrency = wallet?.currency === budget.currency;
-  const actual = matchingCurrency ? state.transactions.filter((item) => item.type === "expense" && item.wallet === budget.wallet && (!budget.category || item.category === budget.category) && item.date.slice(0, 10) >= window.start && item.date.slice(0, 10) <= window.end).reduce((sum, item) => sum + Math.round(item.amount * 100), 0) / 100 : 0;
+  const actualEnd = asOf < window.end ? asOf : window.end;
+  const actual = matchingCurrency ? state.transactions.filter((item) => item.type === "expense" && Number.isFinite(item.amount) && item.amount >= 0 && item.wallet === budget.wallet && (!budget.category || item.category === budget.category) && item.date.slice(0, 10) >= window.start && item.date.slice(0, 10) <= actualEnd).reduce((sum, item) => sum + Math.round(item.amount * 100), 0) / 100 : 0;
   const children = (state.fixedExpenses || []).filter((item) => item.budgetId === budget.id);
-  const planned = children.reduce((sum, item) => sum + Math.round(item.amount * 100) * plannedOccurrences(item, window.start, window.end).length, 0) / 100;
+  const planned = children.filter((item) => Number.isFinite(item.amount) && item.amount >= 0).reduce((sum, item) => sum + Math.round(item.amount * 100) * plannedOccurrences(item, window.start, window.end).length, 0) / 100;
   return { ...window, actual, planned, remaining: budget.amount - actual, allocationRemaining: budget.amount - planned, children, matchingCurrency };
 }
+
+export interface WeeklySpendingRow {
+  start: string;
+  end: string;
+  walletId: string;
+  currency: string;
+  fixed: number;
+  variable: number;
+  total: number;
+  transactionCount: number;
+  unspent: number | null;
+}
+
+export function weeklyPeriodStatus(start: string, end: string, actualThrough: string): "future" | "partial" | "complete" {
+  if (start > actualThrough) return "future";
+  return end > actualThrough ? "partial" : "complete";
+}
+
+export function weeklySpendingRows(
+  state: Pick<AppState, "wallets" | "transactions" | "fixedExpenses">,
+  budgets: Goal[],
+  month: string,
+  actualThrough: string,
+  walletFilter = "all",
+): WeeklySpendingRow[] {
+  if (!/^\d{4}-\d{2}$/.test(month)) return [];
+  const [year, monthNumber] = month.split("-").map(Number);
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const monthStart = `${month}-01`;
+  const monthEnd = `${month}-${String(daysInMonth).padStart(2, "0")}`;
+  const cutoff = actualThrough < monthEnd ? actualThrough : monthEnd;
+  const actualExpenses = state.transactions.filter((transaction) => transaction.type === "expense"
+    && transaction.amount > 0 && Number.isFinite(transaction.amount)
+    && /^\d{4}-\d{2}-\d{2}$/.test(transaction.date)
+    && transaction.date >= monthStart && transaction.date <= cutoff
+    && (walletFilter === "all" || transaction.wallet === walletFilter));
+  const wallets = state.wallets.filter((wallet) => walletFilter === "all" || wallet.id === walletFilter);
+  const result: WeeklySpendingRow[] = [];
+
+  for (const wallet of wallets) {
+    for (let firstDay = 1; firstDay <= daysInMonth; firstDay += 7) {
+      const start = `${month}-${String(firstDay).padStart(2, "0")}`;
+      const lastDay = Math.min(daysInMonth, firstDay + 6);
+      const end = `${month}-${String(lastDay).padStart(2, "0")}`;
+      const transactions = actualExpenses.filter((transaction) => transaction.wallet === wallet.id && transaction.date >= start && transaction.date <= end);
+      const matchedFixed = new Set<string>();
+      const fixedTransactions = transactions.filter((transaction) => {
+        const candidates = (state.fixedExpenses || []).filter((expense) => {
+          const parent = budgets.find((item) => item.id === expense.budgetId);
+          const expenseWalletId = parent?.wallet || expense.walletId;
+          const expenseCurrency = parent?.currency || state.wallets.find((item) => item.id === expenseWalletId)?.currency;
+          return expenseWalletId === wallet.id && expenseCurrency === wallet.currency
+            && expense.category === transaction.category
+            && Math.round(expense.amount * 100) === Math.round(transaction.amount * 100)
+            && plannedOccurrences(expense, transaction.date, transaction.date).length > 0;
+        });
+        if (candidates.length !== 1 || matchedFixed.has(transaction.id)) return false;
+        matchedFixed.add(transaction.id);
+        return true;
+      });
+      const fixed = fixedTransactions.reduce((sum, item) => sum + Math.round(item.amount * 100), 0) / 100;
+      const total = transactions.reduce((sum, item) => sum + Math.round(item.amount * 100), 0) / 100;
+      const remainingAsOf = end < cutoff ? end : cutoff;
+      const walletBudgets = budgets.filter((budget) => budget.wallet === wallet.id);
+      const badCurrency = walletBudgets.some((budget) => budget.currency !== wallet.currency);
+      const overlapping = walletBudgets.some((entry, index) => walletBudgets.slice(index + 1).some((other) =>
+        entry.currency === other.currency && (!entry.category || !other.category || entry.category === other.category)));
+      const unspent = !walletBudgets.length || badCurrency || overlapping
+        ? null
+        : walletBudgets.reduce((sum, budget) => sum + budgetSummary(state, budget, remainingAsOf).remaining, 0);
+      result.push({ start, end, walletId: wallet.id, currency: wallet.currency, fixed, variable: total - fixed, total, transactionCount: transactions.length, unspent });
+    }
+  }
+  return result;
+}
+
 export function validFixedExpense(state: AppState, expense: FixedExpense): boolean {
   const budget = state.goals.find((item) => item.id === expense.budgetId && item.kind === "budget");
   const wallet = state.wallets.find((item) => item.id === (budget?.wallet || expense.walletId) && !item.archived);

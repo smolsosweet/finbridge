@@ -2,15 +2,17 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Bell, CalendarDays, Moon, Sun } from "lucide-react";
+import { Bell, CalendarDays, Moon, ShieldAlert, Sun } from "lucide-react";
 import { useSafety } from "@/components/safety/SafetyProvider";
 import { SAFETY_COPY } from "@/components/safety/safety-copy";
+import { NotificationCenter } from "./NotificationCenter";
 
 export interface FinBridgeHeaderProps {
   lang?: "vi" | "en" | "zh";
   theme?: string;
   currentLanguage?: string;
   onOpenCalendar?: () => void;
+  navigate?: (path: string) => void;
   onToggleTheme?: () => void;
   onSelectLanguage?: (lang: string) => void;
   children?: ReactNode;
@@ -21,6 +23,7 @@ export function FinBridgeHeader({
   theme = "light",
   currentLanguage,
   onOpenCalendar,
+  navigate,
   onToggleTheme,
   onSelectLanguage,
   children,
@@ -63,7 +66,7 @@ export function FinBridgeHeader({
       </div>
 
       <div className="fb-header-actions">
-        {safety && <Link className="fb-alert-bell" href="/app/safetyAlerts?view=history" aria-label={`${SAFETY_COPY[lang].history}${unread ? ` (${unread})` : ""}`} title={SAFETY_COPY[lang].history}><Bell size={20} />{unread > 0 && <span>{unread}</span>}</Link>}
+        {safety && <Link className="fb-alert-bell" href="/app/safetyAlerts?view=history" aria-label={`${SAFETY_COPY[lang].history}${unread ? ` (${unread})` : ""}`} title={SAFETY_COPY[lang].history}><ShieldAlert size={20} />{unread > 0 && <span>{unread}</span>}</Link>}
         {onOpenCalendar && (
           <button
             type="button"
@@ -76,6 +79,8 @@ export function FinBridgeHeader({
             <span className="fb-header-btn-text">{calLabel}</span>
           </button>
         )}
+
+        {navigate && <NotificationCenter navigate={navigate} />}
 
         {onToggleTheme && (
           <button

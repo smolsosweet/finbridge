@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { calculateScenario, scenarioContext } from "../src/lib/scenario-planner.ts";
+import { weeklyPeriodStatus, weeklySpendingRows } from "../src/components/sites/rolly/replica/planningModel.ts";
 
 const state = () => ({
   wallets: [
@@ -36,6 +37,42 @@ test("projects balances and budget deterministically without mutating source dat
   assert.equal(result.budgets[0].afterScenario, 450_000);
   assert.equal(result.plannedBills.length, 1);
   assert.deepEqual(app, before);
+});
+
+test("does not count future-dated transactions as actual budget spending", () => {
+  const app = state();
+  app.transactions.push({ id: "future-food", title: "Future dinner", amount: 75_000, type: "expense", category: "Food", date: "2026-10-15", wallet: "vnd", note: "" });
+  const result = calculateScenario(app, scenario({ changes: [], horizonEnd: "2026-10-31" }), "2026-10-14");
+  assert.equal(result.budgets[0].actualRemaining, 500_000);
+});
+
+test("weekly actuals reconcile to the month-to-date budget and exclude later-dated expenses", () => {
+  const app = state();
+  const budget = app.goals[0];
+  budget.amount = 7_000_000;
+  budget.category = "";
+  app.transactions = [
+    ["w1-a", 50_000, "2026-10-02"], ["w1-b", 60_000, "2026-10-05"],
+    ["w2", 70_000, "2026-10-09"], ["fixed", 92_000, "2026-10-12"], ["w3", 20_000, "2026-10-15"],
+    ["future", 500_000, "2026-10-21"],
+  ].map(([id, amount, date]) => ({ id, title: id, amount, type: "expense", category: id === "fixed" ? "Rent" : "Food", date, wallet: "vnd", note: "" }));
+  app.fixedExpenses = [{ id: "rent", budgetId: budget.id, title: "Rent", amount: 92_000, category: "Rent", dueDate: "2026-10-12", recurrence: "once", active: true }];
+
+  const rows = weeklySpendingRows(app, [budget], "2026-10", "2026-10-15", "vnd");
+  const actualRows = rows.filter((row) => row.total > 0);
+  assert.equal(actualRows.reduce((sum, row) => sum + row.transactionCount, 0), 5);
+  assert.equal(rows.reduce((sum, row) => sum + row.total, 0), 292_000);
+  assert.equal(rows.reduce((sum, row) => sum + row.fixed, 0), 92_000);
+  assert.equal(rows.reduce((sum, row) => sum + row.variable, 0), 200_000);
+  assert.equal(rows.find((row) => row.start === "2026-10-15").unspent, 6_708_000);
+  assert.equal(rows.at(-1).unspent, 6_708_000);
+});
+
+test("labels completed, partial and future weekly periods against the actuals cutoff", () => {
+  assert.equal(weeklyPeriodStatus("2026-10-01", "2026-10-07", "2026-10-15"), "complete");
+  assert.equal(weeklyPeriodStatus("2026-10-15", "2026-10-21", "2026-10-15"), "partial");
+  assert.equal(weeklyPeriodStatus("2026-10-22", "2026-10-28", "2026-10-15"), "future");
+  assert.equal(weeklyPeriodStatus("2026-11-01", "2026-11-07", "2026-10-15"), "future");
 });
 
 test("keeps currencies separate and includes transfer-in in the destination wallet", () => {

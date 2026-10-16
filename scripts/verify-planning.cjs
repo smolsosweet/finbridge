@@ -18,7 +18,7 @@ function compile(file, resolve = requireLocal) {
 }
 const weeks = compile("chartWeek.ts");
 const model = compile("planningModel.ts", (name) => name === "./chartWeek" ? weeks : requireLocal(name));
-const header = compile("FinBridgeHeader.tsx", name => name === "@/components/safety/SafetyProvider" ? { useSafety: () => null } : name === "@/components/safety/safety-copy" ? compile("../../../safety/safety-copy.ts") : requireLocal(name));
+const header = compile("FinBridgeHeader.tsx", name => name === "@/components/safety/SafetyProvider" ? { useSafety: () => null } : name === "@/components/safety/safety-copy" ? compile("../../../safety/safety-copy.ts") : name === "./NotificationCenter" ? { NotificationCenter: () => null } : requireLocal(name));
 const setupCopy = compile("../../../../lib/setup-copy.ts");
 const paymentsModel = compile("../../../../lib/fixed-expense-payments.ts", (name) => name === "../components/sites/rolly/replica/planningModel" ? model : requireLocal(name));
 const outlookModel = compile("../../../../lib/financial-outlook.ts", (name) => name === "../components/sites/rolly/replica/planningModel" ? model : name === "./fixed-expense-payments" ? paymentsModel : requireLocal(name));
@@ -27,6 +27,8 @@ const budgetCategories = compile("../../../../lib/budget-categories.ts");
 const scenarioModel = compile("../../../../lib/scenario-planner.ts", name => name === "../components/sites/rolly/replica/planningModel" ? model : name === "./fixed-expense-payments" ? paymentsModel : requireLocal(name));
 const outlookUI = compile("FinancialOutlook.tsx", (name) => {
   if (name === "@/lib/financial-outlook") return outlookModel;
+  if (name === "@/lib/notification-center") return { notificationDestination: () => "", notificationReadIds: () => [], markNotificationRead: () => {} };
+  if (name === "@/lib/proactive-alerts") return { detectProactiveAlerts: () => [], readDismissedAlertIds: () => [] };
   if (name.endsWith(".module.css")) return { default: new Proxy({}, { get: (_, key) => String(key) }) };
   if (name === "./store") return { useAppState: () => state, updateState: update => { state = update(state); }, today: () => "2026-10-13" };
   return requireLocal(name);
@@ -43,9 +45,9 @@ const transactions = [
 ];
 let state = { wallets, goals: [budget], fixedExpenses: [expense], transactions, categories: ["Rent", "Food", "Salary"], categoryMeta: { Salary: { type: "income" } }, settings: { language: "English" } };
 let summary = model.budgetSummary(state, budget, "2026-10-13");
-assert.equal(summary.actual, 3050000);
+assert.equal(summary.actual, 3100000, "negative expense rows are invalid and excluded from spending totals");
 assert.equal(summary.planned, 3000000);
-assert.equal(summary.remaining, 6950000, "planned expenses are not added to actual spending");
+assert.equal(summary.remaining, 6900000, "planned expenses are not added to actual spending");
 assert.equal(summary.allocationRemaining, 7000000);
 assert.equal(model.budgetSummary(state, { ...budget, category: "Rent" }, "2026-10-13").actual, 3000000);
 assert.deepEqual(model.budgetWindow({ ...budget, date: "2026-01-31" }, "2026-02-28"), { start: "2026-02-28", end: "2026-03-30" });
@@ -93,7 +95,7 @@ const snapshot = JSON.stringify(transactions);
 let html = render();
 assert.match(html, /fb-brand-mark/);
 assert.doesNotMatch(html, /Challenges|Lend|Borrow|Debts|r-mascot|empty_list/);
-state.settings.language = "Tiếng Việt"; assert.match(render(), /Khoản chi cố định/);
+state.settings.language = "Tiếng Việt"; assert.match(render().replace(/&amp;/g, "&"), /Ngân sách & Chi cố định/);
 state.settings.language = "中文"; assert.match(render(), /固定支出/);
 state.settings.language = "English";
 // Test the real creation handlers; there are no financial writes.

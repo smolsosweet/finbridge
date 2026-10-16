@@ -5,11 +5,13 @@ import { Camera, Mic, Send, Settings, Plus, ArrowRightLeft, X, Trash2 } from "lu
 import { EmptyState, Field, Mascot, Modal, PageHeader, Toggle } from "./Ui";
 import { currencySymbol, money, today, updateState, useAppState, workspaceOwner, workspacePersistence, type AppState, type ChatMessage, type Transaction } from "./store";
 import { createTimeoutTransactionDraft, editDraftById, inferDraftCategory, isNewTransactionMessage, matchDraftCategoryAnswer, normalizeVietnameseMessage, readyDrafts, removeDraftById, requestedDraftCategory, validateAndCommitDrafts, validateDraftForState, type TransactionDraft } from "@/lib/transaction-drafts";
+import { resolveUniqueCurrencyWallet } from "@/lib/transaction-currency";
 import { answerFinancialQuery, type FinancialAction } from "@/lib/financial-chat";
 import { localPlanReply, modelHistory } from "@/lib/chat-local-plan";
 import planStyles from "./FinancialOutlook.module.css";
 import { tools } from "./Tools";
 import { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName, type AppLanguage } from "@/lib/i18n";
+import { findTransactionsForDeletion, type TransactionDeletionCriteria } from "@/lib/transaction-deletion";
 
 export interface TransactionFormCopy {
   expense: string;
@@ -471,6 +473,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   const messagesRef = useRef<HTMLDivElement>(null);
   const commitLock = useRef(false);
   const aiRequestLock = useRef(false);
+  const deletionLocks = useRef(new Set<string>());
   const close = () => { recorder.current?.stop(); setListening(false); setModal(""); };
   useEffect(() => () => {
     const activeRecorder = recorder.current;
@@ -544,11 +547,53 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     setMessages([{ role: "assistant", text: "Xin chào!👋 Hãy mô tả giao dịch; tôi sẽ tạo bản nháp để bạn kiểm tra trước khi lưu." }]);
     setDrafts([]); setClarifyingDraftId(null); setModal(""); setText("");
   }
+  function cancelTransactionDeletion(confirmationId: string) {
+    if (deletionLocks.current.has(confirmationId)) return;
+    deletionLocks.current.add(confirmationId);
+    setMessages((previous) => previous.map((message) => message.transactionDeletion?.confirmationId === confirmationId
+      ? { ...message, transactionDeletion: { ...message.transactionDeletion, status: "cancelled" } }
+      : message));
+  }
+  function selectTransactionForDeletion(confirmationId: string, transactionId: string, selected: boolean) {
+    if (deletionLocks.current.has(confirmationId)) return;
+    setMessages((previous) => previous.map((message) => {
+      const deletion = message.transactionDeletion;
+      if (deletion?.confirmationId !== confirmationId || deletion.status !== "pending") return message;
+      const selectedIds = new Set(deletion.selectedIds);
+      if (selected) selectedIds.add(transactionId); else selectedIds.delete(transactionId);
+      return { ...message, transactionDeletion: { ...deletion, selectedIds: [...selectedIds] } };
+    }));
+  }
+  function confirmTransactionDeletion(confirmationId: string) {
+    if (deletionLocks.current.has(confirmationId)) return;
+    const confirmation = messages.find((message) => message.transactionDeletion?.confirmationId === confirmationId)?.transactionDeletion;
+    if (!confirmation || confirmation.status !== "pending" || confirmation.selectedIds.length === 0) return;
+    deletionLocks.current.add(confirmationId);
+    let deletedCount = 0;
+    try {
+      const selectedIds = new Set(confirmation.selectedIds);
+      updateState((current) => {
+        deletedCount = current.transactions.filter((transaction) => selectedIds.has(transaction.id)).length;
+        return { ...current, transactions: current.transactions.filter((transaction) => !selectedIds.has(transaction.id)) };
+      });
+      setMessages((previous) => [...previous.map((message) => message.transactionDeletion?.confirmationId === confirmationId
+        ? { ...message, transactionDeletion: { ...message.transactionDeletion, status: "confirmed" as const, deletedCount } }
+        : message), {
+        role: "assistant",
+        text: deletedCount ? `Đã xóa ${deletedCount} giao dịch theo yêu cầu. Số dư, lịch sử và ngân sách đã được cập nhật.` : "Các giao dịch này không còn trong dữ liệu nên không có giao dịch nào bị xóa.",
+        localOnly: true,
+      }]);
+    } catch {
+      deletionLocks.current.delete(confirmationId);
+      setMessages((previous) => [...previous, { role: "assistant", text: "Chưa xóa được giao dịch do lỗi lưu dữ liệu. Giao dịch vẫn được giữ nguyên; hãy thử lại." }]);
+    }
+  }
   async function send(value: string) {
     const message = value.trim();
     if (!message || busy || aiRequestLock.current) return;
+    const deletionRequest = /\b(?:xoa|delete|remove|clear)\b/.test(normalizeVietnameseMessage(message));
     const categoryPrompt = [...messages].reverse().find((item) => item.role === "assistant" && item.categoryChoiceDraftIds?.length);
-    if (categoryPrompt?.categoryChoiceDraftIds?.length) {
+    if (categoryPrompt?.categoryChoiceDraftIds?.length && !deletionRequest) {
       const draftId = categoryPrompt.categoryChoiceDraftIds[0];
       const draft = drafts.find((item) => item.id === draftId);
       const categoryName = categoryNameFromReply(message);
@@ -580,7 +625,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     const activeDraftId = clarifyingDraftId;
     const activeDraft = activeDraftId ? drafts.find((draft) => draft.id === activeDraftId) : undefined;
     const exactCategory = activeDraft ? matchDraftCategoryAnswer(message, activeDraft, state) : null;
-    if (activeDraft && exactCategory) {
+    if (activeDraft && exactCategory && !deletionRequest) {
       const updatedDrafts = editDraftById(drafts, activeDraft.id, { category: exactCategory }, state);
       const updated = updatedDrafts.find((draft) => draft.id === activeDraft.id);
       setText(""); setDrafts(updatedDrafts);
@@ -589,7 +634,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       return;
     }
     const newCategoryRequest = activeDraft && activeDraft.needsReview.includes("category") ? requestedDraftCategory(message) || categoryNameFromReply(message) : null;
-    if (activeDraft && newCategoryRequest) {
+    if (activeDraft && newCategoryRequest && !deletionRequest) {
       setText("");
       setMessages((previous) => [...previous, { role: "user", text: message }]);
       if (assignNewCategory(activeDraft.id, newCategoryRequest)) {
@@ -630,7 +675,36 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       const returned = (result as { drafts: unknown[] }).drafts;
       const validShape = returned.every((item) => item && typeof item === "object" && typeof (item as TransactionDraft).id === "string" && typeof (item as TransactionDraft).title === "string" && Array.isArray((item as TransactionDraft).needsReview));
       if (!validShape || returned.length > 20) throw new Error("AI trả về dữ liệu chưa hợp lệ. Vui lòng thử lại.");
-      const ai = result as { intent: string; action?: string; walletId?: string | null; scope?: "selected" | "all"; periodStart?: string | null; periodEnd?: string | null; category?: string | null; searchTerm?: string | null; transactionType?: "expense" | "income" | null; reply?: string };
+      const ai = result as { intent: string; action?: string; walletId?: string | null; scope?: "selected" | "all"; periodStart?: string | null; periodEnd?: string | null; category?: string | null; searchTerm?: string | null; transactionType?: "expense" | "income" | null; reply?: string; deletion?: TransactionDeletionCriteria };
+      if (ai.intent === "delete_transactions") {
+        const deletion = ai.deletion;
+        if (!deletion || deletion.scope === "none") {
+          setMessages((previous) => [...previous, { role: "assistant", text: "Bạn muốn xóa giao dịch nào? Hãy cho biết tên, số tiền, ngày hoặc danh mục; dữ liệu chưa bị thay đổi." }]);
+          return;
+        }
+        const matches = findTransactionsForDeletion(state.transactions, deletion);
+        const fallbackCriteria = { ...deletion, searchTerm: null };
+        const candidates = matches.length ? matches : findTransactionsForDeletion(state.transactions, fallbackCriteria);
+        if (!candidates.length) {
+          setMessages((previous) => [...previous, { role: "assistant", text: deletion.scope === "all" && !state.transactions.length
+            ? "Hiện chưa có giao dịch nào để xóa."
+            : "Mình chưa tìm thấy giao dịch khớp yêu cầu. Hãy nêu rõ tên, số tiền, ngày hoặc danh mục; chưa có dữ liệu nào bị xóa." }]);
+          return;
+        }
+        const ids = candidates.map((transaction) => transaction.id);
+        const all = deletion.scope === "all" && !deletion.amount && !deletion.walletId && !deletion.periodStart && !deletion.periodEnd && !deletion.category && !deletion.searchTerm && !deletion.type;
+        const exactMatch = matches.length > 0;
+        const selectByDefault = exactMatch && (deletion.scope === "all" || matches.length === 1);
+        const text = all
+          ? `Bạn yêu cầu xóa toàn bộ ${candidates.length} giao dịch. Hãy kiểm tra danh sách và xác nhận bên dưới; hiện chưa giao dịch nào bị xóa.`
+          : exactMatch
+            ? `Mình tìm thấy ${matches.length} giao dịch khớp yêu cầu. Hãy chọn đúng giao dịch cần xóa rồi xác nhận; hiện chưa giao dịch nào bị xóa.`
+            : `Mình chưa khớp được tên giao dịch, nhưng có ${candidates.length} giao dịch trong khoảng ngày bạn nói. Hãy chọn đúng giao dịch; chưa có dữ liệu nào bị xóa.`;
+        setMessages((previous) => [...previous, { role: "assistant", text, transactionDeletion: {
+          confirmationId: crypto.randomUUID(), transactionIds: ids, selectedIds: selectByDefault ? ids : [], scope: all ? "all" : "matching", status: "pending",
+        } }]);
+        return;
+      }
       if (ai.intent === "financial") {
         const allowedActions: FinancialAction[] = ["balance", "spending_summary", "top_category", "transactions", "budget_status", "explain", "unknown"];
         const answer = answerFinancialQuery({
@@ -641,7 +715,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           searchTerm: ai.searchTerm || null, transactionType: ai.transactionType || null,
         }, state, wallet, today());
         setClarifyingDraftId(activeDraftId);
-        setMessages((previous) => [...previous, { role: "assistant", text: ai.action === "budget_status" ? localPlanReply(state, today(), ai.scope === "all" ? undefined : [ai.walletId || wallet]) : answer, localOnly: true }]);
+        setMessages((previous) => [...previous, { role: "assistant", text: answer, localOnly: true }]);
         return;
       }
       if (ai.intent === "general" || ai.intent === "unclear") {
@@ -667,24 +741,48 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         setClarifyingDraftId(update && missing.length ? update.id : null);
         setMessages((previous) => [...previous, { role: "assistant", text: update && missing.length ? clarificationQuestion(missing) : "Cảm ơn bạn, mình đã cập nhật bản nháp. Hãy kiểm tra rồi xác nhận để lưu nhé." }]);
       } else if (validated.length) {
-        const requireWalletChoice = ai.intent === "transaction";
-        if (requireWalletChoice) validated = validated.map((draft) => validateDraftForState({ ...draft, wallet: null, currency: null }, state));
         setDrafts((previous) => [...previous, ...validated]);
-        const missing = [...new Set(validated.flatMap((draft) => draft.needsReview))];
-        setClarifyingDraftId(requireWalletChoice ? null : validated.find((draft) => draft.needsReview.length > 0)?.id || null);
-        setMessages((previous) => [...previous, requireWalletChoice
-          ? { role: "assistant", text: "Bạn muốn ghi từng giao dịch vào ví nào? Chọn ví bên dưới để tạo bản nháp.", walletChoiceDraftIds: validated.map((draft) => draft.id) }
-          : { role: "assistant", text: missing.length ? clarificationQuestion(missing) : "Mình đã tạo bản nháp. Hãy kiểm tra rồi xác nhận để lưu nhé.", draftIds: validated.map((draft) => draft.id) }]);
+        const walletChoiceDraftIds = validated.filter((draft) => draft.needsReview.includes("wallet")).map((draft) => draft.id);
+        setClarifyingDraftId(validated.find((draft) => draft.needsReview.length > 0)?.id || null);
+        const currencyMatch = ai.intent === "transaction"
+          ? resolveUniqueCurrencyWallet(message, state.wallets.filter((item) => !item.archived))
+          : null;
+        const walletPrompt = walletChoiceDraftIds.length
+          ? currencyMatch?.ambiguous && currencyMatch.currency
+            ? `Có nhiều ví dùng ${currencyMatch.currency}; hãy chọn ví cho từng bản nháp.`
+            : currencyMatch?.ambiguous
+              ? "Tin nhắn có nhiều đơn vị tiền tệ. Hãy chọn ví phù hợp cho từng bản nháp."
+            : currencyMatch?.currency
+              ? `Mình nhận ra tiền tệ ${currencyMatch.currency}, nhưng chưa có ví phù hợp đang hoạt động. Hãy chọn ví hoặc tạo ví ${currencyMatch.currency}.`
+              : "Mình chưa chắc nên dùng ví nào. Hãy chọn ví cho từng bản nháp."
+          : "Mình đã tạo bản nháp. Hãy kiểm tra rồi xác nhận để lưu nhé.";
+        setMessages((previous) => [...previous, {
+          role: "assistant",
+          text: walletPrompt,
+          draftIds: validated.map((draft) => draft.id),
+          ...(currencyMatch?.currency ? { requiredCurrency: currencyMatch.currency } : {}),
+          ...(walletChoiceDraftIds.length ? { walletChoiceDraftIds } : {}),
+        }]);
       }
       else setMessages((previous) => [...previous, { role: "assistant", text: "Chưa tìm thấy giao dịch nào có thể đưa vào bản nháp. Hãy thử mô tả lại." }]);
     } catch (error) {
       const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError" || /chưa phản hồi kịp/i.test(error.message));
       const fallback = timedOut ? createTimeoutTransactionDraft(message, batchId, today(), state) : null;
       if (fallback) {
-        const checked = validateDraftForState(fallback, state);
+        const currencyWallet = resolveUniqueCurrencyWallet(message, state.wallets.filter((item) => !item.archived));
+        const fallbackWallet = currencyWallet.walletId || (!currencyWallet.currency && !currencyWallet.ambiguous ? wallet : null);
+        const selectedWallet = state.wallets.find((item) => item.id === fallbackWallet && !item.archived);
+        const checked = validateDraftForState({ ...fallback, wallet: selectedWallet?.id || null, currency: selectedWallet?.currency || null }, state);
         setDrafts((previous) => [...previous, checked]);
-        setClarifyingDraftId(null);
-        setMessages((previous) => [...previous, { role: "assistant", text: "Gemini đang phản hồi chậm. Mình đã tạo bản nháp tạm từ thông tin nhận diện chắc chắn; hãy chọn ví, kiểm tra các mục còn thiếu rồi xác nhận để lưu.", walletChoiceDraftIds: [checked.id] }]);
+        setClarifyingDraftId(checked.needsReview.length ? checked.id : null);
+        const unresolvedWallet = checked.needsReview.includes("wallet");
+        setMessages((previous) => [...previous, {
+          role: "assistant",
+          text: `Gemini đang phản hồi chậm. Mình đã tạo bản nháp tạm; hãy kiểm tra rồi xác nhận.${unresolvedWallet ? currencyWallet.ambiguous ? " Tin nhắn có nhiều đơn vị tiền tệ; chọn ví phù hợp bên dưới." : " Chọn ví phù hợp bên dưới." : ""}`,
+          draftIds: [checked.id],
+          ...(currencyWallet.currency ? { requiredCurrency: currencyWallet.currency } : {}),
+          ...(unresolvedWallet ? { walletChoiceDraftIds: [checked.id] } : {}),
+        }]);
       } else {
         const errorMessage = timedOut ? "AI phản hồi quá lâu. Tin nhắn vẫn còn trong hội thoại; hãy thử gửi lại." : error instanceof Error ? error.message : "Không thể phân tích nội dung. Vui lòng thử lại.";
         setText((current) => current.trim() ? current : message);
@@ -810,10 +908,11 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     const chosenWallet = state.wallets.find((item) => item.id === walletId && !item.archived);
     const draft = drafts.find((item) => item.id === draftId);
     if (!chosenWallet || !draft) return;
+    const choiceMessage = messages.find((message) => message.walletChoiceDraftIds?.includes(draftId));
+    if (choiceMessage?.requiredCurrency && chosenWallet.currency.toUpperCase() !== choiceMessage.requiredCurrency.toUpperCase()) return;
     const updatedDrafts = editDraftById(drafts, draftId, { wallet: chosenWallet.id, currency: chosenWallet.currency }, state);
     const updatedDraft = updatedDrafts.find((item) => item.id === draftId);
     if (!updatedDraft) return;
-    const choiceMessage = messages.find((message) => message.walletChoiceDraftIds?.includes(draftId));
     const otherWalletChoicesRemain = messages.some((message) => message.walletChoiceDraftIds?.some((id) => id !== draftId));
     const needsCategory = updatedDraft.needsReview.includes("category") && !!updatedDraft.type;
     const batchDraftIds = [...new Set([...(choiceMessage?.draftIds || []), ...(choiceMessage?.walletChoiceDraftIds || [])])];
@@ -919,6 +1018,34 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       <span className="r-chat-date">Hôm nay</span>
       {messages.map((message, index) => <div key={index} className={"r-message " + message.role + (message.draftIds ? " r-ai-draft-message" : "")}>
         <p>{message.text}</p>
+        {message.transactionDeletion && (() => {
+          const deletion = message.transactionDeletion;
+          const candidates = state.transactions.filter((transaction) => deletion.transactionIds.includes(transaction.id));
+          const copy = {
+            vi: { all: "Xóa toàn bộ giao dịch", matched: "Giao dịch khớp yêu cầu", selected: "Được chọn để xóa", cancel: "Hủy yêu cầu", confirm: "Xác nhận xóa", cancelled: "Đã hủy yêu cầu xóa. Dữ liệu vẫn được giữ.", confirmed: `Đã xóa ${deletion.deletedCount || 0} giao dịch.`, empty: "Các giao dịch này không còn tồn tại.", danger: "Thao tác này sẽ xóa giao dịch khỏi dữ liệu và cập nhật số dư, lịch sử, ngân sách." },
+            en: { all: "Delete all transactions", matched: "Matching transactions", selected: "Selected for deletion", cancel: "Cancel request", confirm: "Confirm deletion", cancelled: "Deletion cancelled. Your data is unchanged.", confirmed: `Deleted ${deletion.deletedCount || 0} transactions.`, empty: "These transactions are no longer available.", danger: "This removes the transactions and updates balances, history and budgets." },
+            zh: { all: "删除全部交易", matched: "符合条件的交易", selected: "已选择删除", cancel: "取消请求", confirm: "确认删除", cancelled: "已取消删除，数据保持不变。", confirmed: `已删除 ${deletion.deletedCount || 0} 笔交易。`, empty: "这些交易已不存在。", danger: "删除后将更新余额、历史记录和预算。" },
+          }[resolveLanguage(state.settings.language)];
+          return <section className="r-ai-delete-confirm" aria-label={copy.matched}>
+            <strong>{deletion.status === "pending" ? deletion.scope === "all" ? copy.all : copy.matched : deletion.status === "confirmed" ? copy.confirmed : copy.cancelled}</strong>
+            {deletion.status === "pending" && <>
+              <p>{copy.danger}</p>
+              {candidates.length ? <div className="r-ai-delete-list">{candidates.map((transaction) => {
+                const transactionWallet = state.wallets.find((item) => item.id === transaction.wallet);
+                return <label key={transaction.id}>
+                  <input type="checkbox" checked={deletion.selectedIds.includes(transaction.id)} onChange={(event) => selectTransactionForDeletion(deletion.confirmationId, transaction.id, event.target.checked)} />
+                  <span><b>{transaction.title}</b><small>{transaction.date.slice(0, 10)} · {transaction.category} · {transactionWallet?.name || "Ví"}</small></span>
+                  <strong>{money(transaction.amount, transactionWallet?.currency)}</strong>
+                </label>;
+              })}</div> : <p>{copy.empty}</p>}
+              <small>{deletion.selectedIds.length} {copy.selected.toLocaleLowerCase()}</small>
+              <div className="r-two-options">
+                <button type="button" className="r-secondary" onClick={() => cancelTransactionDeletion(deletion.confirmationId)}>{copy.cancel}</button>
+                <button type="button" className="r-danger" disabled={!deletion.selectedIds.length || !candidates.length} onClick={() => confirmTransactionDeletion(deletion.confirmationId)}>{copy.confirm} ({deletion.selectedIds.length})</button>
+              </div>
+            </>}
+          </section>;
+        })()}
         {message.retryReceipt && failedReceipt.current && <button type="button" className="r-ai-clarify-button" disabled={busy} onClick={() => { const file = failedReceipt.current; if (file) void readReceipt(file); }}>Thử lại ảnh</button>}
         {message.transaction && <button type="button" className="r-chat-record" onClick={() => navigate("editTransaction?id=" + message.transaction?.id)}>
           <small>Đã ghi: {message.transaction.type === "income" ? "Thu nhập" : "Chi phí"}</small><b>{message.transaction.category}</b>
@@ -927,11 +1054,12 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         {message.walletChoiceDraftIds?.map((id) => {
           const pending = drafts.find((draft) => draft.id === id);
           if (!pending) return null;
+          const availableWallets = state.wallets.filter((item) => !item.archived && (!message.requiredCurrency || item.currency.toUpperCase() === message.requiredCurrency.toUpperCase()));
           return <section className="r-ai-wallet-choice" key={id} aria-label={`Chọn ví cho ${pending.title}`}>
             <b>{pending.title || "Giao dịch"}</b>
             <span>{pending.type === "income" ? "Thu nhập" : "Chi phí"}{pending.amount !== null ? ` · ${pending.amount.toLocaleString("vi-VN")}` : " · Chưa rõ số tiền"}</span>
-            <div>{state.wallets.filter((item) => !item.archived).map((item) => <button type="button" key={item.id} onClick={() => chooseDraftWallet(id, item.id)}>{item.name === "." ? "Ví chính" : item.name} · {item.currency}</button>)}</div>
-            {!state.wallets.some((item) => !item.archived) && <small>Hiện chưa có ví đang hoạt động. Hãy tạo ví trước khi ghi giao dịch.</small>}
+            <div>{availableWallets.map((item) => <button type="button" key={item.id} onClick={() => chooseDraftWallet(id, item.id)}>{item.name === "." ? "Ví chính" : item.name} · {item.currency}</button>)}</div>
+            {!availableWallets.length && <small>{message.requiredCurrency ? `Chưa có ví ${message.requiredCurrency} đang hoạt động. Hãy tạo ví cùng tiền tệ trước khi xác nhận.` : "Hiện chưa có ví đang hoạt động. Hãy tạo ví trước khi ghi giao dịch."}</small>}
           </section>;
         })}
         {message.draftIds?.map((id) => {

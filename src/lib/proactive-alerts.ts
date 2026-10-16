@@ -1,0 +1,167 @@
+import type { AppState, FixedExpense, Wallet } from "../components/sites/rolly/replica/store";
+import { budgetSummary, plannedOccurrences } from "../components/sites/rolly/replica/planningModel";
+import { budgetPace, trackedBalance } from "./financial-outlook";
+
+export type FinancialAlertPriority = "high" | "medium" | "low";
+export type FinancialAlertKind = "budget-exceeded" | "budget-risk" | "cash-shortfall" | "fixed-due" | "negative-balance";
+export interface FinancialAlert {
+  id: string;
+  kind: FinancialAlertKind;
+  problem: string;
+  figures: string;
+  when: string;
+  cause: string;
+  priority: FinancialAlertPriority;
+  suggestedAction: string;
+  assumptions: string;
+  walletId: string;
+  currency: string;
+  amount: number;
+  projected: boolean;
+  targetType: "budget" | "fixed-expense" | "wallet";
+  targetId: string;
+}
+
+const cents = (value: number) => Math.round(value * 100);
+const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T12:00:00`) - Date.parse(`${from}T12:00:00`)) / 86_400_000);
+const addDays = (value: string, count: number) => {
+  const date = new Date(`${value}T12:00:00`);
+  date.setDate(date.getDate() + count);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+function formatMoney(amount: number, currency: string, language: string) {
+  const locale = /中文|zh/i.test(language) ? "zh-CN" : /English|en/i.test(language) ? "en-US" : "vi-VN";
+  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(amount)} ${currency}`;
+}
+function validAmount(amount: number) { return Number.isFinite(amount) && amount >= 0; }
+function validDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isFinite(date.getTime()) && `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}` === value;
+}
+function walletName(wallet: Wallet) { return wallet.name === "." ? "Ví chính" : wallet.name; }
+function expenseWallet(state: AppState, expense: FixedExpense) {
+  const budget = state.goals.find((goal) => goal.kind === "budget" && goal.id === expense.budgetId);
+  const wallet = state.wallets.find((item) => item.id === (budget?.wallet || expense.walletId) && !item.archived);
+  if (!wallet || (expense.budgetId && !budget) || (budget && budget.currency !== wallet.currency)) return null;
+  return { budget, wallet };
+}
+function alreadyPaid(state: AppState, expense: FixedExpense, wallet: Wallet, due: string) {
+  const from = addDays(due, -3), to = addDays(due, 3);
+  return state.transactions.some((transaction) => transaction.type === "expense" && transaction.wallet === wallet.id
+    && transaction.category === expense.category && transaction.date.slice(0, 10) >= from && transaction.date.slice(0, 10) <= to
+    && validAmount(transaction.amount) && cents(transaction.amount) === cents(expense.amount));
+}
+
+/** Create evidence-based feed items. All comparisons and amounts are computed locally. */
+export function detectProactiveAlerts(state: AppState, asOf: string, dismissedIds: readonly string[] = [], includeHandled = false): FinancialAlert[] {
+  const dismissed = new Set(dismissedIds), alerts: FinancialAlert[] = [];
+  const activeWallets = state.wallets.filter((wallet) => !wallet.archived);
+  const language = String(state.settings.language || "Tiếng Việt");
+  const add = (alert: FinancialAlert) => { if (includeHandled || !dismissed.has(alert.id)) alerts.push(alert); };
+
+  for (const budget of state.goals.filter((goal) => goal.kind === "budget")) {
+    const wallet = activeWallets.find((item) => item.id === budget.wallet);
+    if (!wallet || wallet.currency !== budget.currency || !Number.isFinite(budget.amount) || budget.amount <= 0) continue;
+    const summary = budgetSummary(state, budget, asOf);
+    const invalidRecordedAmount = state.transactions.some((item) => item.type === "expense" && item.wallet === wallet.id
+      && (!budget.category || item.category === budget.category)
+      && (!validDate(item.date.slice(0, 10)) || (item.date.slice(0, 10) >= summary.start && item.date.slice(0, 10) <= asOf && !validAmount(item.amount))));
+    if (invalidRecordedAmount) continue;
+    const spent = state.transactions.filter((item) => item.type === "expense" && item.wallet === wallet.id
+      && (!budget.category || item.category === budget.category) && item.date.slice(0, 10) >= summary.start
+      && item.date.slice(0, 10) <= asOf && item.date.slice(0, 10) <= summary.end && validAmount(item.amount))
+      .reduce((sum, item) => sum + cents(item.amount), 0) / 100;
+    const window = `${summary.start}:${summary.end}`;
+    const base = { walletId: wallet.id, currency: wallet.currency, walletName: walletName(wallet), amount: spent - budget.amount };
+    if (spent > budget.amount) {
+      add({ id: `budget-exceeded:${budget.id}:${window}`, kind: "budget-exceeded", problem: `Ngân sách “${budget.title}” đã vượt hạn mức.`,
+        figures: `Đã chi ${formatMoney(spent, wallet.currency, language)} / ${formatMoney(budget.amount, wallet.currency, language)} · vượt ${formatMoney(spent - budget.amount, wallet.currency, language)}.`,
+        when: `Chu kỳ ${summary.start} – ${summary.end}`, cause: `Giao dịch đã ghi nhận trong danh mục ${budget.category || "mọi danh mục"}.`, priority: "high",
+        suggestedAction: "Rà soát các khoản chi còn lại trong kỳ và điều chỉnh ngân sách nếu hạn mức đã thay đổi.", assumptions: "Chi tiêu đã ghi nhận; không phải dự báo.", walletId: base.walletId, currency: base.currency, amount: base.amount, projected: false, targetType: "budget", targetId: budget.id });
+      continue;
+    }
+    const pace = budgetPace(state, budget, asOf);
+    const validExpenses = state.transactions.filter((item) => item.type === "expense" && item.wallet === wallet.id
+      && (!budget.category || item.category === budget.category) && item.date.slice(0, 10) >= pace.start && item.date.slice(0, 10) <= asOf
+      && validAmount(item.amount));
+    if (validExpenses.length && pace.remainingDays > 0 && pace.projected > budget.amount) {
+      const projectedExcess = pace.projected - budget.amount;
+      add({ id: `budget-risk:${budget.id}:${window}`, kind: "budget-risk", problem: `Ngân sách “${budget.title}” có nguy cơ vượt hạn mức.`,
+        figures: `Đã chi ${formatMoney(spent, wallet.currency, language)} / ${formatMoney(budget.amount, wallet.currency, language)} · dự báo cuối kỳ ${formatMoney(pace.projected, wallet.currency, language)}.`,
+        when: `Dự báo đến ${summary.end}`, cause: `Nếu tiếp tục giữ nhịp chi hiện tại, có thể vượt khoảng ${formatMoney(projectedExcess, wallet.currency, language)}.`,
+        priority: projectedExcess >= budget.amount * 0.2 ? "high" : "medium", suggestedAction: "Giảm chi linh hoạt trong danh mục này hoặc xem lại hạn mức.",
+        assumptions: "Dự báo tuyến tính từ chi tiêu hợp lệ đã ghi nhận trong chu kỳ; không gồm thu nhập hay khoản chi chưa lưu.",
+        walletId: base.walletId, currency: base.currency, amount: projectedExcess, projected: true, targetType: "budget", targetId: budget.id });
+    }
+  }
+
+  const horizon = addDays(asOf, 30);
+  const dueByWallet = new Map<string, Array<{ expense: FixedExpense; wallet: Wallet; due: string }>>();
+  for (const expense of (state.fixedExpenses || []).filter((item) => item.active && validAmount(item.amount))) {
+    const resolved = expenseWallet(state, expense);
+    if (!resolved) continue;
+    const occurrences = plannedOccurrences(expense, asOf, horizon);
+    for (const due of occurrences) {
+      if (alreadyPaid(state, expense, resolved.wallet, due)) continue;
+      const entries = dueByWallet.get(resolved.wallet.id) || [];
+      entries.push({ expense, wallet: resolved.wallet, due });
+      dueByWallet.set(resolved.wallet.id, entries);
+    }
+  }
+
+  const shortfallDueIds = new Set<string>();
+  for (const wallet of activeWallets) {
+    const balance = trackedBalance(state, wallet.id, asOf);
+    if (!balance.complete) continue;
+    if (balance.amount < 0) {
+      add({ id: `negative-balance:${wallet.id}:${asOf}`, kind: "negative-balance", problem: `Số dư ví ${walletName(wallet)} đang âm.`,
+        figures: `Số dư tính đến ${asOf}: ${formatMoney(balance.amount, wallet.currency, language)}.`, when: asOf,
+        cause: "Số dư ban đầu và các giao dịch đã lưu đến ngày này cho kết quả âm.", priority: "high",
+        suggestedAction: "Rà soát giao dịch gần đây và các khoản cần thanh toán; cập nhật giao dịch nếu có sai sót.",
+        assumptions: "Số dư thực tính từ dữ liệu đã lưu; không gồm giao dịch tương lai.", walletId: wallet.id, currency: wallet.currency, amount: Math.abs(balance.amount), projected: false, targetType: "wallet", targetId: wallet.id });
+      continue;
+    }
+    const due = (dueByWallet.get(wallet.id) || []).sort((a, b) => a.due.localeCompare(b.due));
+    let remaining = cents(balance.amount), shortfall = 0;
+    const crossing: typeof due = [];
+    for (const item of due) {
+      remaining -= cents(item.expense.amount);
+      crossing.push(item);
+      if (remaining < 0) { shortfall = -remaining / 100; break; }
+    }
+    if (shortfall > 0 && crossing.length) {
+      crossing.forEach((item) => shortfallDueIds.add(`${item.expense.id}:${item.due}`));
+      add({ id: `cash-shortfall:${wallet.id}:${crossing.at(-1)?.due}:${crossing.map((item) => item.expense.id).join(",")}`,
+        kind: "cash-shortfall", problem: `Số dư ví ${walletName(wallet)} có thể không đủ cho các khoản cố định sắp tới.`,
+        figures: `Số dư hiện tại ${formatMoney(balance.amount, wallet.currency, language)} · thiếu dự kiến ${formatMoney(shortfall, wallet.currency, language)} sau khoản đến hạn ${crossing.at(-1)?.due}.`,
+        when: crossing.at(-1)?.due || asOf, cause: crossing.map((item) => `${item.expense.title} ${formatMoney(item.expense.amount, wallet.currency, language)}`).join(" + "),
+        priority: "high", suggestedAction: "Kiểm tra các khoản đến hạn, cân nhắc dời khoản chưa bắt buộc hoặc bổ sung tiền vào ví.",
+        assumptions: "Dự báo chỉ trừ các chi phí cố định đã khai báo trong 30 ngày tới; giả định không có thu nhập hoặc giao dịch khác.",
+        walletId: wallet.id, currency: wallet.currency, amount: shortfall, projected: true, targetType: "fixed-expense", targetId: crossing.at(-1)?.expense.id || "" });
+    }
+  }
+
+  for (const items of dueByWallet.values()) {
+    for (const { expense, wallet, due } of items) {
+      const days = daysBetween(asOf, due), reminderDays = expense.reminderDays ?? 3;
+      if (days > reminderDays || shortfallDueIds.has(`${expense.id}:${due}`)) continue;
+      add({ id: `fixed-due:${expense.id}:${due}`, kind: "fixed-due", problem: `Khoản cố định “${expense.title}” sắp đến hạn.`,
+        figures: `${formatMoney(expense.amount, wallet.currency, language)} · ví ${walletName(wallet)} · còn ${days} ngày.`, when: due,
+        cause: `Lịch ${expense.recurrence} đã lưu cho khoản này.`, priority: days <= 1 ? "high" : "medium",
+        suggestedAction: "Kiểm tra số dư ví và đánh dấu khoản này đã thanh toán trong dữ liệu sau khi trả.",
+        assumptions: "Đây là lịch dự kiến, chưa xác nhận thanh toán.", walletId: wallet.id, currency: wallet.currency, amount: expense.amount, projected: false, targetType: "fixed-expense", targetId: expense.id });
+    }
+  }
+  const unique = new Map<string, FinancialAlert>();
+  for (const alert of alerts) unique.set(alert.id, alert);
+  const rank: Record<FinancialAlertPriority, number> = { high: 0, medium: 1, low: 2 };
+  return [...unique.values()].sort((a, b) => rank[a.priority] - rank[b.priority] || a.when.localeCompare(b.when));
+}
+
+export function readDismissedAlertIds(value: unknown): string[] {
+  try {
+    const parsed: unknown = typeof value === "string" ? JSON.parse(value) : value;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string").slice(-300) : [];
+  } catch { return []; }
+}

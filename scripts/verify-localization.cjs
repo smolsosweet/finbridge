@@ -98,7 +98,12 @@ function compileFile(filePath, customResolver, instanceCache = new Map()) {
 
 // Precompile core replica components
 const storeModule = compileFile(path.join(directory, "store.ts"));
-const headerModule = compileFile(path.join(directory, "FinBridgeHeader.tsx"));
+const headerModule = compileFile(path.join(directory, "FinBridgeHeader.tsx"), (name) => {
+  if (name === "./NotificationCenter") return { NotificationCenter: () => null };
+  if (name === "@/components/safety/SafetyProvider") return { useSafety: () => null };
+  if (name === "@/components/safety/safety-copy") return { safetyCopy: () => ({ title: "", description: "", action: "" }) };
+  return undefined;
+});
 const settingsOverviewModule = compileFile(path.join(directory, "SettingsOverview.tsx"));
 const planningModule = compileFile(path.join(directory, "Planning.tsx"));
 const transactionHistoryModule = compileFile(path.join(directory, "TransactionHistory.tsx"));
@@ -122,7 +127,7 @@ const PROHIBITED_ENGLISH_IN_VI_ZH = [
   /\bAdd new wallet\b/i,
   /\bManage wallet\b/i,
   /\bCredit Card\b/i,
-  /\bSpending plan\b/i,
+  /\bBudget & Expense\b/i,
   /\bFixed expenses\b/i,
   /\bAccount settings\b/i,
   /\bSign out\b/i,
@@ -544,8 +549,8 @@ test("Tier 1 & 2: Planning & Budgets Workspace Localization (F7)", async (t) => 
 
   await t.test("T7.1: Planning titles and primary tabs localize across EN, VI, ZH", () => {
     const expectations = {
-      "Tiếng Việt": { title: "Kế hoạch chi tiêu", budget: "Ngân sách", fixed: "Khoản chi cố định" },
-      English: { title: "Spending plan", budget: "Budgets", fixed: "Fixed expenses" },
+      "Tiếng Việt": { title: "Kế hoạch chi tiêu", budget: "Ngân sách", fixed: "Chi cố định" },
+      English: { title: "Budget & Expense", budget: "Budgets", fixed: "Fixed costs" },
       "中文": { title: "支出计划", budget: "预算", fixed: "固定支出" },
     };
 
@@ -567,9 +572,10 @@ test("Tier 1 & 2: Planning & Budgets Workspace Localization (F7)", async (t) => 
         React.createElement(customPlanning.Planning, { navigate })
       );
 
-      assert.ok(html.includes(exp.title), `Planning should render "${exp.title}" in ${lang}`);
-      assert.ok(html.includes(exp.budget), `Planning should render "${exp.budget}" in ${lang}`);
-      assert.ok(html.includes(exp.fixed), `Planning should render "${exp.fixed}" in ${lang}`);
+      const renderedText = unescapeHtml(html);
+      assert.ok(renderedText.includes(exp.title), `Planning should render "${exp.title}" in ${lang}`);
+      assert.ok(renderedText.includes(exp.budget), `Planning should render "${exp.budget}" in ${lang}`);
+      assert.ok(renderedText.includes(exp.fixed), `Planning should render "${exp.fixed}" in ${lang}`);
 
       if (lang === "Tiếng Việt") assertNoEnglishLeaks(html, "Planning (VI)");
       if (lang === "English") assertNoVietnameseLeaks(html, "Planning (EN)");
@@ -582,9 +588,9 @@ test("Tier 1 & 2: Planning & Budgets Workspace Localization (F7)", async (t) => 
 
   await t.test("T7.2: FinancialOutlook due dates & reserves localize across EN, VI, ZH", () => {
     const titles = {
-      "Tiếng Việt": "Nhắc hạn & dự phòng",
-      English: "Due dates & reserves",
-      "中文": "到期提醒与备用金",
+      "Tiếng Việt": "Cảnh báo tài chính",
+      English: "Financial alerts",
+      "中文": "财务提醒",
     };
 
     for (const [lang, expectedTitle] of Object.entries(titles)) {

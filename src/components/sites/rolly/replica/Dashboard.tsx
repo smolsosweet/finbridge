@@ -1794,6 +1794,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
     </> : <>
       <FinBridgeHeader
         lang={lang}
+        navigate={navigate}
         theme={String(state.settings.theme || "light")}
         currentLanguage={String(state.settings.language || "Tiếng Việt")}
         onOpenCalendar={() => setCalendarLedgerOpen(true)}
@@ -1811,7 +1812,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
           <span>{t.addTransaction}</span>
         </button>
       </div>
-      <FinancialOutlook />
+      <FinancialOutlook compact navigate={navigate} />
       <section className="fb-wallet-section" aria-label={t.yourWallets}>
         <div className="fb-section-heading">
           <div>

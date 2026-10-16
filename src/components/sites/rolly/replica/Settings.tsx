@@ -278,6 +278,7 @@ export function AccountSettings({
     <main className="r-dashboard fb-home fb-settings fb-account-settings-page">
       <FinBridgeHeader
         lang={lang}
+        navigate={navigate}
         theme={String(state.settings.theme || "light")}
         currentLanguage={String(state.settings.language || "Tiếng Việt")}
         onOpenCalendar={() => navigate("calendar")}
@@ -540,7 +541,7 @@ export function HomepageConfiguration({ navigate }: { navigate: (screen: string)
 
   return (
     <main className="r-dashboard fb-home fb-settings fb-account-settings-page">
-      <FinBridgeHeader lang={lang} />
+      <FinBridgeHeader lang={lang} navigate={navigate} />
       <div className="fb-settings-container">
         <div className="fb-settings-back-row">
           <button type="button" className="fb-settings-back" onClick={() => navigate("accountSettings")}>
@@ -686,7 +687,7 @@ export function WalletScreen({
 
   return (
     <main className="r-dashboard fb-home fb-settings">
-      <FinBridgeHeader />
+      <FinBridgeHeader navigate={navigate} />
       <div className="fb-settings-container">
         <div className="fb-settings-back-row">
           <button
