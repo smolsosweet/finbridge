@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, Bell, Check, CheckCircle2, ChevronDown, ChevronRight, CircleHelp, Database, Mail, PauseCircle, Plus, Search, ShieldCheck, Trash2, TrendingUp, Wallet, Zap } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, Bell, Check, CheckCircle2, ChevronDown, CircleHelp, Database, Mail, PauseCircle, Plus, Search, ShieldCheck, Trash2, TrendingUp, Wallet, Zap } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { FinBridgeHeader } from "@/components/sites/rolly/replica/FinBridgeHeader";
 import { setSetting, useAppState } from "@/components/sites/rolly/replica/store";
@@ -38,7 +38,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
   const state = useAppState(), lang = safetyLanguage(state.settings.language), t = SAFETY_COPY[lang], x = EXTRA[lang];
   const safety = useSafety(), params = useSearchParams();
   const [view, setView] = useState(["preferences", "history"].includes(params.get("view") || "") ? params.get("view")! : "rules");
-  const [query, setQuery] = useState(""), [filter, setFilter] = useState("all"), [typeFilter, setTypeFilter] = useState<"all" | "actual" | "forecast" | "reserve">("all"), [draft, setDraft] = useState<Draft | null>(null), [step, setStep] = useState(0), [error, setError] = useState("");
+  const [query, setQuery] = useState(params.get("query") || ""), [filter, setFilter] = useState("all"), [typeFilter, setTypeFilter] = useState<"all" | "actual" | "forecast" | "reserve">("all"), [draft, setDraft] = useState<Draft | null>(null), [step, setStep] = useState(0), [error, setError] = useState("");
   const heading = useRef<HTMLHeadingElement>(null), field = useId();
   const snapshot = useMemo(() => { try { return safetySnapshot(state, String(state.settings.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone)); } catch { return null; } }, [state]);
   useEffect(() => { heading.current?.focus(); }, [step, draft?.groupId]);
@@ -132,27 +132,15 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
       <FinBridgeHeader
         lang={lang}
         navigate={navigate}
+        eyebrow={t.planning}
+        title={t.title}
+        subtitle={t.subtitle}
         theme={String(state.settings.theme)}
         currentLanguage={String(state.settings.language)}
         onSelectLanguage={value => setSetting("language", value)}
         onToggleTheme={() => setSetting("theme", state.settings.theme === "dark" ? "light" : "dark")}
+        primaryAction={!draft ? <button className={`${styles.primary} fb-header-primary-action`} onClick={create} disabled={loading || busy}><Plus size={17}/>{t.create}</button> : undefined}
       />
-      <nav className={styles.breadcrumb} aria-label={t.planning}>
-        <button onClick={() => navigate("?tab=tools")}>{t.planning}</button>
-        <ChevronRight size={14}/>
-        <span>{t.title}</span>
-      </nav>
-      <div className={styles.titleRow}>
-        <div>
-          <h1>{t.title}</h1>
-          <p>{t.subtitle}</p>
-        </div>
-        {!draft && (
-          <button className={styles.primary} onClick={create} disabled={loading || busy}>
-            <Plus size={17}/>{t.create}
-          </button>
-        )}
-      </div>
       <div className={styles.databaseNote}>
         <Database size={16}/>
         <b>{x.database}</b>
@@ -416,38 +404,38 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
         <>
           {/* AWS CloudWatch / Budgets Style KPI Overview Cards */}
           <div className={styles.awsSummaryGrid}>
-            <div className={styles.awsKpiCard}>
+            <button type="button" className={styles.awsKpiCard} aria-pressed={view === "rules" && filter === "all"} onClick={() => { setView("rules"); setFilter("all"); setTypeFilter("all"); }}>
               <div className={styles.kpiIconWrap}><Bell size={20} /></div>
               <div className={styles.kpiContent}>
                 <span className={styles.kpiLabel}>{x.kpiTotal}</span>
                 <b className={styles.kpiValue}>{groups.length}</b>
                 <small className={styles.kpiDesc}>{x.kpiTotalDesc}</small>
               </div>
-            </div>
-            <div className={`${styles.awsKpiCard} ${groups.filter(g => status(g.rows) === "alarm").length > 0 ? styles.kpiAlarmActive : ""}`}>
+            </button>
+            <button type="button" className={`${styles.awsKpiCard} ${groups.filter(g => status(g.rows) === "alarm").length > 0 ? styles.kpiAlarmActive : ""}`} aria-pressed={view === "rules" && filter === "alarm"} onClick={() => { setView("rules"); setFilter("alarm"); setTypeFilter("all"); }}>
               <div className={`${styles.kpiIconWrap} ${styles.kpiAlarmIcon}`}><AlertTriangle size={20} /></div>
               <div className={styles.kpiContent}>
                 <span className={styles.kpiLabel}>{x.kpiAlarm}</span>
                 <b className={styles.kpiValue}>{groups.filter(g => status(g.rows) === "alarm").length}</b>
                 <small className={styles.kpiDesc}>{x.kpiAlarmDesc}</small>
               </div>
-            </div>
-            <div className={styles.awsKpiCard}>
+            </button>
+            <button type="button" className={styles.awsKpiCard} aria-pressed={view === "rules" && filter === "ok"} onClick={() => { setView("rules"); setFilter("ok"); setTypeFilter("all"); }}>
               <div className={`${styles.kpiIconWrap} ${styles.kpiOkIcon}`}><CheckCircle2 size={20} /></div>
               <div className={styles.kpiContent}>
                 <span className={styles.kpiLabel}>{x.kpiOk}</span>
                 <b className={styles.kpiValue}>{groups.filter(g => status(g.rows) === "ok").length}</b>
                 <small className={styles.kpiDesc}>{x.kpiOkDesc}</small>
               </div>
-            </div>
-            <div className={styles.awsKpiCard}>
+            </button>
+            <button type="button" className={styles.awsKpiCard} aria-pressed={view === "rules" && filter === "paused"} onClick={() => { setView("rules"); setFilter("paused"); setTypeFilter("all"); }}>
               <div className={`${styles.kpiIconWrap} ${styles.kpiPausedIcon}`}><PauseCircle size={20} /></div>
               <div className={styles.kpiContent}>
                 <span className={styles.kpiLabel}>{x.kpiPaused}</span>
                 <b className={styles.kpiValue}>{groups.filter(g => status(g.rows) === "paused").length}</b>
                 <small className={styles.kpiDesc}>{x.kpiPausedDesc}</small>
               </div>
-            </div>
+            </button>
           </div>
 
           <div className={styles.tabs} role="tablist">
@@ -582,6 +570,9 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                           </span>
                         </header>
 
+                        <details className={styles.configurationDisclosure}>
+                          <summary><span>{lang === "vi" ? "Xem chi tiết và thao tác" : lang === "zh" ? "查看详情和操作" : "View details and actions"}</span><ChevronDown size={15}/></summary>
+                          <div className={styles.configurationBody}>
                         {/* AWS Budgets Style Visual Progress Meter */}
                         {primaryEval && primaryEval.state !== "unavailable" && (
                           <div className={styles.awsMeterSection}>
@@ -756,6 +747,8 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                             </button>
                           </div>
                         </footer>
+                          </div>
+                        </details>
                       </article>
                     );
                   })}

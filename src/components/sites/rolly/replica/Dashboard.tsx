@@ -1144,7 +1144,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
   const [type, setType] = useState<"expense" | "income">("expense");
 
   // Spending trend chart filter state
-  const [dashboardSource] = useState<"sample" | "live">(querySource === "live" ? "live" : "sample");
+  const [dashboardSource] = useState<"sample" | "live">(querySource === "sample" ? "sample" : "live");
   const [dashboardType, setDashboardType] = useState<"all" | "expense" | "income">((queryType as "all" | "expense" | "income") || "all");
   const [dashboardCategory, setDashboardCategory] = useState(queryCategory || "all");
   const dashboardCurrency = wallet.currency;
@@ -1224,6 +1224,15 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
     setIsPickingIcon(false);
     setEditingCatName(null);
     setModal("manageWallet");
+  };
+
+  const openWalletHistory = (targetWalletId: string) => {
+    const current = new Date();
+    const year = current.getFullYear();
+    const month = String(current.getMonth() + 1).padStart(2, "0");
+    const lastDay = String(new Date(year, current.getMonth() + 1, 0).getDate()).padStart(2, "0");
+    close();
+    navigate(`?tab=transactions&wallet=${encodeURIComponent(targetWalletId)}&type=all&category=all&from=${year}-${month}-01&to=${year}-${month}-${lastDay}`);
   };
 
   const handleSaveWalletInfo = (e: React.FormEvent) => {
@@ -1795,23 +1804,16 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
       <FinBridgeHeader
         lang={lang}
         navigate={navigate}
+        eyebrow={t.overviewEyebrow}
+        title={state.settings.name && state.settings.name !== "." ? `${t.welcomePrefix}${state.settings.name}` : t.defaultGreeting}
+        subtitle={t.introSub}
         theme={String(state.settings.theme || "light")}
         currentLanguage={String(state.settings.language || "Tiếng Việt")}
         onOpenCalendar={() => setCalendarLedgerOpen(true)}
         onToggleTheme={() => updateState((s) => ({ ...s, settings: { ...s.settings, theme: s.settings.theme === "dark" ? "light" : "dark" } }))}
         onSelectLanguage={(val) => updateState((s) => ({ ...s, settings: { ...s.settings, language: val } }))}
+        primaryAction={<button type="button" className="fb-add-button fb-header-primary-action" onClick={addTransaction}><Plus size={18} /><span>{t.addTransaction}</span></button>}
       />
-      <div className="fb-home-intro">
-        <div>
-          <p className="fb-eyebrow">{t.overviewEyebrow}</p>
-          <h1>{state.settings.name && state.settings.name !== "." ? `${t.welcomePrefix}${state.settings.name}` : t.defaultGreeting}</h1>
-          <p>{t.introSub}</p>
-        </div>
-        <button type="button" className="fb-add-button" onClick={addTransaction}>
-          <Plus size={18} />
-          <span>{t.addTransaction}</span>
-        </button>
-      </div>
       <FinancialOutlook compact navigate={navigate} />
       <section className="fb-wallet-section" aria-label={t.yourWallets}>
         <div className="fb-section-heading">
@@ -3069,6 +3071,12 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                     )}
                   </div>
                 )}
+
+                <button type="button" className="fb-wallet-history-link" onClick={() => openWalletHistory(targetWallet.id)}>
+                  <ReceiptText size={15}/>
+                  <span>{lang === "vi" ? "Xem lịch sử giao dịch của ví" : lang === "zh" ? "查看钱包交易记录" : "View wallet transaction history"}</span>
+                  <ArrowRight size={15}/>
+                </button>
 
                 <div className="fb-modal-actions">
                   <button type="button" className="r-secondary" onClick={close}>{t.closeButton}</button>

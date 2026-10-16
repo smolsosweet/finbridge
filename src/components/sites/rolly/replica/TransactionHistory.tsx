@@ -65,7 +65,7 @@ export const resolveCategoryDisplayName = (category: string | null | undefined, 
   return SYSTEM[trimmed]?.[l] || trimmed;
 };
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 type Kind = "all" | "expense" | "income" | "transfer";
 type HistoryRecord = {
   id: string;
@@ -360,29 +360,16 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
     <FinBridgeHeader
       lang={lang}
       navigate={navigate}
+      eyebrow={text.eyebrow}
+      title={text.title}
+      subtitle={text.subtitle}
       theme={String(state.settings?.theme || "light")}
       currentLanguage={String(state.settings?.language || "Tiếng Việt")}
       onOpenCalendar={() => setCalendarLedgerOpen(true)}
       onToggleTheme={handleToggleTheme}
       onSelectLanguage={handleSelectLanguage}
+      primaryAction={<button type="button" className="fb-add-button fb-header-primary-action" aria-label={text.addTransaction} onClick={() => navigate("addTransactionChatMode")}><Plus size={18}/><span>{text.addTransaction}</span></button>}
     />
-
-    <div className="fb-home-intro fb-history-header">
-      <div>
-        <p className="fb-eyebrow">{text.eyebrow}</p>
-        <h1>{text.title}</h1>
-        <p>{text.subtitle}</p>
-      </div>
-      <button
-        type="button"
-        className="fb-add-button"
-        aria-label={text.addTransaction}
-        onClick={() => navigate("addTransactionChatMode")}
-      >
-        <Plus size={18} />
-        <span>{text.addTransaction}</span>
-      </button>
-    </div>
 
     <section className="fb-history-controls" aria-label={text.search}>
       <div className="fb-history-controls-top">

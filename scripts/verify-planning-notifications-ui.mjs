@@ -59,27 +59,41 @@ try {
  await page.goto(origin+"/app?tab=tools",{timeout:120000});
  await page.getByRole("tab",{name:"Budgets & Fixed costs",exact:true}).waitFor();
  assert.equal(await page.locator(".fb-alert-bell").count(),0,"The separate shield notification shortcut must be removed");
- assert.equal(await page.locator(".fb-planning-segmented [role=tab]").count(),2);
+ assert.equal(await page.locator(".fb-planning-segmented [role=tab]").count(),3);
  assert.equal(await page.getByRole("tab",{name:"Budgets & Fixed costs",exact:true}).getAttribute("aria-selected"),"true");
  assert.equal(await page.getByRole("tab",{name:"Overview & Forecast",exact:true}).count(),0);
  assert.equal(await page.locator(".fb-planning-alerts").count(),0);
  assert.equal(await page.locator(".fb-planning-summary").count(),0);
  await page.locator("#budget-budget-1").waitFor({state:"visible"});
  const budgetBefore=await page.locator("#budget-budget-1").innerText();
- const analysis=page.locator("details.fb-planning-analysis");
- assert.equal(await analysis.getAttribute("open"),null);
+ const analysis=page.locator(".fb-planning-analysis");
+ assert.equal(await analysis.count(),0);
  assert.equal(await page.getByRole("heading",{name:"Weekly details",exact:true}).isVisible(),false);
  await page.screenshot({path:path.join(directory,"planning-management-desktop.png")});
- await analysis.locator(":scope > summary").click();
+ await page.getByRole("tab",{name:"Spending analysis",exact:true}).click();
  await page.getByRole("heading",{name:"Weekly details",exact:true}).waitFor({state:"visible"});
  await page.getByLabel("Select reporting month",{exact:true}).fill("2026-09");
- assert.equal(await page.locator("#budget-budget-1").innerText(),budgetBefore,"Report month must not alter the current budget card");
  await page.getByLabel("Select reporting month",{exact:true}).fill(date.slice(0,7));
- await analysis.locator(":scope > summary").click();
+ await page.getByRole("tab",{name:"Budgets & Fixed costs",exact:true}).click();
+ assert.equal(await page.locator("#budget-budget-1").innerText(),budgetBefore,"Report month must not alter the current budget card");
  await page.getByRole("tab",{name:"AI Simulator",exact:true}).click();
  await page.getByRole("heading",{name:"AI Financial Planner",exact:true}).waitFor({state:"visible"});
  assert.equal(await page.locator(".fb-planning-analysis").count(),0);
  await page.getByRole("tab",{name:"Budgets & Fixed costs",exact:true}).click();
+
+ // The home chart must use persisted workspace transactions by default. Its
+ // wallet shortcut must carry an explicit current-month filter into history.
+ await page.goto(origin+"/app");
+ await page.getByLabel("Select account",{exact:true}).selectOption("usd");
+ await page.locator(".fb-chart-bar-expense").waitFor({state:"visible"});
+ assert.equal(await page.locator(".fb-env-badge").count(),0,"The live workspace chart must not be labelled simulated");
+ await page.getByRole("button",{name:"Manage wallet Synthetic USD wallet",exact:true}).click();
+ const walletDialog=page.getByRole("dialog",{name:"Manage wallet: Synthetic USD wallet",exact:true});
+ await walletDialog.getByRole("button",{name:"View wallet transaction history",exact:true}).click();
+ await page.waitForURL(url=>url.searchParams.get("tab")==="transactions"&&url.searchParams.get("wallet")==="usd"&&url.searchParams.get("type")==="all"&&url.searchParams.get("category")==="all");
+ await page.getByRole("heading",{name:"Synthetic dining",exact:true}).waitFor({state:"visible"});
+ await page.goto(origin+"/app?tab=tools");
+ await page.getByRole("tab",{name:"Budgets & Fixed costs",exact:true}).waitFor();
  let bell=page.getByRole("button",{name:/^Open notifications/});
  await bell.click();
  let dialog=page.getByRole("dialog",{name:"Notifications",exact:true});
@@ -171,7 +185,7 @@ try {
  }
  await page.evaluate(()=>localStorage.setItem("finbridge-preferred-language-v1","en"));await page.setViewportSize({width:320,height:568});await page.goto(origin+"/app?tab=tools");
  bell=page.getByRole("button",{name:/^Open notifications/});await bell.click();dialog=page.getByRole("dialog",{name:"Notifications",exact:true});
- const smallBounds=await dialog.boundingBox();assert.ok(smallBounds.x>=0&&smallBounds.x+smallBounds.width<=321&&smallBounds.y+smallBounds.height<=568);
+ const smallBounds=await dialog.boundingBox();assert.ok(smallBounds.x>=0&&smallBounds.x+smallBounds.width<=321&&smallBounds.y+smallBounds.height<=568,JSON.stringify(smallBounds));
  assert.equal(await dialog.getByRole("button",{name:"Mark all as read",exact:true}).isDisabled(),true);
  assert.equal(await bell.getAttribute("aria-label"),"Open notifications");
  await saved(s=>JSON.parse(s.settings.readFinancialAlertIds||"[]").length===2);

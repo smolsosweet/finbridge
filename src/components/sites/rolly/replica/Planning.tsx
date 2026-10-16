@@ -244,7 +244,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const activeWallets = state.wallets.filter((item) => !item.archived);
   const [calendarLedgerOpen, setCalendarLedgerOpen] = useState(false);
   const [tab, setTab] = useState(initialTab);
-  const [activeTab, setActiveTab] = useState<"manage" | "simulator">("manage");
+  const [activeTab, setActiveTab] = useState<"manage" | "analysis" | "simulator">("manage");
   const [walletFilter, setWalletFilter] = useState("all");
   const [parentFilter, setParentFilter] = useState(params.get("budget") || "all");
   const [selectedMonth, setSelectedMonth] = useState(today.slice(0, 7));
@@ -665,11 +665,15 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
     <FinBridgeHeader
       lang={lang}
       navigate={navigateFromHeader}
+      eyebrow={lang === "vi" ? "KẾ HOẠCH CHI TIÊU" : lang === "zh" ? "支出计划" : "SPENDING PLAN"}
+      title={t.title}
+      subtitle={lang === "vi" ? "Theo dõi ngân sách, khoản sắp đến hạn và dự báo chi tiêu." : lang === "zh" ? "跟踪预算、即将到期的账单和支出预测。" : "Track budgets, upcoming bills and spending outlook."}
       theme={String(state.settings?.theme || "light")}
       currentLanguage={String(state.settings?.language || "Tiếng Việt")}
       onOpenCalendar={() => setCalendarLedgerOpen(true)}
       onToggleTheme={() => updateState((s) => ({ ...s, settings: { ...s?.settings, theme: s?.settings?.theme === "dark" ? "light" : "dark" } }))}
       onSelectLanguage={(val) => updateState((s) => ({ ...s, settings: { ...s?.settings, language: val } }))}
+      primaryAction={<button type="button" className="fb-add-button fb-header-primary-action" disabled={!activeWallets.length || activeTab !== "manage"} onClick={() => primaryForm === "fixed" ? open("fixed", parentFilter === "all" ? undefined : parentFilter) : open("budget")}><Plus size={18}/><span>{primaryForm === "fixed" ? t.addFixed : t.addBudget}</span></button>}
     />
 
     <div className="fb-home-intro fb-planning-header">
@@ -692,6 +696,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
 
     <nav className="fb-planning-segmented" role="tablist" aria-label={lang === "vi" ? "Các khu vực kế hoạch" : "Planning views"}>
       <button type="button" role="tab" id="planning-tab-manage" aria-controls="planning-panel-manage" aria-selected={activeTab === "manage"} onClick={() => setActiveTab("manage")}><Wallet size={16} /><span>{lang === "vi" ? "Ngân sách & Chi cố định" : lang === "zh" ? "预算与固定支出" : "Budgets & Fixed costs"}</span></button>
+      <button type="button" role="tab" id="planning-tab-analysis" aria-controls="planning-panel-analysis" aria-selected={activeTab === "analysis"} onClick={() => setActiveTab("analysis")}><TrendingUp size={16}/><span>{lang === "vi" ? "Phân tích chi tiêu" : lang === "zh" ? "支出分析" : "Spending analysis"}</span></button>
       <button type="button" role="tab" id="planning-tab-simulator" aria-controls="planning-panel-simulator" aria-selected={activeTab === "simulator"} onClick={() => setActiveTab("simulator")}><Sparkles size={16} /><span>AI Simulator</span></button>
     </nav>
 
@@ -743,7 +748,8 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
         </div>
       </section>}
 
-      <details className="fb-planning-analysis">
+    </section>}
+    {activeTab === "analysis" && <section className="fb-planning-analysis fb-planning-tab-panel" id="planning-panel-analysis" role="tabpanel" aria-labelledby="planning-tab-analysis" tabIndex={0}>
         <summary><TrendingUp size={19}/><span><b>{lang === "vi" ? "Xem phân tích chi tiêu" : lang === "zh" ? "查看支出分析" : "View spending analysis"}</b><small>{lang === "vi" ? "Theo danh mục và theo tuần, từ giao dịch đã ghi nhận." : lang === "zh" ? "按类别和周查看已记录的支出。" : "Review recorded expenses by category and week."}</small></span><ChevronDown size={18}/></summary>
         <div className="fb-planning-analysis-body">
           {unmappedExpenseCount > 0 && <p className="fb-planning-note">{lang === "vi" ? `${unmappedExpenseCount} giao dịch thiếu ví hoặc tiền tệ đã được loại khỏi phân tích.` : lang === "zh" ? `${unmappedExpenseCount} 笔交易缺少钱包或币种，未计入分析。` : `${unmappedExpenseCount} transactions without a wallet or currency were excluded from analysis.`}</p>}
@@ -792,9 +798,8 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       })}</table></div></article>
     </section>
         </div>
-      </details>
-      {state.goals.some((item) => item.kind === "savings") && <details className="fb-planning-legacy"><summary>{t.oldSavings}</summary><ul>{state.goals.filter((item) => item.kind === "savings").map((item) => <li key={item.id}>{item.title} · {format(item.saved, item.currency)} / {format(item.amount, item.currency)}</li>)}</ul></details>}
-    </section>}
+      </section>}
+      {activeTab === "manage" && state.goals.some((item) => item.kind === "savings") && <details className="fb-planning-legacy"><summary>{t.oldSavings}</summary><ul>{state.goals.filter((item) => item.kind === "savings").map((item) => <li key={item.id}>{item.title} · {format(item.saved, item.currency)} / {format(item.amount, item.currency)}</li>)}</ul></details>}
     {activeTab === "simulator" && <section className="fb-planning-tab-panel" id="planning-panel-simulator" role="tabpanel" aria-labelledby="planning-tab-simulator" tabIndex={0}>
     <section className="fb-sandbox-controls" aria-labelledby="fb-sandbox-title"><header><div><p className="fb-eyebrow">{lang === "vi" ? "CHỈ ÁP DỤNG TRONG MÔ PHỎNG" : "SIMULATION ONLY"}</p><h2 id="fb-sandbox-title">{lang === "vi" ? "Điều chỉnh kịch bản" : "Scenario controls"}</h2><p>{lang === "vi" ? "Loại trừ giao dịch hoặc thêm khoản thu/chi để xem tác động tức thời. Không thay đổi dữ liệu FinBridge." : "Exclude transactions or add simulated income/expenses. These controls never change saved FinBridge data."}</p></div><button type="button" onClick={resetSandbox} disabled={!sandboxExcludedIds.length && !sandboxChanges.length}>{lang === "vi" ? "Đặt lại điều chỉnh" : "Reset adjustments"}</button></header>
       <div className="fb-sandbox-grid"><div className="fb-sandbox-exclusions"><h3>{lang === "vi" ? "Giao dịch chi nhiều nhất" : "Largest recorded expenses"}</h3>{sandboxCandidates.length ? sandboxCandidates.map((transaction) => <label key={transaction.id}><input type="checkbox" checked={sandboxExcludedIds.includes(transaction.id)} onChange={(event) => setSandboxExcludedIds((ids) => event.target.checked ? [...new Set([...ids, transaction.id])] : ids.filter((id) => id !== transaction.id))} /><span><b>{transaction.title || transaction.category}</b><small>{transaction.date} · {transaction.category} · {walletName(transaction.wallet)}</small></span><strong>{formatMoney(transaction.amount, transactionCurrency(transaction.wallet))}</strong></label>) : <p className="fb-planning-note">{lang === "vi" ? "Không có giao dịch chi hợp lệ trong tháng này." : "No valid expenses in this month."}</p>}</div>

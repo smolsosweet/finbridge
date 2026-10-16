@@ -5,6 +5,7 @@ import { reserveAmounts } from "@/lib/financial-outlook";
 import { notificationDestination, notificationReadIds } from "@/lib/notification-center";
 import { detectProactiveAlerts, readDismissedAlertIds, type FinancialAlert } from "@/lib/proactive-alerts";
 import { updateState, useAppState, today } from "./store";
+import { Modal } from "./Ui";
 import styles from "./FinancialOutlook.module.css";
 
 const COPY = {
@@ -23,6 +24,7 @@ export function FinancialOutlook({ editable = false, compact = false, notificati
   const [aiNotes, setAiNotes] = useState<Record<string, AiNote>>({});
   const attemptedIds = useRef(new Set<string>());
   const [editing, setEditing] = useState(false), [draft, setDraft] = useState<Record<string, string>>({}), [error, setError] = useState("");
+  const [selectedAlert, setSelectedAlert] = useState<FinancialAlert | null>(null);
   useEffect(() => {
     const refresh = () => setAsOf(today());
     const timer = window.setInterval(refresh, 60000); window.addEventListener("focus", refresh);
@@ -72,7 +74,7 @@ export function FinancialOutlook({ editable = false, compact = false, notificati
   const dashboardAlerts = alerts.filter((alert) => alert.priority === "high" || alert.priority === "medium").slice(0, 3);
   const visibleAlerts = (compact ? dashboardAlerts : alerts).filter(alert => !unreadOnly || !readSet.has(alert.id));
   if (!editable && !visibleAlerts.length) return null;
-  return <section className={`${styles.panel}${notifications ? ` ${styles.notifications}` : ""}`} aria-label={t.title}>
+  return <><section className={`${styles.panel}${compact ? ` ${styles.compact}` : ""}${notifications ? ` ${styles.notifications}` : ""}`} aria-label={t.title}>
     <header>{!notifications && <h2><ShieldCheck size={20} />{t.title}</h2>}{editable && <button type="button" onClick={() => { setEditing((value) => !value); setDraft(Object.fromEntries(state.wallets.filter((wallet) => !wallet.archived).map((wallet) => [wallet.id, String(reserves[wallet.id] || 0)]))); setError(""); }}>{t.reserve}</button>}</header>
     {editing && <form onSubmit={(event) => { event.preventDefault(); const values = Object.fromEntries(Object.entries(draft).map(([id, amount]) => [id, Number(amount)])); if (Object.values(values).some((amount) => !Number.isFinite(amount) || amount < 0 || amount > 1e12)) { setError(t.invalid); return; } updateState((current) => ({ ...current, settings: { ...current.settings, reserveByWallet: JSON.stringify(values) } })); setEditing(false); }} className={styles.form}>{state.wallets.filter((wallet) => !wallet.archived).map((wallet) => <label key={wallet.id}>{wallet.name} · {wallet.currency}<input type="number" min={0} max={1e12} step="0.01" required value={draft[wallet.id] ?? "0"} onChange={(event) => setDraft((value) => ({ ...value, [wallet.id]: event.target.value }))} /></label>)}{error && <p role="alert">{error}</p>}<button type="submit">{t.save}</button></form>}
     {!visibleAlerts.length && !notifications && <p>{t.empty}</p>}
@@ -81,10 +83,11 @@ export function FinancialOutlook({ editable = false, compact = false, notificati
       const ai = aiNotes[`${lang}:${alert.id}`];
       const isRead = readSet.has(alert.id);
       const origin = alert.projected ? t.forecast : alert.kind === "fixed-due" ? t.schedule : t.actual;
-      if (compact) return <article key={alert.id} className={`${styles.alert} ${styles[alert.priority]}`}>
-        <header><h3><Icon size={16} />{alert.problem}</h3><span className={styles.priority}>{t.priority}: {priorityLabel(alert.priority)}</span><span className={styles.readStatus}>{isRead ? t.read : t.unread}</span></header>
-        <p>{alert.figures}</p><small>{origin} · {alert.when}</small>
-        <div className={styles.actions}>{!isRead && <button type="button" className={styles.dismiss} onClick={() => markRead(alert.id)}>{t.markRead}</button>}{navigate && <button type="button" className={styles.dismiss} onClick={() => { markRead(alert.id); navigate(notificationDestination(alert)); }}>{t.details}</button>}</div>
+      if (compact) return <article key={alert.id} className={`${styles.alert} ${styles.compactAlert} ${styles[alert.priority]}`}>
+        <span className={styles.compactIcon}><Icon size={17}/></span>
+        <div className={styles.compactCopy}><h3>{alert.problem}</h3><p>{alert.figures}</p><small>{origin} · {alert.when}</small></div>
+        <span className={styles.priority}>{priorityLabel(alert.priority)}</span>
+        <button type="button" className={styles.compactDetails} onClick={() => { markRead(alert.id); setSelectedAlert(alert); }}>{lang === "vi" ? "Chi tiết" : lang === "zh" ? "详情" : "Details"}</button>
       </article>;
       const detail = <>
         <div><b>{t.figures}</b><p>{alert.figures}</p><p>{origin} · {alert.when}</p></div>
@@ -105,5 +108,18 @@ export function FinancialOutlook({ editable = false, compact = false, notificati
       </article>;
     })}
     {(!notifications || visibleAlerts.length > 0) && <small>{t.note}</small>}
-  </section>;
+  </section>{compact && selectedAlert && (() => {
+    const Icon = selectedAlert.kind === "fixed-due" ? Bell : selectedAlert.kind === "budget-risk" ? TrendingUp : AlertTriangle;
+    const origin = selectedAlert.projected ? t.forecast : selectedAlert.kind === "fixed-due" ? t.schedule : t.actual;
+    return <Modal title={t.title} onClose={() => setSelectedAlert(null)}>
+      <div className={styles.modalDetail}>
+        <div className={styles.modalHeading}><Icon size={20}/><div><h3>{selectedAlert.problem}</h3><span className={styles.priority}>{t.priority}: {priorityLabel(selectedAlert.priority)}</span></div></div>
+        <section><b>{t.figures}</b><p>{selectedAlert.figures}</p><small>{origin} · {selectedAlert.when}</small></section>
+        <section><b>{t.cause}</b><p>{selectedAlert.cause}</p></section>
+        <section><b>{t.action}</b><p>{selectedAlert.suggestedAction}</p></section>
+        <small>{t.assumptions}: {selectedAlert.assumptions}</small>
+        <div className={styles.actions}>{navigate && <button type="button" className={styles.dismiss} onClick={() => { const destination = notificationDestination(selectedAlert); setSelectedAlert(null); navigate(destination); }}>{t.details}</button>}<button type="button" className={styles.dismiss} onClick={() => setSelectedAlert(null)}>{lang === "vi" ? "Đóng" : lang === "zh" ? "关闭" : "Close"}</button></div>
+      </div>
+    </Modal>;
+  })()}</>;
 }

@@ -12,6 +12,10 @@ export interface FinBridgeHeaderProps {
   navigate?: (path: string) => void;
   onToggleTheme?: () => void;
   onSelectLanguage?: (lang: string) => void;
+  eyebrow?: string;
+  title?: string;
+  subtitle?: string;
+  primaryAction?: ReactNode;
   children?: ReactNode;
 }
 
@@ -23,6 +27,10 @@ export function FinBridgeHeader({
   navigate,
   onToggleTheme,
   onSelectLanguage,
+  eyebrow,
+  title,
+  subtitle,
+  primaryAction,
   children,
 }: FinBridgeHeaderProps) {
   const isDark = theme === "dark";
@@ -53,7 +61,7 @@ export function FinBridgeHeader({
 
   return (
     <header className="fb-home-header">
-      <div className="fb-brand">
+      <div className={`fb-brand${title ? " fb-header-page-context" : ""}`}>
         <span className="fb-brand-mark" aria-hidden="true">
           <svg viewBox="0 0 32 32" fill="none">
             <path
@@ -64,22 +72,31 @@ export function FinBridgeHeader({
             />
           </svg>
         </span>
-        <span className="fb-brand-title">
-          <span className="fb-brand-name">
-            <span className="fb-brand-fin">Fin</span>
-            <span className="fb-brand-bridge">Bridge</span>
+        {title ? (
+          <span className="fb-header-page-copy">
+            {eyebrow && <small className="fb-header-eyebrow">{eyebrow}</small>}
+            <strong>{title}</strong>
+            {subtitle && <small className="fb-header-subtitle">{subtitle}</small>}
           </span>
-          <small>
-            {lang === "vi"
-              ? "Không gian tài chính của bạn"
-              : lang === "zh"
-              ? "您的财务空间"
-              : "Your financial workspace"}
-          </small>
-        </span>
+        ) : (
+          <span className="fb-brand-title">
+            <span className="fb-brand-name">
+              <span className="fb-brand-fin">Fin</span>
+              <span className="fb-brand-bridge">Bridge</span>
+            </span>
+            <small>
+              {lang === "vi"
+                ? "Không gian tài chính của bạn"
+                : lang === "zh"
+                ? "您的财务空间"
+                : "Your financial workspace"}
+            </small>
+          </span>
+        )}
       </div>
 
       <div className="fb-header-actions">
+        {primaryAction}
         {onOpenCalendar && (
           <button
             type="button"
