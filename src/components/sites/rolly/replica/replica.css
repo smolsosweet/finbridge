@@ -1515,3 +1515,20 @@ html:has(.r-chat-page){scrollbar-gutter:auto}
 .fb-planning-analysis-period{display:flex;justify-content:flex-end;margin-bottom:16px}
 .fb-planning-analysis .fb-weekly-method p{position:static;width:min(320px,100%);box-shadow:none}
 @media(max-width:640px){.fb-planning-analysis-body{padding:12px}.fb-planning-analysis>summary{padding:14px 12px}.fb-planning .fb-planning-segmented button{gap:6px;padding:9px 7px;font-size:11px}}
+
+/* Planning Details Modals */
+.fb-details-modal-content{display:flex;flex-direction:column;gap:16px;max-height:75vh;overflow-y:auto;padding-right:2px}
+.fb-details-modal-header{display:flex;flex-direction:column;gap:8px}
+.fb-details-modal-badges{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.fb-details-stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fb-details-formula-box{padding:12px 14px;border-radius:12px;background:var(--r-bg);border:1px solid var(--r-line)}
+.fb-details-formula-box .fb-planning-note{margin:0}
+.fb-details-allocations-section{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--r-line);padding-top:14px}
+.fb-details-allocations-section h4{font-size:13px;font-weight:650;margin:0;color:var(--r-text)}
+.fb-details-children-list{display:flex;flex-direction:column;gap:8px}
+.fb-details-child-row{display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:10px;background:var(--r-bg);border:1px solid var(--r-line);font-size:12px}
+.fb-details-child-row small{display:block;color:var(--r-muted);font-size:11px;margin-top:2px}
+.fb-details-child-row strong{font-size:13px;color:var(--r-text)}
+.fb-details-dates-list{display:flex;flex-wrap:wrap;gap:6px}
+.fb-details-modal-actions{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.fb-details-modal-actions button{width:100%;min-height:42px}
