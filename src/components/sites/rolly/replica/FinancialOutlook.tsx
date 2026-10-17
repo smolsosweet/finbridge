@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Bell, Check, ShieldCheck, TrendingUp } from "lucide-react";
 import { reserveAmounts } from "@/lib/financial-outlook";
-import { notificationDestination, notificationReadIds } from "@/lib/notification-center";
+import { homeAttentionAlerts, notificationDestination, notificationReadIds, NOTIFICATION_CENTER_OPEN_EVENT } from "@/lib/notification-center";
 import { detectProactiveAlerts, readDismissedAlertIds, type FinancialAlert } from "@/lib/proactive-alerts";
 import { updateState, useAppState, today } from "./store";
 import { Modal } from "./Ui";
@@ -14,12 +14,18 @@ const COPY = {
   zh: { title: "财务提醒", empty: "目前没有需要处理的提醒。", reserve: "编辑备用金", save: "保存备用金", priority: "优先级", high: "高", medium: "中", low: "低", problem: "问题", figures: "数据与时间", cause: "触发原因", action: "建议操作", assumptions: "计算依据", actual: "实际", forecast: "预测", schedule: "计划", handled: "已处理", read: "已读", unread: "未读", markRead: "标为已读", note: "提醒根据已保存的数据生成。预测仅包含每条提醒中列出的假设；不会执行付款。", invalid: "备用金必须是有效的非负金额。", details: "打开计划", openBudget: "查看并调整预算", openFixed: "查看固定支出", openWallet: "管理钱包与充值" },
 };
 type Language = keyof typeof COPY;
+
+const HOME_COPY = {
+  vi: { title: "Cần chú ý hôm nay", all: "Xem tất cả cảnh báo", details: "Chi tiết", wallet: "Kiểm tra số dư ví" },
+  en: { title: "Needs attention today", all: "View all alerts", details: "Details", wallet: "Review wallet balance" },
+  zh: { title: "今日待处理", all: "查看所有提醒", details: "详情", wallet: "查看钱包余额" },
+};
 type AiNote = { explanation: string; suggestion: string };
 
 export function FinancialOutlook({ editable = false, compact = false, notifications = false, unreadOnly = false, asOfDate, navigate }: { editable?: boolean; compact?: boolean; notifications?: boolean; unreadOnly?: boolean; asOfDate?: string; navigate?: (path: string) => void }) {
   const state = useAppState();
   const lang: Language = /中文|zh/i.test(String(state.settings.language)) ? "zh" : /Tiếng Việt|vi/i.test(String(state.settings.language)) ? "vi" : "en";
-  const t = COPY[lang];
+  const t = COPY[lang], homeCopy = HOME_COPY[lang];
   const [asOf, setAsOf] = useState(today);
   const [aiNotes, setAiNotes] = useState<Record<string, AiNote>>({});
   const attemptedIds = useRef(new Set<string>());
@@ -71,11 +77,11 @@ export function FinancialOutlook({ editable = false, compact = false, notificati
     return ids.includes(id) ? current : { ...current, settings: { ...current.settings, readFinancialAlertIds: JSON.stringify([...ids, id].slice(-1000)) } };
   });
   const priorityLabel = (priority: FinancialAlert["priority"]) => priority === "high" ? t.high : priority === "medium" ? t.medium : t.low;
-  const dashboardAlerts = alerts.filter((alert) => alert.priority === "high" || alert.priority === "medium").slice(0, 3);
+  const dashboardAlerts = homeAttentionAlerts(alerts, dismissedRaw);
   const visibleAlerts = (compact ? dashboardAlerts : alerts).filter(alert => !unreadOnly || !readSet.has(alert.id));
   if (!editable && !visibleAlerts.length) return null;
-  return <><section className={`${styles.panel}${compact ? ` ${styles.compact}` : ""}${notifications ? ` ${styles.notifications}` : ""}`} aria-label={t.title}>
-    <header>{!notifications && <h2><ShieldCheck size={20} />{t.title}</h2>}{editable && <button type="button" onClick={() => { setEditing((value) => !value); setDraft(Object.fromEntries(state.wallets.filter((wallet) => !wallet.archived).map((wallet) => [wallet.id, String(reserves[wallet.id] || 0)]))); setError(""); }}>{t.reserve}</button>}</header>
+  return <><section className={`${styles.panel}${compact ? ` ${styles.compact}` : ""}${notifications ? ` ${styles.notifications}` : ""}`} aria-label={compact ? homeCopy.title : t.title} data-testid={compact ? "home-attention" : undefined}>
+    <header>{!notifications && <h2><ShieldCheck size={20} />{compact ? homeCopy.title : t.title}</h2>}{editable && <button type="button" onClick={() => { setEditing((value) => !value); setDraft(Object.fromEntries(state.wallets.filter((wallet) => !wallet.archived).map((wallet) => [wallet.id, String(reserves[wallet.id] || 0)]))); setError(""); }}>{t.reserve}</button>}</header>
     {editing && <form onSubmit={(event) => { event.preventDefault(); const values = Object.fromEntries(Object.entries(draft).map(([id, amount]) => [id, Number(amount)])); if (Object.values(values).some((amount) => !Number.isFinite(amount) || amount < 0 || amount > 1e12)) { setError(t.invalid); return; } updateState((current) => ({ ...current, settings: { ...current.settings, reserveByWallet: JSON.stringify(values) } })); setEditing(false); }} className={styles.form}>{state.wallets.filter((wallet) => !wallet.archived).map((wallet) => <label key={wallet.id}>{wallet.name} · {wallet.currency}<input type="number" min={0} max={1e12} step="0.01" required value={draft[wallet.id] ?? "0"} onChange={(event) => setDraft((value) => ({ ...value, [wallet.id]: event.target.value }))} /></label>)}{error && <p role="alert">{error}</p>}<button type="submit">{t.save}</button></form>}
     {!visibleAlerts.length && !notifications && <p>{t.empty}</p>}
     {visibleAlerts.map((alert) => {
@@ -85,9 +91,9 @@ export function FinancialOutlook({ editable = false, compact = false, notificati
       const origin = alert.projected ? t.forecast : alert.kind === "fixed-due" ? t.schedule : t.actual;
       if (compact) return <article key={alert.id} className={`${styles.alert} ${styles.compactAlert} ${styles[alert.priority]}`}>
         <span className={styles.compactIcon}><Icon size={17}/></span>
-        <div className={styles.compactCopy}><h3>{alert.problem}</h3><p>{alert.figures}</p><small>{origin} · {alert.when}</small></div>
-        <span className={styles.priority}>{priorityLabel(alert.priority)}</span>
-        <button type="button" className={styles.compactDetails} onClick={() => { markRead(alert.id); setSelectedAlert(alert); }}>{lang === "vi" ? "Chi tiết" : lang === "zh" ? "详情" : "Details"}</button>
+        <div className={styles.compactCopy}><h3>{alert.problem}</h3><p>{alert.figures}</p></div>
+        <span className={styles.priority}>{origin}</span>
+        <button type="button" className={styles.compactDetails} aria-label={`${homeCopy.details}: ${alert.problem}`} onClick={() => { markRead(alert.id); setSelectedAlert(alert); }}>{homeCopy.details}</button>
       </article>;
       const detail = <>
         <div><b>{t.figures}</b><p>{alert.figures}</p><p>{origin} · {alert.when}</p></div>
@@ -107,7 +113,7 @@ export function FinancialOutlook({ editable = false, compact = false, notificati
         <header>{heading}</header>{detail}
       </article>;
     })}
-    {(!notifications || visibleAlerts.length > 0) && <small>{t.note}</small>}
+    {compact ? <footer className={styles.compactFooter}><button type="button" onClick={() => window.dispatchEvent(new Event(NOTIFICATION_CENTER_OPEN_EVENT))}>{homeCopy.all} &rarr;</button></footer> : (!notifications || visibleAlerts.length > 0) && <small>{t.note}</small>}
   </section>{compact && selectedAlert && (() => {
     const Icon = selectedAlert.kind === "fixed-due" ? Bell : selectedAlert.kind === "budget-risk" ? TrendingUp : AlertTriangle;
     const origin = selectedAlert.projected ? t.forecast : selectedAlert.kind === "fixed-due" ? t.schedule : t.actual;
@@ -115,7 +121,7 @@ export function FinancialOutlook({ editable = false, compact = false, notificati
       ? t.openBudget
       : selectedAlert.targetType === "fixed-expense"
         ? t.openFixed
-        : t.openWallet;
+        : homeCopy.wallet;
     return <Modal title={t.title} onClose={() => setSelectedAlert(null)}>
       <div className={styles.modalDetail}>
         <div className={styles.modalHeading}>

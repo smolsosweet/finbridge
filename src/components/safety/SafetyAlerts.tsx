@@ -147,7 +147,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
       <FinBridgeHeader
         lang={lang}
         navigate={navigate}
-        eyebrow={t.planning}
+        eyebrow={lang === "vi" ? "AN TOÀN TÀI CHÍNH" : lang === "zh" ? "财务安全" : "FINANCIAL SAFETY"}
         title={t.title}
         subtitle={t.subtitle}
         theme={String(state.settings.theme)}
@@ -155,7 +155,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
         onOpenCalendar={() => setCalendarLedgerOpen(true)}
         onSelectLanguage={value => setSetting("language", value)}
         onToggleTheme={() => setSetting("theme", state.settings.theme === "dark" ? "light" : "dark")}
-        primaryAction={!draft ? <button className={`${styles.primary} fb-header-primary-action`} onClick={create} disabled={loading || busy}><Plus size={17}/>{t.create}</button> : undefined}
+        primaryAction={!draft ? <button aria-label={t.create} className={`${styles.primary} fb-header-primary-action`} onClick={create} disabled={loading || busy}><Plus size={17}/><span>{t.create}</span></button> : undefined}
       />
       <div className={styles.topBackBar}>
         <button
@@ -167,20 +167,20 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
               setStep(0);
               setError("");
             } else {
-              navigate("?tab=tools");
+              navigate("");
             }
           }}
           aria-label={
             draft
               ? (lang === "vi" ? "Quay lại Ngưỡng an toàn" : lang === "zh" ? "返回安全阈值" : "Back to Safety Thresholds")
-              : (lang === "vi" ? "Quay lại Kế hoạch" : lang === "zh" ? "返回计划" : "Back to Planning")
+              : (lang === "vi" ? "Quay lại Trang chủ" : lang === "zh" ? "返回首页" : "Back to Home")
           }
         >
           <ArrowLeft size={16} />
           <span>
             {draft
               ? (lang === "vi" ? "Quay lại Ngưỡng an toàn" : lang === "zh" ? "返回安全阈值" : "Back to Safety Thresholds")
-              : (lang === "vi" ? "Quay lại Kế hoạch" : lang === "zh" ? "返回计划" : "Back to Planning")}
+              : (lang === "vi" ? "Quay lại Trang chủ" : lang === "zh" ? "返回首页" : "Back to Home")}
           </span>
         </button>
       </div>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { Bell, CheckCheck, Settings2, X } from "lucide-react";
 import { useSafety } from "@/components/safety/SafetyProvider";
 import { detectProactiveAlerts } from "@/lib/proactive-alerts";
-import { buildNotificationFeed, combineNotificationFeeds, notificationDestination, notificationReadIds } from "@/lib/notification-center";
+import { buildNotificationFeed, combineNotificationFeeds, notificationReadIds, NOTIFICATION_CENTER_OPEN_EVENT } from "@/lib/notification-center";
 import { safetyLanguage, type SafetyEvent } from "@/lib/safety-model";
 import { flushWorkspace, today, updateState, useAppState } from "./store";
 import { FinancialOutlook } from "./FinancialOutlook";
@@ -26,6 +26,11 @@ export function NotificationCenter({ navigate, floating = false }: { navigate: (
   const root = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), closeButton = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const [asOf, setAsOf] = useState(today);
+  useEffect(() => {
+    const showAll = () => { setSourceFilter("all"); setUnreadOnly(false); setOpen(true); };
+    window.addEventListener(NOTIFICATION_CENTER_OPEN_EVENT, showAll);
+    return () => window.removeEventListener(NOTIFICATION_CENTER_OPEN_EVENT, showAll);
+  }, []);
   useEffect(() => {
     const refresh = () => setAsOf(today());
     const timer = window.setInterval(refresh, 60000);

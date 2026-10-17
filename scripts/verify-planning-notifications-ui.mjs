@@ -42,6 +42,7 @@ const workspace = {
 const setup={version:1,displayName:"Synthetic UI",occupation:"student",language:"en",wallets:workspace.wallets.map(({type,...w})=>w),expenseCategories:["Housing"],incomeCategories:["Salary"],commitments:[],reserves:workspace.wallets.map(w=>({walletId:w.id,amount:0}))};
 await pool.query("INSERT INTO finbridge_onboarding(user_id,data) VALUES($1,$2)",[owner,JSON.stringify(setup)]);
 await workspaceRepository(pool).save(owner,{revision:0,mutationId:randomUUID(),data:workspace});
+const persistedPlanning=(await workspaceRepository(pool).read(owner)).data;
 const env={...process.env,NODE_ENV:"development",DATABASE_URL:db.href,BETTER_AUTH_URL:origin,BETTER_AUTH_SECRET:secret,GOOGLE_CLIENT_ID:"synthetic",GOOGLE_CLIENT_SECRET:"synthetic",AUTH_EMAIL_MODE:"",AUTH_EMAIL_FROM:"",BREVO_API_KEY:"",SMTP_HOST:"",SMTP_FROM:"",SAFETY_EMAIL_ENABLED:"false",SAFETY_CRON_SECRET:"",FINBRIDGE_DEMO_MODE:"false"};
 const server=spawn(process.execPath,[path.join(root,"node_modules/next/dist/bin/next"),"dev",directory,"-p",String(port)],{cwd:directory,env,windowsHide:true,stdio:["ignore","pipe","pipe"]});
 let logs="";server.stdout.on("data",c=>logs+=c);server.stderr.on("data",c=>logs+=c);
@@ -57,33 +58,51 @@ try {
  await context.route("**/api/ai/proactive-feed",route=>route.fulfill({status:503,json:{error:"AI_NOT_CONFIGURED"}}));
  page=await context.newPage();const errors=[];page.on("pageerror",e=>errors.push(e.message));page.setDefaultTimeout(30000);
  await page.goto(origin+"/app?tab=tools",{timeout:120000});
- await page.getByRole("tab",{name:"Budgets & Fixed costs",exact:true}).waitFor();
- assert.equal(await page.locator(".fb-alert-bell").count(),0,"The separate shield notification shortcut must be removed");
- assert.equal(await page.locator(".fb-planning-segmented [role=tab]").count(),3);
- assert.equal(await page.getByRole("tab",{name:"Budgets & Fixed costs",exact:true}).getAttribute("aria-selected"),"true");
- assert.equal(await page.getByRole("tab",{name:"Overview & Forecast",exact:true}).count(),0);
- assert.equal(await page.locator(".fb-planning-alerts").count(),0);
- assert.equal(await page.locator(".fb-planning-summary").count(),0);
+ const planningTabs=page.locator(".fb-planning-tabs");
+ await planningTabs.getByRole("tab",{name:/^Budgets/}).waitFor();
+ assert.equal(await planningTabs.getByRole("tab").count(),2);
+ assert.equal(await planningTabs.getByRole("tab",{name:/^Budgets/}).getAttribute("aria-selected"),"true");
+ assert.equal(await page.locator(".fb-alert-bell").count(),0);
+ assert.equal(await page.locator(".fb-planning-segmented,.fb-planning-analysis,.fb-weekly-chart-card,.fb-scenario-planner,.fb-sandbox-controls").count(),0,"Planning only contains budget and fixed-expense management");
+ assert.equal(await page.getByLabel("Select reporting month",{exact:true}).count(),0);
+ assert.equal(await page.locator(".fb-safety-planning-link").count(),0,"Planning must not repeat the standalone safety entry");
+ const sidebar=page.locator(".fb-sidebar-nav");
+ await sidebar.getByRole("button",{name:"Safety thresholds",exact:true}).click();
+ await page.waitForURL(/\/app\/safetyAlerts$/);
+ await page.locator(".fb-header-page-copy>strong").filter({hasText:"Safety thresholds & alerts"}).waitFor();
+ assert.equal(await sidebar.getByRole("button",{name:"Safety thresholds",exact:true}).getAttribute("aria-current"),"page");
+ assert.equal(await sidebar.getByRole("button",{name:"Planning",exact:true}).getAttribute("aria-current"),null);
+ await page.getByRole("button",{name:"Create alert",exact:true}).click();
+ await page.getByRole("button",{name:"Back to Safety Thresholds",exact:true}).click();
+ assert.equal(await page.locator(".fb-safety-planning-link").count(),0);
+ await page.reload();
+ await page.getByRole("button",{name:"Create alert",exact:true}).waitFor();
+ assert.equal(await sidebar.getByRole("button",{name:"Safety thresholds",exact:true}).getAttribute("aria-current"),"page");
+ await page.screenshot({path:path.join(directory,"safety-sidebar-desktop.png")});
+ await sidebar.getByRole("button",{name:"Planning",exact:true}).click();
+ await planningTabs.getByRole("tab",{name:/^Budgets/}).waitFor();
  await page.locator("#budget-budget-1").waitFor({state:"visible"});
- const budgetBefore=await page.locator("#budget-budget-1").innerText();
- const analysis=page.locator(".fb-planning-analysis");
- assert.equal(await analysis.count(),0);
- assert.equal(await page.getByRole("heading",{name:"Weekly details",exact:true}).isVisible(),false);
+ await planningTabs.getByRole("tab",{name:/^Fixed expenses/}).click();
+ await page.locator("#fixed-rent").waitFor({state:"visible"});
+ assert.equal(await page.getByRole("button",{name:"Create fixed expense",exact:true}).first().isEnabled(),true);
+ assert.equal(await page.locator("#budget-budget-1").count(),0);
+ await planningTabs.getByRole("tab",{name:/^Budgets/}).click();
+ await page.locator("#budget-budget-1").waitFor({state:"visible"});
+ assert.equal(await page.getByRole("button",{name:"Create budget",exact:true}).first().isEnabled(),true);
+ const planningRecord=(await workspaceRepository(pool).read(owner)).data;
+ assert.deepEqual(planningRecord.goals,persistedPlanning.goals,"Removing reports must preserve budgets");
+ assert.deepEqual(planningRecord.fixedExpenses,persistedPlanning.fixedExpenses,"Removing reports must preserve planned bills");
  await page.screenshot({path:path.join(directory,"planning-management-desktop.png")});
- await page.getByRole("tab",{name:"Spending analysis",exact:true}).click();
- await page.getByRole("heading",{name:"Weekly details",exact:true}).waitFor({state:"visible"});
- await page.getByLabel("Select reporting month",{exact:true}).fill("2026-09");
- await page.getByLabel("Select reporting month",{exact:true}).fill(date.slice(0,7));
- await page.getByRole("tab",{name:"Budgets & Fixed costs",exact:true}).click();
- assert.equal(await page.locator("#budget-budget-1").innerText(),budgetBefore,"Report month must not alter the current budget card");
- await page.getByRole("tab",{name:"AI Simulator",exact:true}).click();
- await page.getByRole("heading",{name:"AI Financial Planner",exact:true}).waitFor({state:"visible"});
- assert.equal(await page.locator(".fb-planning-analysis").count(),0);
- await page.getByRole("tab",{name:"Budgets & Fixed costs",exact:true}).click();
 
  // The home chart must use persisted workspace transactions by default. Its
  // wallet shortcut must carry an explicit current-month filter into history.
  await page.goto(origin+"/app");
+ let bell=page.getByRole("button",{name:/^Open notifications/});
+ await bell.click();
+ let homeNotifications = page.getByRole("dialog",{name:"Notifications",exact:true});
+ assert.equal(await homeNotifications.locator("article").count(),2);
+ await homeNotifications.getByRole("button",{name:"Close notifications",exact:true}).click();
+ assert.equal(await page.getByTestId("home-attention").count(),0,"Home must not duplicate notification items");
  await page.getByLabel("Select account",{exact:true}).selectOption("usd");
  await page.locator(".fb-chart-bar-expense").waitFor({state:"visible"});
  assert.equal(await page.locator(".fb-env-badge").count(),0,"The live workspace chart must not be labelled simulated");
@@ -92,9 +111,13 @@ try {
  await walletDialog.getByRole("button",{name:"View wallet transaction history",exact:true}).click();
  await page.waitForURL(url=>url.searchParams.get("tab")==="transactions"&&url.searchParams.get("wallet")==="usd"&&url.searchParams.get("type")==="all"&&url.searchParams.get("category")==="all");
  await page.getByRole("heading",{name:"Synthetic dining",exact:true}).waitFor({state:"visible"});
+ await page.goto(origin+"/app/walletSettings?wallet=usd");
+ const linkedWalletDialog=page.getByRole("dialog",{name:"Manage wallet: Synthetic USD wallet",exact:true});
+ await linkedWalletDialog.waitFor({state:"visible"});
+ await page.keyboard.press("Escape");
  await page.goto(origin+"/app?tab=tools");
- await page.getByRole("tab",{name:"Budgets & Fixed costs",exact:true}).waitFor();
- let bell=page.getByRole("button",{name:/^Open notifications/});
+ await planningTabs.getByRole("tab",{name:/^Budgets/}).waitFor();
+ bell=page.getByRole("button",{name:/^Open notifications/});
  await bell.click();
  let dialog=page.getByRole("dialog",{name:"Notifications",exact:true});
  assert.equal(await dialog.locator("article").count(),2);
@@ -113,6 +136,18 @@ try {
  await saved(s=>JSON.parse(s.settings.dismissedFinancialAlerts||"[]").length===1&&JSON.parse(s.settings.reserveByWallet||"{}").bank===75000);
  await dialog.getByRole("button",{name:"Close notifications",exact:true}).click();
  assert.equal(await bell.evaluate(el=>document.activeElement===el),true);
+ await page.goto(origin+"/app");
+ assert.equal(await page.getByTestId("home-attention").count(),0,"The notification center is the single alert inbox");
+ bell=page.getByRole("button",{name:/^Open notifications/});
+ await bell.click();
+ homeNotifications=page.getByRole("dialog",{name:"Notifications",exact:true});
+ await homeNotifications.getByRole("group",{name:"Filter notifications"}).getByRole("button",{name:/^Unread/}).click();
+ await homeNotifications.getByRole("button",{name:/^Unread/}).click();
+ await homeNotifications.getByRole("button",{name:"Close notifications",exact:true}).click();
+ await bell.click();
+ assert.equal(await homeNotifications.locator("article").count(),2,"The inbox includes read and handled notification records");
+ await homeNotifications.getByRole("button",{name:"Close notifications",exact:true}).click();
+ await page.goto(origin+"/app?tab=tools");
  await page.reload();
  await page.getByRole("button",{name:/^Open notifications/}).click();dialog=page.getByRole("dialog",{name:"Notifications",exact:true});
  cash=dialog.locator("article").filter({has:page.getByRole("heading",{name:/Synthetic VND wallet/})});
@@ -167,9 +202,9 @@ try {
  await page.getByRole("dialog",{name:"Notifications",exact:true}).getByRole("button",{name:"Alert settings",exact:true}).click();
  await page.waitForURL(/\/app\/safetyAlerts$/);
  for(const locale of [
-  {code:"en",open:/^Open notifications/,title:"Notifications",close:"Close notifications",all:"Mark all as read"},
-  {code:"vi",open:/^Mở thông báo/,title:"Thông báo",close:"Đóng thông báo",all:"Đánh dấu tất cả đã đọc"},
-  {code:"zh",open:/^打开通知/,title:"通知",close:"关闭通知",all:"全部标为已读"},
+  {code:"en",open:/^Open notifications/,title:"Notifications",close:"Close notifications",all:"Mark all as read",home:"Needs attention today",allAlerts:/View all alerts/,settings:"Settings",safety:"Safety thresholds & alerts",navSafety:"Safety thresholds",backHome:"Back to Home"},
+  {code:"vi",open:/^Mở thông báo/,title:"Thông báo",close:"Đóng thông báo",all:"Đánh dấu tất cả đã đọc",home:"Cần chú ý hôm nay",allAlerts:/Xem tất cả cảnh báo/,settings:"Cài đặt",safety:"Ngưỡng an toàn & cảnh báo",navSafety:"Ngưỡng an toàn",backHome:"Quay lại Trang chủ"},
+  {code:"zh",open:/^打开通知/,title:"通知",close:"关闭通知",all:"全部标为已读",home:"今日待处理",allAlerts:/查看所有提醒/,settings:"设置",safety:"安全阈值与提醒",navSafety:"安全阈值",backHome:"返回首页"},
  ]){
   await page.evaluate(code=>localStorage.setItem("finbridge-preferred-language-v1",code),locale.code);
   await page.setViewportSize({width:390,height:844});await page.goto(origin+"/app?tab=tools");
@@ -181,7 +216,27 @@ try {
   assert.equal(await page.evaluate(()=>document.documentElement.scrollHeight),height);
   await page.screenshot({path:path.join(directory,"notifications-"+locale.code+"-mobile.png")});
   await page.keyboard.press("Escape");assert.equal(await dialog.count(),0);
+  assert.equal(await planningTabs.getByRole("tab").count(),2);
+  assert.equal(await page.locator(".fb-planning-segmented,.fb-planning-analysis,.fb-weekly-chart-card").count(),0);
   await page.screenshot({path:path.join(directory,"planning-"+locale.code+"-mobile.png")});
+  await page.goto(origin+"/app");
+  assert.equal(await page.getByTestId("home-attention").count(),0,"Home must not render a duplicate notification shortlist");
+  const homeBell=page.getByRole("button",{name:locale.open});
+  await homeBell.click();
+  await page.getByRole("dialog",{name:locale.title,exact:true}).waitFor();
+  await page.keyboard.press("Escape");
+  const bottomNav=page.locator(".r-bottom-nav");
+  assert.equal(await bottomNav.getByRole("button").count(),5,"Keep mobile navigation readable");
+  await bottomNav.getByRole("button",{name:locale.settings,exact:true}).click();
+  await page.getByRole("button",{name:locale.safety,exact:true}).click();
+  await page.waitForURL(/\/app\/safetyAlerts$/);
+  await page.locator(".fb-header-page-copy>strong").filter({hasText:locale.safety}).waitFor();
+  await page.getByRole("tab",{name:locale.code==="vi"?"Quy tắc cảnh báo":locale.code==="zh"?"提醒规则":"Alert rules",exact:true}).waitFor();
+  assert.ok((await sidebar.locator('[aria-current="page"]').textContent()).includes(locale.navSafety));
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  await page.screenshot({path:path.join(directory,"safety-settings-"+locale.code+"-mobile.png")});
+  await page.getByRole("button",{name:locale.backHome,exact:true}).click();
+  await page.waitForURL(url=>url.pathname==="/app"&&!url.searchParams.has("tab"));
  }
  await page.evaluate(()=>localStorage.setItem("finbridge-preferred-language-v1","en"));await page.setViewportSize({width:320,height:568});await page.goto(origin+"/app?tab=tools");
  bell=page.getByRole("button",{name:/^Open notifications/});await bell.click();dialog=page.getByRole("dialog",{name:"Notifications",exact:true});
@@ -222,7 +277,7 @@ try {
  assert.equal(created.length,1);assert.equal(created[0].budgetId,"");assert.equal(created[0].amount,1234);
  await page.reload();await page.getByRole("heading",{name:"Synthetic standalone retry",exact:true}).waitFor();
  assert.deepEqual(errors,[]);
- console.log("PASS: one bell for financial and threshold notifications; combined counts, unread filter, individual and bulk read, failed-read retry, retained rules/history; settings links; Planning management/analytics/simulator; EN/VI/ZH and 390px/320px bounds");
+ console.log("PASS: one notification inbox, read versus handled, persisted resolution, targeted wallet and planning destinations; one notification center with both sources; failed-read retry; Planning with only budgets and fixed expenses; reports removed without changing saved plans; EN/VI/ZH and 390px/320px bounds");
  console.log("Screenshots:",directory);
 }catch(error){console.error(logs.slice(-2500));if(page){await page.screenshot({path:path.join(directory,"failure.png"),fullPage:true});console.error((await page.locator("body").innerText()).slice(-3500));console.error("Failure screenshot:",path.join(directory,"failure.png"));}throw error;}
 finally{if(browser)await browser.close();if(server.pid&&process.platform==="win32"){try{execFileSync("taskkill",["/pid",String(server.pid),"/T","/F"],{windowsHide:true,stdio:"ignore"});}catch{}}else server.kill();await pause(500);await pool.query("DELETE FROM finbridge_onboarding WHERE user_id=$1",[owner]);await pool.query('DELETE FROM "session" WHERE "userId"=$1',[owner]);await pool.query('DELETE FROM "account" WHERE "userId"=$1',[owner]);await cleanupFinance(pool,[owner]);await pool.end();}
