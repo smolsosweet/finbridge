@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { FinBridgeHeader } from "./FinBridgeHeader";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
 import { SETUP_COPY } from "@/lib/setup-copy";
-import { Modal } from "./Ui";
+import { Modal, FinBridgeDropdown } from "./Ui";
 import { localDateKey } from "./chartWeek";
 import { budgetSummary, currencyScale, plannedOccurrences, validBudget, validFixedExpense } from "./planningModel";
 import { flushWorkspace, updateState, useAppState, workspaceOwner, workspacePersistence, getWorkspaceState, type FixedExpense, type Goal } from "./store";
@@ -141,97 +141,7 @@ const COPY = {
   },
 };
 
-interface DropdownOption {
-  value: string;
-  label: string;
-}
-
-function PlanningDropdown({
-  value,
-  onChange,
-  options,
-  ariaLabel,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  options: DropdownOption[];
-  ariaLabel: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const current = options.find((o) => o.value === value) || options[0];
-
-  useEffect(() => {
-    if (!open) return;
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open]);
-
-  return (
-    <div ref={containerRef} className="fb-dropdown-container">
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        className={`fb-dropdown-trigger ${open ? "is-open" : ""}`}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={ariaLabel}
-      >
-        <span className="fb-dropdown-label">{current?.label || value}</span>
-        <ChevronDown size={14} className={`fb-dropdown-chevron ${open ? "is-open" : ""}`} aria-hidden="true" />
-      </button>
-      {open && (
-        <ul role="listbox" className="fb-dropdown-menu">
-          {options.map((option) => {
-            const active = option.value === value;
-            return (
-              <li key={option.value}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  onClick={() => {
-                    onChange(option.value);
-                    setOpen(false);
-                  }}
-                  className={`fb-dropdown-item ${active ? "is-active" : ""}`}
-                >
-                  <span className="fb-dropdown-item-text">{option.label}</span>
-                  {active && <Check size={14} className="fb-dropdown-check" aria-hidden="true" />}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        tabIndex={-1}
-        aria-label={ariaLabel}
-        className="fb-dropdown-native-hidden"
-      >
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
+const PlanningDropdown = FinBridgeDropdown;
 
 export function Planning({ navigate, initialTab = "budget", initialForm = "" }: { navigate: (screen: string) => void; initialTab?: "budget" | "fixed"; initialForm?: "budget" | "fixed" | "" }) {
   const state = useAppState();
@@ -287,6 +197,8 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const [sandboxDirection, setSandboxDirection] = useState<"income" | "expense">("expense");
   const [sandboxWalletId, setSandboxWalletId] = useState(activeWallets[0]?.id || "");
   const [sandboxCategory, setSandboxCategory] = useState("");
+  const [visibleBudgetCount, setVisibleBudgetCount] = useState(5);
+  const [visibleFixedCount, setVisibleFixedCount] = useState(5);
   const plannerStorageKey = `finbridge-scenario-planner:${workspaceOwner() || "guest"}:v1`;
   useEffect(() => { setTab(initialTab); setActiveTab("manage"); }, [initialTab, initialForm]);
   useEffect(() => {
@@ -299,6 +211,8 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       setTab(targetId.startsWith("fixed-") ? "fixed" : "budget");
       setWalletFilter("all");
       setParentFilter("all");
+      if (targetId.startsWith("budget-")) setVisibleBudgetCount(prev => Math.max(prev, 999));
+      if (targetId.startsWith("fixed-")) setVisibleFixedCount(prev => Math.max(prev, 999));
       window.clearTimeout(timer);
       timer = window.setTimeout(() => document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "center" }), 220);
     };
@@ -676,23 +590,17 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       primaryAction={<button type="button" className="fb-add-button fb-header-primary-action" disabled={!activeWallets.length || activeTab !== "manage"} onClick={() => primaryForm === "fixed" ? open("fixed", parentFilter === "all" ? undefined : parentFilter) : open("budget")}><Plus size={18}/><span>{primaryForm === "fixed" ? t.addFixed : t.addBudget}</span></button>}
     />
 
-    <div className="fb-home-intro fb-planning-header">
-      <div>
-        <p className="fb-eyebrow">{lang === "vi" ? "KẾ HOẠCH CHI TIÊU" : lang === "zh" ? "支出计划" : "SPENDING PLAN"}</p>
-        <h1>{t.title}</h1>
-        <p>{lang === "vi" ? "Theo dõi ngân sách, khoản sắp đến hạn và dự báo chi tiêu." : lang === "zh" ? "查看预算、即将到期的账单和支出预测。" : "Track budgets, upcoming bills and spending outlook."}</p>
-      </div>
+    <div className="fb-planning-action-row">
+      <button type="button" className="fb-safety-planning-link" onClick={() => navigate("safetyAlerts")}>
+        <span>{SAFETY_COPY[lang].title}<small>{SAFETY_COPY[lang].subtitle}</small></span>
+        <ArrowRight size={20} />
+      </button>
+
       <div className="fb-planning-header-actions">
         {activeTab === "simulator" && <label className="fb-period-control"><span>{lang === "vi" ? "Kỳ xem" : lang === "zh" ? "查看期间" : "Period"}</span><input type="month" value={selectedMonth} onChange={(event) => event.target.value && setSelectedMonth(event.target.value)} aria-label={lang === "vi" ? "Chọn tháng xem báo cáo" : "Select reporting month"} /></label>}
-        <label className="fb-period-control fb-wallet-period-control"><span>{t.wallet}</span><PlanningDropdown value={walletFilter} onChange={(val) => { setWalletFilter(val); setParentFilter("all"); }} options={[{ value: "all", label: t.allWallets }, ...state.wallets.map((item) => ({ value: item.id, label: `${walletName(item.id)} · ${item.currency}` }))]} ariaLabel={t.wallet} /></label>
-      <button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => primaryForm === "fixed" ? open("fixed", parentFilter === "all" ? undefined : parentFilter) : open("budget")}>
-        <Plus size={18} />
-        <span>{primaryForm === "fixed" ? t.addFixed : t.addBudget}</span>
-      </button>
+        <label className="fb-period-control fb-wallet-period-control"><span>{t.wallet}</span><PlanningDropdown value={walletFilter} onChange={(val) => { setWalletFilter(val); setParentFilter("all"); setVisibleBudgetCount(5); setVisibleFixedCount(5); }} options={[{ value: "all", label: t.allWallets }, ...state.wallets.map((item) => ({ value: item.id, label: `${walletName(item.id)} · ${item.currency}` }))]} ariaLabel={t.wallet} /></label>
       </div>
     </div>
-
-    <button type="button" className="fb-safety-planning-link" onClick={() => navigate("safetyAlerts")}><span>{SAFETY_COPY[lang].title}<small>{SAFETY_COPY[lang].subtitle}</small></span><ArrowRight size={20} /></button>
 
     <nav className="fb-planning-segmented" role="tablist" aria-label={lang === "vi" ? "Các khu vực kế hoạch" : "Planning views"}>
       <button type="button" role="tab" id="planning-tab-manage" aria-controls="planning-panel-manage" aria-selected={activeTab === "manage"} onClick={() => setActiveTab("manage")}><Wallet size={16} /><span>{lang === "vi" ? "Ngân sách & Chi cố định" : lang === "zh" ? "预算与固定支出" : "Budgets & Fixed costs"}</span></button>
@@ -708,14 +616,14 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
           <button type="button" role="tab" aria-selected={tab === "fixed"} onClick={() => setPlanningTab("fixed")}><b>{t.fixed}</b><small>{t.fixedHint}</small><span>{fixed.filter((item) => item.active).length} {t.countFixed}</span></button>
         </div>
         <div className="fb-planning-filters">
-          {tab === "fixed" && <label><span>{t.parent}</span><PlanningDropdown value={parentFilter} onChange={(val) => setParentFilter(val)} options={[{ value: "all", label: t.allBudgets }, ...filteredBudgets.map((item) => ({ value: item.id, label: item.title }))]} ariaLabel={t.parent} /></label>}
+          {tab === "fixed" && <label><span>{t.parent}</span><PlanningDropdown value={parentFilter} onChange={(val) => { setParentFilter(val); setVisibleFixedCount(5); }} options={[{ value: "all", label: t.allBudgets }, ...filteredBudgets.map((item) => ({ value: item.id, label: item.title }))]} ariaLabel={t.parent} /></label>}
         </div>
       </div>
 
       {tab === "budget" && <section className="fb-planning-list-section" id="fb-budget-section" aria-labelledby="fb-budget-list-title">
         <header className="fb-planning-section-heading"><div><p className="fb-eyebrow">{lang === "vi" ? "HẠN MỨC" : "LIMITS"}</p><h2 id="fb-budget-list-title">{t.budget}</h2></div><span>{filteredBudgets.length} {t.countBudget}</span></header>
         <div className="fb-planning-cards">
-          {!filteredBudgets.length ? <div className="fb-planning-empty"><Wallet size={30} /><h2>{t.emptyBudget}</h2><p>{t.emptyBudgetHint}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("budget")}><Plus size={17} />{t.addBudget}</button></div> : filteredBudgets.map((budget) => {
+          {!filteredBudgets.length ? <div className="fb-planning-empty"><Wallet size={30} /><h2>{t.emptyBudget}</h2><p>{t.emptyBudgetHint}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("budget")}><Plus size={17} />{t.addBudget}</button></div> : filteredBudgets.slice(0, visibleBudgetCount).map((budget) => {
             const summary = budgetSummary(state, budget, today);
             const walletArchived = !!state.wallets.find((item) => item.id === budget.wallet)?.archived;
             const status = !summary.matchingCurrency || walletArchived ? "needs-review" : summary.actual > budget.amount ? "over" : summary.afterCommitments < 0 ? "planned-over" : summary.actual >= budget.amount * 0.8 ? "near" : "on-track";
@@ -728,24 +636,78 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
             </article>;
           })}
         </div>
+        {filteredBudgets.length > visibleBudgetCount && (
+          <div className="fb-load-more-wrap">
+            <button
+              type="button"
+              className="fb-load-more-btn"
+              onClick={() => setVisibleBudgetCount((prev) => prev + 5)}
+            >
+              {lang === "vi"
+                ? `Xem thêm (${filteredBudgets.length - visibleBudgetCount} ngân sách)`
+                : lang === "zh"
+                ? `查看更多 (${filteredBudgets.length - visibleBudgetCount})`
+                : `Show more (${filteredBudgets.length - visibleBudgetCount})`}
+            </button>
+          </div>
+        )}
       </section>}
 
       {tab === "fixed" && <section className="fb-planning-list-section" id="fb-fixed-section" aria-labelledby="fb-fixed-list-title">
         <header className="fb-planning-section-heading"><div><p className="fb-eyebrow">{lang === "vi" ? "LỊCH THANH TOÁN" : "PAYMENT SCHEDULE"}</p><h2 id="fb-fixed-list-title">{t.fixed}</h2></div><span>{filteredFixed.filter((item) => item.active).length} {t.countFixed}</span></header>
         <div className="fb-fixed-list">
-          {!filteredFixed.length ? <div className="fb-planning-empty"><ReceiptText size={30} /><h2>{t.emptyFixed}</h2><p>{t.emptyFixedHint}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("fixed", parentFilter === "all" ? undefined : parentFilter)}><Plus size={17} />{t.addFixed}</button></div> : sortedFixed.map((expense) => {
+          {!filteredFixed.length ? <div className="fb-planning-empty"><ReceiptText size={30} /><h2>{t.emptyFixed}</h2><p>{t.emptyFixedHint}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("fixed", parentFilter === "all" ? undefined : parentFilter)}><Plus size={17} />{t.addFixed}</button></div> : sortedFixed.slice(0, visibleFixedCount).map((expense) => {
             const parent = budgets.find((item) => item.id === expense.budgetId);
             const window = parent ? budgetSummary(state, parent, today) : undefined;
             const due = window ? plannedOccurrences(expense, window.start, window.end) : [];
             const currency = parent?.currency || state.wallets.find((wallet) => wallet.id === expense.walletId)?.currency || "";
-            return <article id={`fixed-${expense.id}`} className="fb-fixed-card" key={expense.id}><div className="fb-planning-card-heading"><span className="fb-planning-icon"><ArrowDownRight size={20} /></span><div className="fb-card-heading-body"><h2>{expense.title}</h2><div className="fb-card-tags"><span className="fb-card-tag">{parent ? `${t.parent}: ${parent.title}` : (expense.budgetId ? t.noParent : unassigned)}</span><span className="fb-card-tag">{walletName(parent?.wallet || expense.walletId || "")} · {currency}</span><span className="fb-card-tag">{parent?.category || expense.category}</span></div></div><button type="button" className="fb-planning-delete" aria-label={`${t.delete}: ${expense.title}`} title={t.delete} onClick={() => deleteFixed(expense.id)}><Trash2 size={16} /></button></div>
-              <div className="fb-fixed-amount-strip"><div className="fb-fixed-amount-main"><span className="fb-fixed-amount-label">{t.amount}</span><b>{format(expense.amount, currency)}</b></div><span className={`fb-status-pill ${expense.active ? "is-active" : ""}`}>{expense.active ? t.active : t.paused}</span></div>
-              <div className="fb-fixed-meta"><span>{expense.recurrence === "monthly" ? `${repeatMonths}: ${expense.intervalMonths || 1}` : t[expense.recurrence]}</span><span><CalendarDays size={13} />{due.length > 0 ? `${t.dueThisPeriod}: ${due.map(formatDate).join(" · ")}` : `${t.firstDue}: ${formatDate(expense.dueDate)}`}</span></div>
-              <div className="fb-planning-card-actions"><button type="button" disabled={!!expense.budgetId && !parent} onClick={() => open("fixed", parent?.id, expense)}>{t.edit}</button><button type="button" onClick={() => setDetailsExpense(expense)}>{t.details}</button><button type="button" onClick={() => updateState((current) => ({ ...current, fixedExpenses: (current.fixedExpenses || []).map((item) => item.id === expense.id ? { ...item, active: !item.active } : item) }))}>{expense.active ? t.pause : t.resume}</button></div>
-              <FixedExpenseActions expense={expense} lang={lang} navigate={navigate} />
+            return <article id={`fixed-${expense.id}`} className="fb-fixed-card" key={expense.id}>
+              <div className="fb-planning-card-heading">
+                <span className="fb-planning-icon"><ArrowDownRight size={18} /></span>
+                <div className="fb-card-heading-body">
+                  <h2>{expense.title}</h2>
+                  <div className="fb-card-tags">
+                    <span className="fb-card-tag">{parent ? `${t.parent}: ${parent.title}` : (expense.budgetId ? t.noParent : unassigned)}</span>
+                    <span className="fb-card-tag">{walletName(parent?.wallet || expense.walletId || "")} · {currency}</span>
+                    <span className="fb-card-tag">{parent?.category || expense.category}</span>
+                  </div>
+                </div>
+                <span className={`fb-status-pill ${expense.active ? "is-active" : ""}`}>{expense.active ? t.active : t.paused}</span>
+                <button type="button" className="fb-planning-delete" aria-label={`${t.delete}: ${expense.title}`} title={t.delete} onClick={() => deleteFixed(expense.id)}><Trash2 size={16} /></button>
+              </div>
+              <div className="fb-fixed-compact-row">
+                <div className="fb-fixed-compact-amount">
+                  <span>{t.amount}:</span>
+                  <b>{format(expense.amount, currency)}</b>
+                </div>
+                <div className="fb-fixed-compact-meta">
+                  <span>{expense.recurrence === "monthly" ? `${repeatMonths}: ${expense.intervalMonths || 1}` : t[expense.recurrence]}</span>
+                  <span><CalendarDays size={12} />{due.length > 0 ? `${t.dueThisPeriod}: ${due.map(formatDate).join(" · ")}` : `${t.firstDue}: ${formatDate(expense.dueDate)}`}</span>
+                </div>
+              </div>
+              <div className="fb-planning-card-actions">
+                <button type="button" onClick={() => setDetailsExpense(expense)}>{t.details}</button>
+                <button type="button" disabled={!!expense.budgetId && !parent} onClick={() => open("fixed", parent?.id, expense)}>{t.edit}</button>
+                <button type="button" onClick={() => updateState((current) => ({ ...current, fixedExpenses: (current.fixedExpenses || []).map((item) => item.id === expense.id ? { ...item, active: !item.active } : item) }))}>{expense.active ? t.pause : t.resume}</button>
+              </div>
             </article>;
           })}
         </div>
+        {sortedFixed.length > visibleFixedCount && (
+          <div className="fb-load-more-wrap">
+            <button
+              type="button"
+              className="fb-load-more-btn"
+              onClick={() => setVisibleFixedCount((prev) => prev + 5)}
+            >
+              {lang === "vi"
+                ? `Xem thêm (${sortedFixed.length - visibleFixedCount} khoản cố định)`
+                : lang === "zh"
+                ? `查看更多 (${sortedFixed.length - visibleFixedCount})`
+                : `Show more (${sortedFixed.length - visibleFixedCount})`}
+            </button>
+          </div>
+        )}
       </section>}
 
     </section>}
@@ -943,6 +905,10 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
                 </div>
               </div>
             )}
+
+            <div className="fb-details-payment-section">
+              <FixedExpenseActions expense={detailsExpense} lang={lang} navigate={navigate} />
+            </div>
 
             <p className="fb-planning-note">{t.noPayment}</p>
 

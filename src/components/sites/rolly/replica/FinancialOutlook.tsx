@@ -9,9 +9,9 @@ import { Modal } from "./Ui";
 import styles from "./FinancialOutlook.module.css";
 
 const COPY = {
-  vi: { title: "Cảnh báo tài chính", empty: "Chưa có cảnh báo cần xử lý.", reserve: "Chỉnh mức dự phòng", save: "Lưu mức dự phòng", priority: "Ưu tiên", high: "Cao", medium: "Vừa", low: "Thấp", problem: "Vấn đề", figures: "Số liệu và thời điểm", cause: "Nguyên nhân", action: "Hành động đề xuất", assumptions: "Giả định / giới hạn", actual: "Thực tế", forecast: "Dự báo", schedule: "Lịch dự kiến", handled: "Đã xử lý", read: "Đã đọc", unread: "Chưa đọc", markRead: "Đánh dấu đã đọc", note: "Cảnh báo được tính từ dữ liệu đã lưu. Dự báo chỉ gồm giả định nêu trong từng cảnh báo; không thực hiện thanh toán.", invalid: "Mức dự phòng phải là số không âm hợp lệ.", details: "Mở kế hoạch" },
-  en: { title: "Financial alerts", empty: "No alerts need attention right now.", reserve: "Edit reserves", save: "Save reserves", priority: "Priority", high: "High", medium: "Medium", low: "Low", problem: "Issue", figures: "Figures and timing", cause: "Cause", action: "Suggested action", assumptions: "Assumptions / limits", actual: "Actual", forecast: "Forecast", schedule: "Scheduled", handled: "Handled", read: "Read", unread: "Unread", markRead: "Mark as read", note: "Alerts use saved data. Forecasts include only the assumptions shown in each alert; no payments are made.", invalid: "Reserves must be a valid non-negative amount.", details: "Open planning" },
-  zh: { title: "财务提醒", empty: "目前没有需要处理的提醒。", reserve: "编辑备用金", save: "保存备用金", priority: "优先级", high: "高", medium: "中", low: "低", problem: "问题", figures: "数据与时间", cause: "原因", action: "建议操作", assumptions: "假设 / 限制", actual: "实际", forecast: "预测", schedule: "计划", handled: "已处理", read: "已读", unread: "未读", markRead: "标为已读", note: "提醒根据已保存的数据生成。预测仅包含每条提醒中列出的假设；不会执行付款。", invalid: "备用金必须是有效的非负金额。", details: "打开计划" },
+  vi: { title: "Cảnh báo tài chính", empty: "Chưa có cảnh báo cần xử lý.", reserve: "Chỉnh mức dự phòng", save: "Lưu mức dự phòng", priority: "Ưu tiên", high: "Cần chú ý", medium: "Theo dõi", low: "Thông tin", problem: "Vấn đề", figures: "Thông tin & thời điểm", cause: "Lý do phát hiện", action: "Gợi ý hành động", assumptions: "Cơ sở tính toán", actual: "Thực tế", forecast: "Dự báo", schedule: "Lịch dự kiến", handled: "Đã xử lý", read: "Đã đọc", unread: "Chưa đọc", markRead: "Đánh dấu đã đọc", note: "Cảnh báo được tính từ dữ liệu đã lưu. Dự báo chỉ gồm giả định nêu trong từng cảnh báo; không thực hiện thanh toán.", invalid: "Mức dự phòng phải là số không âm hợp lệ.", details: "Mở kế hoạch", openBudget: "Xem & điều chỉnh ngân sách", openFixed: "Xem khoản chi cố định", openWallet: "Quản lý ví & nạp tiền" },
+  en: { title: "Financial alerts", empty: "No alerts need attention right now.", reserve: "Edit reserves", save: "Save reserves", priority: "Priority", high: "High", medium: "Medium", low: "Low", problem: "Issue", figures: "Figures and timing", cause: "Cause", action: "Suggested action", assumptions: "Assumptions / limits", actual: "Actual", forecast: "Forecast", schedule: "Scheduled", handled: "Handled", read: "Read", unread: "Unread", markRead: "Mark as read", note: "Alerts use saved data. Forecasts include only the assumptions shown in each alert; no payments are made.", invalid: "Reserves must be a valid non-negative amount.", details: "Open planning", openBudget: "View & adjust budget", openFixed: "View fixed expense", openWallet: "Manage wallet & funds" },
+  zh: { title: "财务提醒", empty: "目前没有需要处理的提醒。", reserve: "编辑备用金", save: "保存备用金", priority: "优先级", high: "高", medium: "中", low: "低", problem: "问题", figures: "数据与时间", cause: "触发原因", action: "建议操作", assumptions: "计算依据", actual: "实际", forecast: "预测", schedule: "计划", handled: "已处理", read: "已读", unread: "未读", markRead: "标为已读", note: "提醒根据已保存的数据生成。预测仅包含每条提醒中列出的假设；不会执行付款。", invalid: "备用金必须是有效的非负金额。", details: "打开计划", openBudget: "查看并调整预算", openFixed: "查看固定支出", openWallet: "管理钱包与充值" },
 };
 type Language = keyof typeof COPY;
 type AiNote = { explanation: string; suggestion: string };
@@ -111,14 +111,70 @@ export function FinancialOutlook({ editable = false, compact = false, notificati
   </section>{compact && selectedAlert && (() => {
     const Icon = selectedAlert.kind === "fixed-due" ? Bell : selectedAlert.kind === "budget-risk" ? TrendingUp : AlertTriangle;
     const origin = selectedAlert.projected ? t.forecast : selectedAlert.kind === "fixed-due" ? t.schedule : t.actual;
+    const actionLabel = selectedAlert.targetType === "budget"
+      ? t.openBudget
+      : selectedAlert.targetType === "fixed-expense"
+        ? t.openFixed
+        : t.openWallet;
     return <Modal title={t.title} onClose={() => setSelectedAlert(null)}>
       <div className={styles.modalDetail}>
-        <div className={styles.modalHeading}><Icon size={20}/><div><h3>{selectedAlert.problem}</h3><span className={styles.priority}>{t.priority}: {priorityLabel(selectedAlert.priority)}</span></div></div>
-        <section><b>{t.figures}</b><p>{selectedAlert.figures}</p><small>{origin} · {selectedAlert.when}</small></section>
-        <section><b>{t.cause}</b><p>{selectedAlert.cause}</p></section>
-        <section><b>{t.action}</b><p>{selectedAlert.suggestedAction}</p></section>
-        <small>{t.assumptions}: {selectedAlert.assumptions}</small>
-        <div className={styles.actions}>{navigate && <button type="button" className={styles.dismiss} onClick={() => { const destination = notificationDestination(selectedAlert); setSelectedAlert(null); navigate(destination); }}>{t.details}</button>}<button type="button" className={styles.dismiss} onClick={() => setSelectedAlert(null)}>{lang === "vi" ? "Đóng" : lang === "zh" ? "关闭" : "Close"}</button></div>
+        <div className={styles.modalHeading}>
+          <Icon size={22}/>
+          <div>
+            <h3>{selectedAlert.problem}</h3>
+            <div className={styles.modalMetaRow}>
+              <span className={styles.priority}>{t.priority}: {priorityLabel(selectedAlert.priority)}</span>
+              <span className={styles.originTag}>{origin} · {selectedAlert.when}</span>
+            </div>
+          </div>
+        </div>
+        <section className={styles.modalSection}>
+          <b>{t.figures}</b>
+          <p>{selectedAlert.figures}</p>
+        </section>
+        <section className={styles.modalSection}>
+          <b>{t.cause}</b>
+          <p>{selectedAlert.cause}</p>
+        </section>
+        <section className={`${styles.modalSection} ${styles.modalSectionAction}`}>
+          <b>{t.action}</b>
+          <p>{selectedAlert.suggestedAction}</p>
+        </section>
+        <small className={styles.modalAssumption}>{t.assumptions}: {selectedAlert.assumptions}</small>
+        <div className={styles.modalActions}>
+          {navigate && (
+            <button
+              type="button"
+              className={styles.primaryModalAction}
+              onClick={() => {
+                const destination = notificationDestination(selectedAlert);
+                setSelectedAlert(null);
+                navigate(destination);
+              }}
+            >
+              <span>{actionLabel}</span> &rarr;
+            </button>
+          )}
+          <button
+            type="button"
+            className={styles.dismiss}
+            disabled={handledIds.has(selectedAlert.id)}
+            onClick={() => {
+              dismiss(selectedAlert);
+              setSelectedAlert(null);
+            }}
+          >
+            <Check size={15} />
+            {t.handled}
+          </button>
+          <button
+            type="button"
+            className={styles.closeBtn}
+            onClick={() => setSelectedAlert(null)}
+          >
+            {lang === "vi" ? "Đóng" : lang === "zh" ? "关闭" : "Close"}
+          </button>
+        </div>
       </div>
     </Modal>;
   })()}</>;

@@ -1,4 +1,8 @@
-.page {
+:root,
+.page,
+.detailsModalContent,
+:global(.r-dialog),
+:global(.r-wide-dialog) {
   --s-card: #fff;
   --s-ink: #203343;
   --s-muted: #64748b;
@@ -14,11 +18,18 @@
   --s-paused: #64748b;
   --s-paused-soft: #f1f5f9;
   --s-paused-line: #cbd5e1;
+}
+
+.page {
   color: var(--s-ink);
   padding-bottom: 110px !important;
 }
 
-:global(.r-dark) .page {
+:global(.r-dark),
+:global(.r-dark) .page,
+:global(.r-dark) .detailsModalContent,
+:global(.r-dark) :global(.r-dialog),
+:global(.r-dark) :global(.r-wide-dialog) {
   --s-card: #1e293b;
   --s-ink: #f8fafc;
   --s-muted: #94a3b8;
@@ -49,7 +60,13 @@
 .breadcrumb button { color: var(--s-accent); }
 .titleRow { display: flex; justify-content: space-between; gap: 24px; align-items: center; margin-bottom: 20px; }
 .titleRow p { margin-top: 6px; max-width: 680px; font-size: 14px; }
-.databaseNote { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 22px; font-size: 11px; color: var(--s-muted); }
+.topBackBar { display: flex; align-items: center; margin: -4px 0 16px; }
+.backButton { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 9999px; border: 1px solid var(--s-line); background: var(--s-card); color: var(--s-muted); font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all .18s ease; }
+.backButton:hover { color: var(--s-accent); border-color: var(--s-accent); background: var(--s-soft); }
+.loadMoreWrap { display: flex; justify-content: center; margin-top: 20px; }
+.loadMoreBtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 22px; border-radius: 9999px; border: 1px solid var(--s-line); background: var(--s-card); color: var(--s-muted); font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all .18s ease; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+.loadMoreBtn:hover { border-color: var(--s-accent); color: var(--s-accent); background: var(--s-soft); }
+.databaseNote { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 24px; font-size: 11.5px; color: var(--s-muted); }
 .databaseNote b { color: var(--s-accent); font-weight: 600; }
 
 .primary, .secondary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 9px 18px; border-radius: 10px; font-size: 13px !important; font-weight: 650 !important; line-height: 1.4; }
@@ -247,6 +264,25 @@
   box-sizing: border-box;
 }
 
+.filters :global(.fb-dropdown-container) {
+  flex: 0 0 auto;
+}
+.filters :global(.fb-dropdown-trigger) {
+  height: 42px;
+  min-height: 42px;
+  border-radius: 12px;
+  border: 1px solid var(--s-line);
+  background: var(--s-card);
+  color: var(--s-ink);
+  font-size: 13px;
+  min-width: 170px;
+}
+.filters :global(.fb-dropdown-trigger:hover),
+.filters :global(.fb-dropdown-trigger.is-open) {
+  border-color: var(--s-accent);
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.12);
+}
+
 /* Badges */
 .badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid var(--s-line); color: var(--s-muted); background: var(--s-soft); border-radius: 8px; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .alarm { color: var(--s-alarm); background: var(--s-alarm-soft); border-color: var(--s-alarm-line); }
@@ -276,8 +312,246 @@
 .configurationDisclosure { margin-top: 10px; }
 .configurationDisclosure>summary { display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:38px; padding:8px 10px; border-radius:9px; color:var(--s-accent); background:var(--s-soft); cursor:pointer; list-style:none; font-size:12px; font-weight:650; }
 .configurationDisclosure>summary::-webkit-details-marker { display:none; }
-.configurationDisclosure[open]>summary svg { transform:rotate(180deg); }
 .configurationBody { display:grid; gap:12px; padding-top:12px; }
+
+/* Compact Card Info Row & Actions */
+.compactInfoRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  background: var(--s-soft);
+  border-radius: 10px;
+  border: 1px solid var(--s-line);
+  margin: 10px 0 8px;
+  flex-wrap: wrap;
+}
+.compactInfoLeft {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--s-ink);
+}
+.compactInfoLeft span {
+  font-size: 11.5px;
+  color: var(--s-muted);
+}
+.compactInfoLeft b {
+  font-weight: 700;
+  color: var(--s-ink);
+}
+.compactLimitSub {
+  font-size: 11.5px;
+  color: var(--s-muted);
+}
+.compactInfoRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--s-muted);
+}
+.compactInfoRight b {
+  color: var(--s-ink);
+  font-weight: 600;
+}
+.compactCardActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+.compactChannel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--s-muted);
+}
+.compactActionBtns {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.btnDetail, .btnEdit, .btnToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--s-line);
+  background: var(--s-card);
+  color: var(--s-ink);
+  transition: all 0.15s ease;
+}
+.btnDetail {
+  background: var(--s-soft);
+  color: var(--s-accent);
+  border-color: var(--s-line);
+}
+.btnDetail:hover {
+  background: var(--s-accent);
+  color: #fff;
+  border-color: var(--s-accent);
+}
+.btnEdit:hover, .btnToggle:hover {
+  border-color: var(--s-accent);
+  color: var(--s-accent);
+}
+
+/* Modal Details Content */
+.detailsModalContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 75vh;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+.detailsModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 4px 0 16px;
+  border-bottom: 1px solid var(--s-line, #e2e8f0);
+}
+.meterSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.meterSectionTitle {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--s-muted, #64748b);
+}
+.modalConditionsSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--s-line, #e2e8f0);
+  margin-top: 4px;
+}
+.modalConditionsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.modalConditionsHeader h4 {
+  font-size: 13.5px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--s-ink, #203343);
+}
+.modalConditionsCount {
+  font-size: 11px;
+  font-weight: 650;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--s-soft, #f8fafc);
+  border: 1px solid var(--s-line, #e2e8f0);
+  color: var(--s-muted, #64748b);
+}
+.detailsModalActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--s-line, #e2e8f0);
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.detailsModalActions .channelBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--s-muted, #64748b);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--s-soft, #f8fafc);
+  border: 1px solid var(--s-line, #e2e8f0);
+}
+.modalActionButtons {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+.modalActionButtons .btnClose {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 1px solid var(--s-line, #cbd5e1);
+  background: var(--s-card, #ffffff);
+  color: var(--s-ink, #203343);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.modalActionButtons .btnClose:hover {
+  background: var(--s-soft, #f8fafc);
+  border-color: var(--s-muted, #94a3b8);
+}
+.modalActionButtons .btnToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 10px;
+  border: 1px solid var(--s-line, #cbd5e1);
+  background: var(--s-card, #ffffff);
+  color: var(--s-ink, #203343);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.modalActionButtons .btnToggle:hover {
+  border-color: var(--s-accent, #6366f1);
+  color: var(--s-accent, #6366f1);
+}
+.modalActionButtons .btnEdit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 650;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(135deg, #7b40f2 0%, #6366f1 100%);
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(123, 64, 242, 0.25);
+  transition: all 0.15s ease;
+}
+.modalActionButtons .btnEdit:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(123, 64, 242, 0.35);
+}
 
 /* Card Header Scope & Type Badges */
 .scopeTypeRow {
@@ -336,11 +610,12 @@
 
 /* AWS Budgets Style Visual Progress Meter */
 .awsMeterSection {
-  margin: 16px 0 12px;
-  padding: 12px 14px;
-  background: var(--s-soft);
-  border: 1px solid var(--s-line);
-  border-radius: 12px;
+  margin: 12px 0 16px;
+  padding: 16px 18px;
+  background: var(--s-soft, #f8fafc);
+  border: 1px solid var(--s-line, #e2e8f0);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 .awsMeterHeader {
   display: flex;
@@ -408,11 +683,11 @@
 
 .awsMeterTrack {
   position: relative;
-  height: 9px;
+  height: 10px;
   border-radius: 999px;
-  background: var(--s-line);
+  background: var(--s-line, #e2e8f0);
   overflow: visible;
-  margin-bottom: 24px;
+  margin: 14px 0 24px;
 }
 .awsForecastBar {
   position: absolute;
@@ -590,18 +865,19 @@
 
 .configurationValues {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 10px;
-  padding: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 0;
 }
 .configValueCard {
-  background: var(--s-soft);
-  border: 1px solid var(--s-line);
-  border-radius: 10px;
-  padding: 12px 14px;
+  background: var(--s-card, #ffffff);
+  border: 1px solid var(--s-line, #e2e8f0);
+  border-radius: 12px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.03);
   transition: all 0.15s ease;
 }
 .configValueTop {
@@ -609,37 +885,54 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .configValueTop .configBasis {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   margin: 0;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 650;
 }
 .configBadgeMini {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-size: 10.5px;
+  padding: 2px 7px;
+  border-radius: 6px;
   font-weight: 650;
   white-space: nowrap;
 }
 .configValueActual {
-  border-left: 3px solid #0284c7;
+  border-left: 4px solid #0284c7;
 }
 .configValueForecast {
-  border-left: 3px solid #9333ea;
+  border-left: 4px solid #9333ea;
 }
 .configValueReserve {
-  border-left: 3px solid #d97706;
+  border-left: 4px solid #d97706;
+}
+.configCardDivider {
+  height: 1px;
+  background: var(--s-line, #e2e8f0);
+  border: none;
+  margin: 2px 0;
+}
+.configCardBody {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.configAmountRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 .configBasis { font-size: 11px; font-weight: 600; color: var(--s-accent); margin-bottom: 2px; }
 .configLabel { font-size: 11px; color: var(--s-muted); }
-.configAmount { font-size: 16px; font-weight: 700; color: var(--s-ink); margin: 2px 0; }
-.configThreshold { font-size: 11px; color: var(--s-muted); }
-.configReason { font-size: 11px; color: #b45309; }
+.configAmount { font-size: 17px; font-weight: 750; color: var(--s-ink); margin: 2px 0; }
+.configThreshold { font-size: 11.5px; color: var(--s-muted); margin: 0; }
+.configThreshold b { color: var(--s-ink); }
+.configReason { font-size: 11px; color: #b45309; margin: 0; }
 
 .configuration footer {
   display: flex;

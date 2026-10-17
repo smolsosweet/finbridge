@@ -1073,12 +1073,20 @@ function SvgDonut({
             })
           )}
         </svg>
-        <div className="fb-donut-center-info">
-          <span className="fb-donut-center-label">{type === "income" ? t.donutTotalIncome : t.donutTotalExpense}</span>
-          <b className={"fb-donut-center-value " + (type === "income" ? "r-income" : "r-expense")}>
-            {total === 0 ? `0 ${currency}` : (type === "income" ? "+" : "−") + formatHomeMoney(total, currency)}
-          </b>
+        <div className="fb-donut-center-icon" aria-hidden="true">
+          {type === "income" ? (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+          ) : (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#e11d48" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+          )}
         </div>
+      </div>
+
+      <div className="fb-donut-total-bar">
+        <span className="fb-donut-total-label">{type === "income" ? t.donutTotalIncome : t.donutTotalExpense}</span>
+        <strong className={"fb-donut-total-amount " + (type === "income" ? "r-income" : "r-expense")}>
+          {total === 0 ? `0 ${currency}` : (type === "income" ? "+" : "−") + formatHomeMoney(total, currency)}
+        </strong>
       </div>
 
       <div className="fb-donut-legend">

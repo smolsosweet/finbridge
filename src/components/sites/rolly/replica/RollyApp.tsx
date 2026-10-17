@@ -17,6 +17,7 @@ import { Categories } from "./Categories";
 import { SafetyProvider } from "@/components/safety/SafetyProvider";
 import { NotificationCenter } from "./NotificationCenter";
 import { SafetyAlerts } from "@/components/safety/SafetyAlerts";
+import { Mascot as LacMascot } from "page-mascot";
 import "./replica.css";
 
 export function RollyApp({ screen = "" }: { screen?: string }) {
@@ -144,15 +145,30 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
       {!isWelcome && !hasSharedHeader && screen !== "safetyAlerts" && <NotificationCenter navigate={navigate} floating />}
 
       {!isWelcome && screen !== "addTransactionChatMode" && screen !== "safetyAlerts" && (
-        <button
-          type="button"
-          className="r-fab fb-global-fab"
-          aria-label={lang === "vi" ? "Thêm giao dịch qua chat AI" : lang === "zh" ? "AI 记账对话" : "Add transaction via AI chat"}
-          title={lang === "vi" ? "Thêm giao dịch qua chat AI" : lang === "zh" ? "AI 记账对话" : "Add transaction via AI chat"}
+        <div
+          role="button"
+          tabIndex={0}
+          className="r-fab fb-global-fab fb-mascot-fab"
+          aria-label={lang === "vi" ? "Trò chuyện cùng FinBridge AI" : lang === "zh" ? "与 FinBridge AI 对话" : "Chat with FinBridge AI"}
+          title={lang === "vi" ? "Trò chuyện cùng FinBridge AI" : lang === "zh" ? "与 FinBridge AI 对话" : "Chat with FinBridge AI"}
           onClick={() => navigate("addTransactionChatMode")}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              navigate("addTransactionChatMode");
+            }
+          }}
         >
-          <Plus size={26} />
-        </button>
+          <div className="fb-mascot-fab-inner">
+            <LacMascot
+              directions="/mascots/lac-directions.webp"
+              reactions="/mascots/lac-reactions.webp"
+              size={44}
+              label="Jake"
+            />
+            <span className="fb-mascot-fab-ai-badge">AI</span>
+          </div>
+        </div>
       )}
 
       {!screen && (

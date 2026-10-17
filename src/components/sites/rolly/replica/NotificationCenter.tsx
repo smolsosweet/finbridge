@@ -79,7 +79,21 @@ export function NotificationCenter({ navigate, floating = false }: { navigate: (
 
   const close = () => { setOpen(false); trigger.current?.focus(); };
   const go = (path: string) => { close(); navigate(path); };
-  const time = (value: string) => new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  const time = (value: string) => {
+    if (!value) return "—";
+    try {
+      const trimmed = value.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        const [y, m, d] = trimmed.split("-").map(Number);
+        return new Intl.DateTimeFormat(lang, { dateStyle: "medium" }).format(new Date(y, m - 1, d));
+      }
+      const parsed = new Date(trimmed);
+      if (!Number.isFinite(parsed.getTime())) return value;
+      return new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short" }).format(parsed);
+    } catch {
+      return value;
+    }
+  };
   const money = (value: number | null, currency: string) => {
     if (value === null || !Number.isFinite(value) || !currency) return "—";
     try { return new Intl.NumberFormat(lang, { style: "currency", currency }).format(value); } catch { return "—"; }

@@ -54,5 +54,15 @@
 .modalDetail section { padding: 12px; border: 1px solid var(--r-line,#e2e8f0); border-radius: 11px; background: var(--r-bg,#f8fafc); }
 .modalDetail section p { margin: 5px 0 0; color: var(--r-muted,#64748b); font-size: 12px; line-height: 1.6; }
 .modalHeading { display: flex; align-items: flex-start; gap: 10px; }
-.modalHeading h3 { margin: 0 0 7px; font-size: 15px!important; line-height: 1.45; }
+.modalHeading h3 { margin: 0 0 4px; font-size: 15px!important; line-height: 1.45; }
+.modalMetaRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.originTag { font-size: 11px; color: var(--r-muted, #64748b); }
+.modalSectionAction { border-color: rgba(20, 125, 120, 0.35)!important; background: rgba(20, 125, 120, 0.05)!important; }
+.modalSectionAction b { color: var(--r-teal, #147d78); }
+.modalAssumption { display: block; font-size: 11px; color: var(--r-muted, #64748b); line-height: 1.5; }
+.modalActions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 6px; }
+.primaryModalAction { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px!important; min-height: 40px!important; border: 0!important; border-radius: 10px!important; background: var(--r-teal, #147d78)!important; color: #ffffff!important; font-size: 12px!important; font-weight: 600!important; cursor: pointer; transition: opacity 0.15s; }
+.primaryModalAction:hover { opacity: 0.9; }
+.closeBtn { min-height: 40px!important; padding: 10px 14px!important; border: 1px solid var(--r-line, #e2e8f0)!important; border-radius: 10px!important; background: transparent!important; color: var(--r-text, #172f3c)!important; font-size: 12px!important; cursor: pointer; }
+.closeBtn:hover { background: var(--r-bg, #f8fafc)!important; }
 @media(max-width:640px){.compactAlert{grid-template-columns:32px minmax(0,1fr) auto}.compactAlert>.priority{display:none}.compactDetails{grid-column:2/-1;justify-self:start}.compactCopy p{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}.compact{padding:14px}}

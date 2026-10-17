@@ -140,6 +140,10 @@ const COPY = {
     showing: "Hiển thị",
     unknownDate: "Chưa có ngày",
     ranges: "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.",
+    colTransaction: "Giao dịch",
+    colCategory: "Danh mục",
+    colWallet: "Tài khoản",
+    colAmount: "Số tiền",
   },
   en: {
     title: "Transaction history",
@@ -196,6 +200,10 @@ const COPY = {
     showing: "Showing",
     unknownDate: "No date recorded",
     ranges: "Start date must be on or before end date.",
+    colTransaction: "Transaction",
+    colCategory: "Category",
+    colWallet: "Account",
+    colAmount: "Amount",
   },
   zh: {
     title: "交易记录",
@@ -252,6 +260,10 @@ const COPY = {
     showing: "显示",
     unknownDate: "未记录日期",
     ranges: "开始日期不能晚于结束日期。",
+    colTransaction: "交易",
+    colCategory: "类别",
+    colWallet: "账户",
+    colAmount: "金额",
   },
 };
 
@@ -274,6 +286,7 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
   });
   const [search, setSearch] = useState(defaultSearch || params.get("q") || params.get("search") || "");
   const [page, setPage] = useState(1);
+  const [visibleLimit, setVisibleLimit] = useState(5);
   const [calendarLedgerOpen, setCalendarLedgerOpen] = useState(false);
   const nameOfWallet = (id?: string) => {
     const item = state.wallets.find((wallet) => wallet.id === id);
@@ -330,10 +343,10 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
       return { currency, label: (type === "income" ? signed >= 0 ? "+" : "−" : signed > 0 ? "+" : "−") + amount(Math.abs(value), currency) };
     });
   };
-  const pages = Math.max(1, Math.ceil(records.length / PAGE_SIZE));
+  const pages = Math.max(1, Math.ceil(records.length / visibleLimit));
   const activePage = Math.min(page, pages);
-  const visible = records.slice((activePage - 1) * PAGE_SIZE, activePage * PAGE_SIZE);
-  const reset = () => { setKind("all"); setWalletId("all"); setCategory("all"); setPeriod({ ...period, kind: "month", month: Number(today.slice(5, 7)) - 1, year: Number(today.slice(0, 4)) }); setSearch(""); setPage(1); };
+  const visible = records.slice(0, visibleLimit);
+  const reset = () => { setKind("all"); setWalletId("all"); setCategory("all"); setPeriod({ ...period, kind: "month", month: Number(today.slice(5, 7)) - 1, year: Number(today.slice(0, 4)) }); setSearch(""); setPage(1); setVisibleLimit(5); };
   const dateLabel = (record: HistoryRecord) => {
     const raw = record.occurredAt || record.date;
     const value = new Date(raw.length === 10 ? raw + "T12:00:00" : raw);
@@ -381,14 +394,14 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
               type="search"
               placeholder={text.placeholder}
               value={search}
-              onChange={(event) => { setSearch(event.target.value); setPage(1); }}
+              onChange={(event) => { setSearch(event.target.value); setPage(1); setVisibleLimit(5); }}
             />
             {search && (
               <button
                 type="button"
                 className="fb-search-clear-btn"
                 aria-label={text.clearSearch}
-                onClick={() => { setSearch(""); setPage(1); }}
+                onClick={() => { setSearch(""); setPage(1); setVisibleLimit(5); }}
               >
                 <X size={14} />
               </button>
@@ -403,7 +416,7 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
           <div className="fb-select-wrap">
             <select
               value={walletId}
-              onChange={(event) => { setWalletId(event.target.value); setCategory("all"); setPage(1); }}
+              onChange={(event) => { setWalletId(event.target.value); setCategory("all"); setPage(1); setVisibleLimit(5); }}
             >
               <option value="all">{text.allWallets}</option>
               {state.wallets.map((wallet) => (
@@ -421,7 +434,7 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
           <div className="fb-select-wrap">
             <select
               value={kind}
-              onChange={(event) => { setKind(event.target.value as Kind); setCategory("all"); setPage(1); }}
+              onChange={(event) => { setKind(event.target.value as Kind); setCategory("all"); setPage(1); setVisibleLimit(5); }}
             >
               <option value="all">{text.all}</option>
               <option value="expense">{text.expense}</option>
@@ -437,7 +450,7 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
           <div className="fb-select-wrap">
             <select
               value={category}
-              onChange={(event) => { setCategory(event.target.value); setPage(1); }}
+              onChange={(event) => { setCategory(event.target.value); setPage(1); setVisibleLimit(5); }}
             >
               <option value="all">{text.allCategories}</option>
               {category !== "all" && !availableCategories.includes(category) && (
@@ -455,7 +468,7 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
           <span>{text.period}</span>
           <HistoryPeriodPicker
             value={period}
-            onChange={(value) => { setPeriod(value); setPage(1); }}
+            onChange={(value) => { setPeriod(value); setPage(1); setVisibleLimit(5); }}
             lang={lang}
           />
         </div>
@@ -503,6 +516,12 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
         <h2>{text.title}</h2>
         <span>{records.length} {text.count} · {sample ? text.sample : text.saved}</span>
       </div>
+      <div className="fb-history-table-header" aria-hidden="true">
+        <span className="fb-th-col fb-th-info">{text.colTransaction}</span>
+        <span className="fb-th-col fb-th-category">{text.colCategory}</span>
+        <span className="fb-th-col fb-th-wallet">{text.colWallet}</span>
+        <span className="fb-th-col fb-th-amount">{text.colAmount}</span>
+      </div>
       {visible.length === 0 ? (
         <div className="fb-history-empty">
           <ReceiptText size={30} />
@@ -517,24 +536,41 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
           const sign = record.type === "transfer" ? "" : signed >= 0 ? "+" : "−";
           return (
             <article key={record.id} className={"fb-history-record " + record.type}>
-              <div className="fb-history-record-heading">
+              <div className="fb-history-col-info">
                 <span className="fb-history-record-icon"><IconComponent size={20} /></span>
-                <div>
+                <div className="fb-history-info-meta">
                   <h3>{record.title || resolveCategoryDisplayName(record.category, lang, text.noCategory)}</h3>
-                  <p><time dateTime={record.occurredAt || record.date}>{dateLabel(record)}</time> · {record.sourceLabel || (sample ? text.syntheticData : text.saved)}</p>
+                  <p><time dateTime={record.occurredAt || record.date}>{dateLabel(record)}</time> · <span>{record.sourceLabel || (sample ? text.syntheticData : text.saved)}</span></p>
                 </div>
-                <b className="fb-history-amount">{sign}{amount(Math.abs(record.amount), currencyOf(record))}</b>
               </div>
-              <p className="fb-history-source">
-                {text.source} · <b>{nameOfWallet(record.wallet)}</b>{record.type === "transfer" && record.targetWallet ? <span> → {nameOfWallet(record.targetWallet)}</span> : null}
-              </p>
-              <div className="fb-history-tags">
-                <span className="fb-history-kind">{label}</span>
-                <span>{resolveCategoryDisplayName(record.category, lang, text.noCategory)}{record.subcategory ? " / " + record.subcategory : ""}</span>
-                {record.classification?.method && <span>{record.classification.method === "automatic" ? text.auto : text.manual}</span>}
-                {typeof record.classification?.confidence === "number" && record.classification.confidence >= 0 && record.classification.confidence <= 1 && <span>{Math.round(record.classification.confidence * 100)}%</span>}
+
+              <div className="fb-history-col-category">
+                <div className="fb-history-tags">
+                  <span className="fb-history-kind">{label}</span>
+                  <span className="fb-history-cat-badge">{resolveCategoryDisplayName(record.category, lang, text.noCategory)}{record.subcategory ? " / " + record.subcategory : ""}</span>
+                </div>
+                {record.classification?.method && (
+                  <span className="fb-history-classify-tag">
+                    {record.classification.method === "automatic" ? text.auto : text.manual}
+                    {typeof record.classification?.confidence === "number" && record.classification.confidence >= 0 && record.classification.confidence <= 1 && (
+                      <span className="fb-history-confidence"> · {Math.round(record.classification.confidence * 100)}%</span>
+                    )}
+                  </span>
+                )}
+              </div>
+
+              <div className="fb-history-col-wallet">
+                <small className="fb-history-wallet-eyebrow">{text.source}</small>
+                <p className="fb-history-source">
+                  <b>{nameOfWallet(record.wallet)}</b>{record.type === "transfer" && record.targetWallet ? <span> → {nameOfWallet(record.targetWallet)}</span> : null}
+                </p>
+              </div>
+
+              <div className="fb-history-col-amount">
+                <b className="fb-history-amount">{sign}{amount(Math.abs(record.amount), currencyOf(record))}</b>
                 <span className="fb-history-recorded">{text.recorded}</span>
               </div>
+
               <div className="fb-history-details">
                 <details>
                   <summary>{text.why}</summary>
@@ -555,12 +591,36 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
         })
       )}
       <footer className="fb-history-pagination">
-        <span>{text.showing} {records.length ? (activePage - 1) * PAGE_SIZE + 1 : 0}–{Math.min(activePage * PAGE_SIZE, records.length)} / {records.length}</span>
-        <div>
-          <button type="button" aria-label={text.previous} disabled={activePage <= 1} onClick={() => setPage(activePage - 1)}><ChevronLeft size={18} /></button>
-          <span>{text.page} {activePage} {text.of} {pages}</span>
-          <button type="button" aria-label={text.next} disabled={activePage >= pages} onClick={() => setPage(activePage + 1)}><ChevronRight size={18} /></button>
-        </div>
+        <span>{text.showing} {records.length ? 1 : 0}–{Math.min(visibleLimit, records.length)} / {records.length} {text.count}</span>
+        {records.length > 5 && (
+          <div className="fb-history-pagination-actions">
+            {visibleLimit < records.length && (
+              <button
+                type="button"
+                className="fb-load-more-btn fb-history-page-btn"
+                onClick={() => setVisibleLimit((c) => c + 5)}
+              >
+                <ChevronDown size={14} />
+                <span>
+                  {lang === "vi"
+                    ? `Xem thêm (${records.length - visibleLimit} giao dịch)`
+                    : lang === "zh"
+                    ? `查看更多 (${records.length - visibleLimit})`
+                    : `Show more (${records.length - visibleLimit})`}
+                </span>
+              </button>
+            )}
+            {visibleLimit > 5 && (
+              <button
+                type="button"
+                className="fb-history-page-btn fb-history-collapse-btn"
+                onClick={() => setVisibleLimit(5)}
+              >
+                {lang === "vi" ? "Thu gọn" : lang === "zh" ? "收起" : "Show less"}
+              </button>
+            )}
+          </div>
+        )}
       </footer>
     </section>
 
