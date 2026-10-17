@@ -125,7 +125,10 @@ test("actual store partitions accounts, clears memory on logout, and preserves s
     store.clearUserWorkspace(); assert.equal(store.workspaceOwner(), null);
     assert.equal(s.getItem(storage.userWorkspaceKey("A")), savedA);
     assert.equal(s.getItem(storage.LEGACY_WORKSPACE_KEY), legacy);
-    store.activateUserWorkspace("A", "Google A"); assert.equal(store.useAppState().transactions[0].id, "A-only");
+    languagePreference.rememberPreferredLanguage("zh");
+    store.activateUserWorkspace("A", "Google A");
+    assert.equal(store.useAppState().transactions[0].id, "A-only");
+    assert.equal(store.useAppState().settings.language, "中文", "the browser language choice overrides an older per-account setting");
   } finally { global.window = previousWindow; global.localStorage = previousStorage; }
 });
 test("actual store imports only after choice and retains the legacy backup", () => {

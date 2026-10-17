@@ -5,6 +5,7 @@ import { OnboardingWizard } from "./OnboardingWizard";
 import { applyOnboarding, onboardingSchema, type OnboardingRecord } from "@/lib/onboarding";
 import { SETUP_COPY } from "@/lib/setup-copy";
 import { updateState, useAppState, workspaceOwner } from "@/components/sites/rolly/replica/store";
+import { readPreferredLanguage, workspaceLanguage } from "@/lib/language-preference";
 export function FirstRunGate({ children }: { children: ReactNode }) {
   const user = useAuthenticatedUser(), state = useAppState();
   const [status, setStatus] = useState<"loading" | "setup" | "complete" | "error">("loading");
@@ -20,14 +21,20 @@ export function FirstRunGate({ children }: { children: ReactNode }) {
       if (!active || workspaceOwner() !== userId) return;
       if (result.profile) {
         if (!onboardingSchema.safeParse(result.profile.data).success) throw new Error("INVALID_PROFILE");
-        updateState(s => applyOnboarding(s, result.profile)); setStatus("complete");
+        updateState(s => {
+          const hydrated = applyOnboarding(s, result.profile);
+          return { ...hydrated, settings: { ...hydrated.settings, language: workspaceLanguage(readPreferredLanguage()) } };
+        }); setStatus("complete");
       } else setStatus("setup");
     }).catch(() => { if (active) setStatus("error"); });
     return () => { active = false; controller.abort(); };
   }, [userId, attempt]);
   function completed(profile: OnboardingRecord) {
     if (workspaceOwner() !== userId) return;
-    updateState(s => ({ ...applyOnboarding(s, profile), onboardingDraft: undefined })); setStatus("complete");
+    updateState(s => {
+      const hydrated = applyOnboarding(s, profile);
+      return { ...hydrated, onboardingDraft: undefined, settings: { ...hydrated.settings, language: workspaceLanguage(readPreferredLanguage()) } };
+    }); setStatus("complete");
   }
   if (status === "complete") return children;
   if (status === "setup" && user) return <OnboardingWizard userId={user.id} name={user.name} state={state} onComplete={completed} />;

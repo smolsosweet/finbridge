@@ -77,7 +77,7 @@ function getSnapshot() {
     initialized = true;
     try {
       const saved = readUserWorkspace(localStorage, activeOwner);
-      if (saved) current = { ...initialState, ...saved, settings: { ...initialState.settings, name: ownerName, language: "English", ...saved.settings } };
+      if (saved) current = { ...initialState, ...saved, settings: { ...initialState.settings, name: ownerName, ...saved.settings, language: workspaceLanguage(readPreferredLanguage()) } };
     } catch { /* User data and the unclaimed legacy record remain untouched. */ }
   }
   return current;
@@ -89,14 +89,15 @@ function subscribe(callback: () => void) {
 export const subscribeWorkspace = subscribe;
 export function updateState(update: (value: AppState) => AppState) {
   if (!activeOwner) throw new Error("No active user workspace.");
-  current = update(getSnapshot());
+  const previous = getSnapshot();
+  current = update(previous);
   if (current.walletCategories) current = { ...current, walletCategories: Object.fromEntries(current.wallets.map(w => [w.id, [...new Set(current.walletCategories?.[w.id] || current.categories)].filter(n => current.categories.includes(n))])) };
   if (persistence === "browser") { try { localStorage.setItem(userWorkspaceKey(activeOwner), JSON.stringify(current)); } catch { /* Demo data can remain in memory. */ } }
+  if (current.settings.language !== previous.settings.language) rememberPreferredLanguage(String(current.settings.language));
   notify();
 }
 export function useAppState() { return useSyncExternalStore(subscribe, getSnapshot, () => initialState); }
 export function setSetting(name: string, value: string | boolean) {
-  if (name === "language" && typeof value === "string") rememberPreferredLanguage(value);
   updateState((s) => ({ ...s, settings: { ...s.settings, [name]: value } }));
 }
 export function currencySymbol(code: string) { return ({ USD: "$", VND: "₫", EUR: "€", GBP: "£", AUD: "A$", SGD: "S$", JPY: "¥" } as Record<string, string>)[code] || code + " "; }
