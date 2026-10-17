@@ -29,7 +29,7 @@ html{scrollbar-gutter:stable}
 .r-budget-ai form>.r-primary{position:fixed;bottom:20px;left:20px;width:calc(100% - 40px)}
 .r-rotate-close{transform:rotate(45deg)}
 .r-icon-button{display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;color:inherit;padding:8px;border-radius:50%}
-.r-bottom-nav{position:fixed;bottom:0;left:0;width:100%;display:grid;grid-template-columns:repeat(4,1fr);background:var(--r-surface);height:56px;border-top:1px solid #ededed;z-index:20}
+.r-bottom-nav{position:fixed;bottom:0;left:0;width:100%;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));background:var(--r-surface);height:56px;border-top:1px solid #ededed;z-index:20}
 .r-bottom-nav button{border:0;background:transparent;display:flex;flex-direction:column;gap:3px;align-items:center;justify-content:center;color:#7c7c7c;font-size:12px;padding:7px 4px}
 .r-bottom-nav .r-icon{font-size:24px}
 .r-bottom-nav button.active{color:var(--r-teal)}

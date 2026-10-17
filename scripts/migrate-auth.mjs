@@ -5,6 +5,7 @@ import { initializeAccountLifecycle } from "../src/lib/account-lifecycle.ts";
 import { SAFETY_SQL } from "../src/lib/safety-repository.ts";
 import { WORKSPACE_SQL } from "../src/lib/workspace-repository.ts";
 import { FINANCE_TABLES_SQL, writeFinanceTables } from "../src/lib/finance-tables.ts";
+import { INTERNATIONAL_TRANSFER_SQL } from "../src/lib/international-transfer-repository.ts";
 
 nextEnv.loadEnvConfig(process.cwd());
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required.");
@@ -18,6 +19,7 @@ try {
   await pool.query(SAFETY_SQL);
   await pool.query(WORKSPACE_SQL);
   await pool.query(FINANCE_TABLES_SQL);
+  await pool.query(INTERNATIONAL_TRANSFER_SQL);
   // Backfill only server-owned records from the earlier snapshot prototype.
   // Device-only data is migrated explicitly by its signed-in owner in the UI.
   const workspaces = await pool.query("SELECT user_id,data FROM finbridge_workspaces WHERE data IS NOT NULL");

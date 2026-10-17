@@ -1,7 +1,6 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus } from "lucide-react";
 import { Dashboard } from "./Dashboard";
 import { TransactionHistory } from "./TransactionHistory";
 import { Planning } from "./Planning";
@@ -17,6 +16,7 @@ import { Categories } from "./Categories";
 import { SafetyProvider } from "@/components/safety/SafetyProvider";
 import { NotificationCenter } from "./NotificationCenter";
 import { SafetyAlerts } from "@/components/safety/SafetyAlerts";
+import { InternationalTransfers } from "@/components/transfers/InternationalTransfers";
 import { Mascot as LacMascot } from "page-mascot";
 import "./replica.css";
 
@@ -46,8 +46,9 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
     zh: [["home", "首页", "f015"], ["transactions", "交易", "f555"], ["tools", "计划", "f51e"], ["settings", "设置", "f013"]],
   }[lang] as Array<[string, string, string]>;
 
+  navLabels.splice(3, 0, ["transfers", lang === "vi" ? "Chuyển tiền quốc tế" : lang === "zh" ? "国际汇款" : "International transfers", "f0ac"]);
   let content;
-  if (!screen) content = tab === "tools" ? <Planning navigate={navigate} initialTab={params.get("plan") === "fixed" ? "fixed" : "budget"} /> : tab === "settings" ? <SettingsOverview navigate={navigate} /> : tab === "transactions" ? <TransactionHistory navigate={navigate} /> : <Dashboard key={tab} navigate={navigate} />;
+  if (!screen) content = tab === "transfers" ? <InternationalTransfers navigate={navigate} /> : tab === "tools" ? <Planning navigate={navigate} initialTab={params.get("plan") === "fixed" ? "fixed" : "budget"} /> : tab === "settings" ? <SettingsOverview navigate={navigate} /> : tab === "transactions" ? <TransactionHistory navigate={navigate} /> : <Dashboard key={tab} navigate={navigate} />;
   else if (["budget", "savings", "fixedExpenses", "createBudget", "createFixedExpense", "createSavingsGoal", "debt", "loanList", "challenge", "createDebtClerance", "createLoan", "createChallenge"].includes(screen)) content = <Planning key={screen} navigate={navigate} initialTab={["savings", "fixedExpenses", "createFixedExpense", "createSavingsGoal"].includes(screen) ? "fixed" : "budget"} initialForm={screen === "createBudget" ? "budget" : ["createFixedExpense", "createSavingsGoal"].includes(screen) ? "fixed" : ""} />;
   else if (tools.some((t) => t.path === screen)) content = <ToolPage key={screen} screen={screen} navigate={navigate} />;
   else if (tools.some((t) => t.create === screen)) content = <GoalForm key={screen} screen={screen} navigate={navigate} initialType={params.get("initialType") || undefined} />;

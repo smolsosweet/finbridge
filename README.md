@@ -11,6 +11,7 @@ FinBridge is a multilingual personal finance workspace for wallets, transactions
 - [Fixed-bill payments](docs/FIXED_BILL_PAYMENTS.md): local VietQR reading, editable saved recipients, bank-app handoff and user-confirmed expense recording per occurrence.
 - [Safety thresholds and alerts](docs/safety/SAFETY_ALERTS.md): actual/forecast budget rules, wallet floors, protected history and optional private email reminders.
 - Gemini-assisted transaction entry and financial scenario planning, with review before recording changes.
+- [International education-payment sandbox](docs/INTERNATIONAL_TRANSFERS.md): compare example routes, review costs and recipients, approve a test transfer and retain account-owned receipts.
 
 Wallets are manually tracked. The application does not connect to banks, move real money or convert wallet balances between currencies.
 
@@ -53,6 +54,8 @@ On the current Windows machine, PostgreSQL runs separately on port 5434. See [da
 | `npm run test:localization` | Wallet/transaction language checks |
 | `npm run test:transaction-ai` | AI transaction fixtures |
 | `npm run test:scenario-planner` | Scenario planning |
+| `npm run test:transfers` / `npm run test:transfers:postgres` | International transfer calculations, lifecycle and database isolation |
+| `npm run test:transfers:ui` | Isolated browser approval and receipt workflow |
 
 Database tests require `AUTH_TEST_DATABASE_URL` targeting local `finbridge_auth_test`. Never run them against app/production data.
 
