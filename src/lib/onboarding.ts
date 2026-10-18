@@ -5,6 +5,11 @@ export const OCCUPATIONS = ["student", "freelancer", "employee", "business_owner
 const amount = z.number().finite().min(0).max(1_000_000_000_000).multipleOf(0.01);
 const openingBalance = z.number().finite().min(-1_000_000_000_000).max(1_000_000_000_000).multipleOf(0.01);
 const name = z.string().trim().min(1).max(80);
+export function formatCategoryName(value: string) {
+  return value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLowerCase()
+    .replace(/(^|[^\p{L}\p{M}\p{N}])(\p{L})/gu, (_, separator: string, letter: string) => separator + letter.toUpperCase());
+}
+const categoryName = name.transform(formatCategoryName);
 const identifier = z.string().min(1).max(100);
 export function validSetupDate(value: string) {
   const date = new Date(value + "T12:00:00Z");
@@ -13,8 +18,8 @@ export function validSetupDate(value: string) {
 export const onboardingSchema = z.object({
   version: z.literal(1), displayName: name, occupation: z.enum(OCCUPATIONS), language: z.enum(["en", "vi", "zh"]),
   wallets: z.array(z.object({ id: identifier, name, currency: z.string().regex(/^[A-Z]{3}$/).refine(c => Intl.supportedValuesOf("currency").includes(c)), initial: openingBalance }).strict()).min(1).max(30),
-  expenseCategories: z.array(name).min(1).max(50), incomeCategories: z.array(name).min(1).max(50),
-  commitments: z.array(z.object({ id: identifier, walletId: identifier, title: name, amount: amount.refine(n => n > 0), category: name,
+  expenseCategories: z.array(categoryName).min(1).max(50), incomeCategories: z.array(categoryName).min(1).max(50),
+  commitments: z.array(z.object({ id: identifier, walletId: identifier, title: name, amount: amount.refine(n => n > 0), category: categoryName,
     dueDate: z.string().refine(validSetupDate), intervalMonths: z.number().int().min(1).max(12),
     monthPosition: z.enum(["start", "end", "date"]), reminderDays: z.number().int().min(0).max(30),
   }).strict()).max(50),
@@ -48,7 +53,7 @@ export type OnboardingData = z.infer<typeof onboardingSchema>;
 export const onboardingDraftSchema = z.object({ ...onboardingSchema.shape,
   displayName: z.string().max(80),
   wallets: z.array(onboardingSchema.shape.wallets.element.extend({ name: z.string().max(80) })).min(1).max(30),
-  expenseCategories: z.array(name).max(50), incomeCategories: z.array(name).max(50),
+  expenseCategories: z.array(categoryName).max(50), incomeCategories: z.array(categoryName).max(50),
   reserves: z.array(onboardingSchema.shape.reserves.element).max(30),
 }).strict();
 export type OnboardingRecord = { data: OnboardingData; completedAt: string };

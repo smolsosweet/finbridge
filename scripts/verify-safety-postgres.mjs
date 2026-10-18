@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { ruleFixture } from "./safety-fixtures.mjs";
 import { safetyRepository, SAFETY_SQL } from "../src/lib/safety-repository.ts";
 import { workspaceRepository } from "../src/lib/workspace-repository.ts";
+import { readFinanceTables, readSafetyFinanceTables } from "../src/lib/finance-tables.ts";
+import { safetySnapshot } from "../src/lib/safety-model.ts";
 import { handleSafety } from "../src/lib/safety-handler.ts";
 import { runSafetyWorker } from "../src/lib/safety-worker.ts";
 import { deactivateAccountLifecycle } from "../src/lib/account-lifecycle.ts";
@@ -17,6 +19,19 @@ async function request(body,{id=owner,trusted=true,emailAvailable=true}={}) {
 }
 after(async()=>{await cleanupFinance(pool,[owner,other]);await pool.end();});
 test("schema migration preserves rows and reads authoritative database financial records",async()=>{await pool.query(SAFETY_SQL);const doc=await saved();assert.equal(doc.revision,0);assert.equal(doc.sourceId,"database");assert.equal(doc.snapshot.transactions[0].amount,850);});
+test("safety projection matches the full relational reader in one query without leaking another account", async () => {
+ const client = await pool.connect();
+ try {
+  const fallback = workspaceFixture(), full = await readFinanceTables(client, owner, fallback);
+  let calls = 0;
+  const measured = { query(...args) { calls++; return client.query(...args); } };
+  const minimal = await readSafetyFinanceTables(measured, owner, fallback);
+  assert.equal(calls, 1);
+  assert.deepEqual(safetySnapshot(minimal, "UTC"), safetySnapshot(full, "UTC"));
+  const foreign = await readSafetyFinanceTables(client, other, fallback);
+  assert.deepEqual(foreign.wallets, []); assert.deepEqual(foreign.transactions, []); assert.deepEqual(foreign.goals, []);
+ } finally { client.release(); }
+});
 test("foreign origins, missing sessions and client-supplied financial snapshots are rejected",async()=>{
  assert.equal((await request({action:"read"},{trusted:false})).status,403);
  assert.equal((await handleSafety(new Request(origin+"/api/safety"),null,origin,repo,true)).status,401);

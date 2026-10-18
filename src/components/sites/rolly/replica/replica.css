@@ -1685,3 +1685,4 @@ html:has(.r-chat-page){scrollbar-gutter:auto}
 .fb-details-dates-list{display:flex;flex-wrap:wrap;gap:6px}
 .fb-details-modal-actions{display:flex;flex-direction:column;gap:8px;margin-top:6px}
 .fb-details-modal-actions button{width:100%;min-height:42px}
+.fb-fixed-unpaid-summary{font-size:12px;color:var(--r-muted);line-height:1.6;margin:10px 0;overflow-wrap:anywhere}

@@ -13,11 +13,10 @@ import { Icon, PageHeader } from "./Ui";
 import { useAppState } from "./store";
 import { WelcomeScreen } from "../WelcomeScreen";
 import { Categories } from "./Categories";
-import { SafetyProvider } from "@/components/safety/SafetyProvider";
 import { NotificationCenter } from "./NotificationCenter";
 import { SafetyAlerts } from "@/components/safety/SafetyAlerts";
 import { InternationalTransfers } from "@/components/transfers/InternationalTransfers";
-import { Mascot as LacMascot } from "page-mascot";
+import { FinBridgeMascot } from "@/components/FinBridgeMascot";
 import "./replica.css";
 
 export function RollyApp({ screen = "" }: { screen?: string }) {
@@ -78,7 +77,7 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
   const hasSharedHeader = !screen || ["budget", "savings", "fixedExpenses", "createBudget", "createFixedExpense", "createSavingsGoal", "createDebtClerance", "createLoan", "createChallenge", "debt", "loanList", "challenge", "accountSettings", "homepageConfiguration", "createWallet1"].includes(screen);
 
   return (
-    <SafetyProvider><div className={"r-app " + theme + (isAppShell ? " fb-home-shell has-sidebar" : "")}>
+    <div className={"r-app " + theme + (isAppShell ? " fb-home-shell has-sidebar" : "")}>
       {!isWelcome && (
         <aside className="fb-desktop-sidebar" aria-label="Điều hướng máy tính">
           <div>
@@ -165,9 +164,7 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
           }}
         >
           <div className="fb-mascot-fab-inner">
-            <LacMascot
-              directions="/mascots/lac-directions.webp"
-              reactions="/mascots/lac-reactions.webp"
+            <FinBridgeMascot
               size={44}
               label="Jake"
             />
@@ -192,6 +189,6 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
           ))}
         </nav>
       )}
-    </div></SafetyProvider>
+    </div>
   );
 }

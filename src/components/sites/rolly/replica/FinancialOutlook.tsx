@@ -96,8 +96,8 @@ export function FinancialOutlook({ editable = false, compact = false, notificati
         <button type="button" className={styles.compactDetails} aria-label={`${homeCopy.details}: ${alert.problem}`} onClick={() => { markRead(alert.id); setSelectedAlert(alert); }}>{homeCopy.details}</button>
       </article>;
       const detail = <>
-        <div><b>{t.figures}</b><p>{alert.figures}</p><p>{origin} · {alert.when}</p></div>
-        <div><b>{t.cause}</b><p>{ai?.explanation || alert.cause}</p></div>
+        {!notifications && <div><b>{t.figures}</b><p>{alert.figures}</p><p>{origin} · {alert.when}</p></div>}
+        <div><b>{t.cause}</b><p className={styles.cause}>{alert.cause}</p></div>
         <div><b>{t.action}</b><p>{ai?.suggestion || alert.suggestedAction}</p></div>
         <small>{t.assumptions}: {alert.assumptions}</small>
         <div className={styles.actions}>{!isRead && <button type="button" className={styles.dismiss} onClick={() => markRead(alert.id)}>{t.markRead}</button>}{navigate && <button type="button" className={styles.dismiss} onClick={() => { markRead(alert.id); navigate(notificationDestination(alert)); }}>{t.details}</button>}<button type="button" disabled={handledIds.has(alert.id)} className={styles.dismiss} onClick={() => dismiss(alert)}><Check size={15} />{t.handled}</button></div>
@@ -140,7 +140,7 @@ export function FinancialOutlook({ editable = false, compact = false, notificati
         </section>
         <section className={styles.modalSection}>
           <b>{t.cause}</b>
-          <p>{selectedAlert.cause}</p>
+          <p className={styles.cause}>{selectedAlert.cause}</p>
         </section>
         <section className={`${styles.modalSection} ${styles.modalSectionAction}`}>
           <b>{t.action}</b>

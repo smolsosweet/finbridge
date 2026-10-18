@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, Check, ChevronDown, X } from "lucide-react";
-import { Mascot as LacMascot } from "page-mascot";
+import { FinBridgeMascot } from "@/components/FinBridgeMascot";
 import { Animation } from "./Animation";
 
 const subscribeHydration = () => () => {};
@@ -22,9 +22,7 @@ export function Mascot({ greeting, className = "" }: { greeting?: string; classN
     <div className={"r-mascot " + className}>
       {greeting && <p className="r-bubble">{greeting}</p>}
       <div className="r-mascot-lac-wrap r-mascot-3d">
-        <LacMascot
-          directions="/mascots/lac-directions.webp"
-          reactions="/mascots/lac-reactions.webp"
+        <FinBridgeMascot
           size={120}
           label="Jake, FinBridge Mascot"
         />

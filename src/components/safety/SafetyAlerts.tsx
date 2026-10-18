@@ -157,33 +157,25 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
         onToggleTheme={() => setSetting("theme", state.settings.theme === "dark" ? "light" : "dark")}
         primaryAction={!draft ? <button aria-label={t.create} className={`${styles.primary} fb-header-primary-action`} onClick={create} disabled={loading || busy}><Plus size={17}/><span>{t.create}</span></button> : undefined}
       />
-      <div className={styles.topBackBar}>
+      {draft && <div className={styles.topBackBar}>
         <button
           type="button"
           className={styles.backButton}
           onClick={() => {
-            if (draft) {
-              setDraft(null);
-              setStep(0);
-              setError("");
-            } else {
-              navigate("");
-            }
+            setDraft(null);
+            setStep(0);
+            setError("");
           }}
           aria-label={
-            draft
-              ? (lang === "vi" ? "Quay lại Ngưỡng an toàn" : lang === "zh" ? "返回安全阈值" : "Back to Safety Thresholds")
-              : (lang === "vi" ? "Quay lại Trang chủ" : lang === "zh" ? "返回首页" : "Back to Home")
+            lang === "vi" ? "Quay lại Ngưỡng an toàn" : lang === "zh" ? "返回安全阈值" : "Back to Safety Thresholds"
           }
         >
           <ArrowLeft size={16} />
           <span>
-            {draft
-              ? (lang === "vi" ? "Quay lại Ngưỡng an toàn" : lang === "zh" ? "返回安全阈值" : "Back to Safety Thresholds")
-              : (lang === "vi" ? "Quay lại Trang chủ" : lang === "zh" ? "返回首页" : "Back to Home")}
+            {lang === "vi" ? "Quay lại Ngưỡng an toàn" : lang === "zh" ? "返回安全阈值" : "Back to Safety Thresholds"}
           </span>
         </button>
-      </div>
+      </div>}
       {err && (
         <div role="alert" className={styles.error}>
           {errorText}

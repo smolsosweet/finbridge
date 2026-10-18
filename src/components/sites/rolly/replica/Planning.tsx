@@ -11,7 +11,7 @@ import { localDateKey } from "./chartWeek";
 import { budgetSummary, currencyScale, plannedOccurrences, validBudget, validFixedExpense } from "./planningModel";
 import { flushWorkspace, updateState, useAppState, type FixedExpense, type Goal } from "./store";
 import { addBudgetCategory, expenseCategoriesForWallet } from "@/lib/budget-categories";
-import { nextExpenseDue } from "@/lib/fixed-expense-payments";
+import { nextExpenseDue, unpaidOccurrences } from "@/lib/fixed-expense-payments";
 import { FixedExpenseActions } from "@/components/payments/FixedExpenseActions";
 
 
@@ -107,6 +107,8 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const language = String(state.settings.language || "").toLowerCase();
   const lang = /zh|chinese|trung|中文/.test(language) ? "zh" : /en|english|anh/.test(language) ? "en" : "vi";
   const t = COPY[lang], today = localDateKey(new Date());
+  const horizon = new Date(today + "T12:00:00Z"); horizon.setUTCDate(horizon.getUTCDate() + 30);
+  const unpaidHorizon = horizon.toISOString().slice(0, 10);
   const budgets = state.goals.filter((item) => item.kind === "budget");
   const fixed = state.fixedExpenses || [];
   const activeWallets = state.wallets.filter((item) => !item.archived);
@@ -357,6 +359,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
             const window = parent ? budgetSummary(state, parent, today) : undefined;
             const due = window ? plannedOccurrences(expense, window.start, window.end) : [];
             const currency = parent?.currency || state.wallets.find((wallet) => wallet.id === expense.walletId)?.currency || "";
+            const unpaid = expense.active ? unpaidOccurrences(state, expense, expense.dueDate, unpaidHorizon) : [];
             return <article id={`fixed-${expense.id}`} className="fb-fixed-card" key={expense.id}>
               <div className="fb-planning-card-heading">
                 <span className="fb-planning-icon"><ArrowDownRight size={18} /></span>
@@ -373,7 +376,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
               </div>
               <div className="fb-fixed-compact-row">
                 <div className="fb-fixed-compact-amount">
-                  <span>{t.amount}:</span>
+                  <span>{lang === "vi" ? "Số tiền mỗi kỳ" : lang === "zh" ? "每期金额" : "Amount per period"}:</span>
                   <b>{format(expense.amount, currency)}</b>
                 </div>
                 <div className="fb-fixed-compact-meta">
@@ -381,6 +384,10 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
                   <span><CalendarDays size={12} />{due.length > 0 ? `${t.dueThisPeriod}: ${due.map(formatDate).join(" · ")}` : `${t.firstDue}: ${formatDate(expense.dueDate)}`}</span>
                 </div>
               </div>
+              {unpaid.length > 0 && <p className="fb-fixed-unpaid-summary">
+                {lang === "vi" ? `${unpaid.length} kỳ chưa ghi nhận đã trả đến ${formatDate(unpaidHorizon)}` : lang === "zh" ? `截至${formatDate(unpaidHorizon)}有${unpaid.length}期尚未记录付款` : `${unpaid.length} unpaid periods through ${formatDate(unpaidHorizon)}`}
+                {` · ${unpaid.slice(0, 3).map(formatDate).join(" / ")}${unpaid.length > 3 ? " …" : ""} · ${format(expense.amount * unpaid.length, currency)}`}
+              </p>}
               <div className="fb-planning-card-actions">
                 <button type="button" onClick={() => setDetailsExpense(expense)}>{t.details}</button>
                 <button type="button" disabled={!!expense.budgetId && !parent} onClick={() => open("fixed", parent?.id, expense)}>{t.edit}</button>

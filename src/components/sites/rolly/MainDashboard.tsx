@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
+import { FinBridgeMascot } from "@/components/FinBridgeMascot";
 import {
   MessageSquare,
   ListOrdered,
@@ -255,13 +256,7 @@ export function MainDashboard({ onLogout }: MainDashboardProps) {
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative w-9 h-9 rounded-xl overflow-hidden bg-teal-50 flex items-center justify-center p-0.5">
-              <Image
-                src="/sites/rolly/images/Welcome_Icon.png"
-                alt="Rolly Mascot"
-                width={36}
-                height={36}
-                className="object-contain"
-              />
+              <FinBridgeMascot size={36} label="Jake, FinBridge" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">

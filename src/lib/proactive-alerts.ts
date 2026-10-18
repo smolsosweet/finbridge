@@ -51,6 +51,7 @@ export function detectProactiveAlerts(state: AppState, asOf: string, dismissedId
   const dismissed = new Set(dismissedIds), alerts: FinancialAlert[] = [];
   const activeWallets = state.wallets.filter((wallet) => !wallet.archived);
   const language = String(state.settings.language || "English");
+  const locale = /中文|zh/i.test(language) ? "zh-CN" : /English|en/i.test(language) ? "en-US" : "vi-VN";
   const add = (alert: FinancialAlert) => {
     const zh = /中文|zh/i.test(language), vi = /Tiếng Việt|vi/i.test(language);
     if (!vi) alert = localizeAlert(alert, state, asOf, zh ? "zh" : "en");
@@ -132,7 +133,11 @@ export function detectProactiveAlerts(state: AppState, asOf: string, dismissedId
       add({ id: `cash-shortfall:${wallet.id}:${crossing.at(-1)?.due}:${crossing.map((item) => item.expense.id).join(",")}`,
         kind: "cash-shortfall", problem: `Số dư ví ${walletName(wallet, language)} có thể không đủ cho các khoản cố định sắp tới.`,
         figures: `Số dư hiện tại ${formatMoney(balance.amount, wallet.currency, language)} · thiếu dự kiến ${formatMoney(shortfall, wallet.currency, language)} sau khoản đến hạn ${crossing.at(-1)?.due}.`,
-        when: crossing.at(-1)?.due || asOf, cause: crossing.map((item) => `${item.expense.title} ${formatMoney(item.expense.amount, wallet.currency, language)}`).join(" + "),
+        when: crossing.at(-1)?.due || asOf, cause: crossing.map((item) => {
+          const date = new Intl.DateTimeFormat(locale, { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "UTC" }).format(new Date(item.due + "T12:00:00Z"));
+          const status = item.due < asOf ? (locale === "en-US" ? "overdue, not recorded as paid" : locale === "zh-CN" ? "已逾期，尚未记录付款" : "quá hạn, chưa ghi nhận đã trả") : (locale === "en-US" ? "upcoming, not recorded as paid" : locale === "zh-CN" ? "即将到期，尚未记录付款" : "sắp đến hạn, chưa ghi nhận đã trả");
+          return `${item.expense.title} · ${date} · ${formatMoney(item.expense.amount, wallet.currency, language)} · ${status}`;
+        }).join("\n"),
         priority: "high", suggestedAction: "Kiểm tra các khoản đến hạn, cân nhắc dời khoản chưa bắt buộc hoặc bổ sung tiền vào ví.",
         assumptions: "Dự báo gồm khoản quá hạn chưa trả và các chi phí cố định trong 30 ngày tới; giả định không có thu nhập hoặc giao dịch khác.",
         walletId: wallet.id, currency: wallet.currency, amount: shortfall, projected: true, targetType: "fixed-expense", targetId: crossing.at(-1)?.expense.id || "" });
