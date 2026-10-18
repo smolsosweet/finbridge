@@ -25,7 +25,6 @@ import { CalendarLedgerModal } from "./CalendarLedgerModal";
 import { FeatureRequestsModal } from "./Extras";
 import { Modal } from "./Ui";
 import { setSetting, useAppState, type AppState } from "./store";
-import { SAFETY_COPY } from "@/components/safety/safety-copy";
 
 const COPY = {
   vi: {
@@ -305,13 +304,6 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
   }
 
   const menuItems = [
-    {
-      id: "notifications",
-      title: SAFETY_COPY[lang].title,
-      subtitle: SAFETY_COPY[lang].subtitle,
-      icon: <ShieldCheck size={22} />,
-      onClick: () => navigate("safetyAlerts"),
-    },
     {
       id: "account",
       title: t.account,

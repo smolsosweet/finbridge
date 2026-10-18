@@ -1623,6 +1623,7 @@ html:has(.r-chat-page){scrollbar-gutter:auto}
 /* Shared sticky page context and compact business information architecture */
 .fb-home-header{position:sticky;top:0;z-index:80;width:calc(100% + 64px);max-width:calc(100% + 64px);margin:0 -32px 20px;padding:14px 32px;box-sizing:border-box;background:color-mix(in srgb,var(--r-bg) 92%,transparent);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 1px 0 var(--r-line)}
 .fb-header-page-context{min-width:0;flex:1}
+.fb-header-page-context .fb-brand-mark{display:none!important}
 .fb-header-page-copy{display:grid;min-width:0;gap:2px}
 .fb-header-page-copy>strong{overflow:hidden;color:var(--r-text);font-size:20px;line-height:1.25;text-overflow:ellipsis;white-space:nowrap}
 .fb-header-eyebrow{color:var(--r-teal)!important;font-size:9px!important;font-weight:750;letter-spacing:1.1px;text-transform:uppercase}
