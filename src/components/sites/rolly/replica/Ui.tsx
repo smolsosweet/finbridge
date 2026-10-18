@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, X } from "lucide-react";
+import { ArrowLeft, Check, ChevronDown, X } from "lucide-react";
+import { Mascot as LacMascot } from "page-mascot";
 import { Animation } from "./Animation";
 
 const subscribeHydration = () => () => {};
@@ -17,7 +18,19 @@ export function EmptyState({ title, text, className = "" }: { title: string; tex
   return <div className={"r-empty " + className}><Animation name="empty_list" className="r-empty-animation" /><p>{title}</p>{text && <p>{text}</p>}</div>;
 }
 export function Mascot({ greeting, className = "" }: { greeting?: string; className?: string }) {
-  return <div className={"r-mascot " + className}>{greeting && <p className="r-bubble">{greeting}</p>}<Animation className="r-robot" /></div>;
+  return (
+    <div className={"r-mascot " + className}>
+      {greeting && <p className="r-bubble">{greeting}</p>}
+      <div className="r-mascot-lac-wrap r-mascot-3d">
+        <LacMascot
+          directions="/mascots/lac-directions.webp"
+          reactions="/mascots/lac-reactions.webp"
+          size={120}
+          label="Jake, FinBridge Mascot"
+        />
+      </div>
+    </div>
+  );
 }
 export function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (value: boolean) => void; label: string }) {
   return <button type="button" className={"r-switch " + (checked ? "is-on" : "")} role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)}><span /></button>;
@@ -64,3 +77,96 @@ export function Modal({ title, children, onClose, sheet = false, wide = false, c
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="r-field"><span>{label}</span>{children}</label>;
 }
+
+export interface DropdownOption {
+  value: string;
+  label: string;
+}
+
+export function FinBridgeDropdown({
+  value,
+  onChange,
+  options,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: DropdownOption[];
+  ariaLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const current = options.find((o) => o.value === value) || options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="fb-dropdown-container">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className={`fb-dropdown-trigger ${open ? "is-open" : ""}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+      >
+        <span className="fb-dropdown-label">{current?.label || value}</span>
+        <ChevronDown size={14} className={`fb-dropdown-chevron ${open ? "is-open" : ""}`} aria-hidden="true" />
+      </button>
+      {open && (
+        <ul role="listbox" className="fb-dropdown-menu">
+          {options.map((option) => {
+            const active = option.value === value;
+            return (
+              <li key={option.value}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                  className={`fb-dropdown-item ${active ? "is-active" : ""}`}
+                >
+                  <span className="fb-dropdown-item-text">{option.label}</span>
+                  {active && <Check size={14} className="fb-dropdown-check" aria-hidden="true" />}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        tabIndex={-1}
+        aria-label={ariaLabel}
+        className="fb-dropdown-native-hidden"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+

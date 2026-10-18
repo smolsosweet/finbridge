@@ -279,6 +279,9 @@ export function AccountSettings({
       <FinBridgeHeader
         lang={lang}
         navigate={navigate}
+        eyebrow={t.eyebrow}
+        title={t.title}
+        subtitle={t.intro}
         theme={String(state.settings.theme || "light")}
         currentLanguage={String(state.settings.language || "Tiếng Việt")}
         onOpenCalendar={() => navigate("calendar")}
@@ -297,15 +300,6 @@ export function AccountSettings({
           ))}
         </select>
       </FinBridgeHeader>
-
-
-      <div className="fb-home-intro fb-account-settings-intro">
-        <div>
-          <p className="fb-eyebrow">{t.eyebrow}</p>
-          <h1>{t.title}</h1>
-          <p>{t.intro}</p>
-        </div>
-      </div>
 
       {/* Profile Card matching Image 2 */}
       <div className="fb-account-profile-card">

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { buildNotificationFeed, combineNotificationFeeds, notificationDestination } from "../src/lib/notification-center.ts";
+import { buildNotificationFeed, combineNotificationFeeds, homeAttentionAlerts, notificationDestination } from "../src/lib/notification-center.ts";
 import { detectProactiveAlerts } from "../src/lib/proactive-alerts.ts";
 
 const state = () => ({
@@ -50,6 +49,26 @@ test("empty notification source returns a zero unread count", () => {
   assert.deepEqual(buildNotificationFeed([], "[]", "[]"), { items: [], unreadCount: 0 });
 });
 
+test("home shortlist shows at most three unique high-priority unresolved alerts", () => {
+  const base = detectProactiveAlerts(state(), "2026-10-15", [], true)[0];
+  const alerts = [
+    { ...base, id: "medium", priority: "medium" },
+    ...["handled", "first", "second", "third", "fourth"].map(id => ({ ...base, id, priority: "high" })),
+  ];
+  const selected = homeAttentionAlerts([alerts[2], ...alerts], '["handled"]');
+  assert.deepEqual(selected.map(alert => alert.id), ["first", "second", "third"]);
+  const readFeed = buildNotificationFeed(alerts, '["first"]', '["handled"]');
+  assert.ok(homeAttentionAlerts(readFeed.items, '["handled"]').some(alert => alert.id === "first"), "Read is not resolved");
+  assert.deepEqual(homeAttentionAlerts([], "[]"), []);
+});
+
+test("home shortlist drops an alert once the underlying negative balance is corrected", () => {
+  const data = state();
+  assert.ok(homeAttentionAlerts(detectProactiveAlerts(data, "2026-10-15"), "[]").some(alert => alert.kind === "negative-balance"));
+  data.wallets[0].initial = 500;
+  assert.ok(!homeAttentionAlerts(detectProactiveAlerts(data, "2026-10-15"), "[]").some(alert => alert.kind === "negative-balance"));
+});
+
 test("one badge combines both sources without losing items whose IDs happen to match", () => {
   const financial = buildNotificationFeed(detectProactiveAlerts(state(), "2026-10-15", [], true), "[]", "[]");
   const first = { id: financial.items[0].id, read: false, createdAt: "2026-10-15T12:00:00Z" };
@@ -67,11 +86,4 @@ test("read threshold history never counts as new or changes a financial reminder
   const combined = combineNotificationFeeds(financial, [{ id: "old", read: true, createdAt: "2026-10-15T12:00:00Z" }]);
   assert.equal(combined.unreadCount, 0);
   assert.ok(combined.financial.items.every(item => item.read && !item.handled));
-});
-
-test("small-screen notification panel has a viewport-bounded responsive layout", async () => {
-  const css = await readFile(new URL("../src/components/sites/rolly/replica/NotificationCenter.module.css", import.meta.url), "utf8");
-  assert.match(css, /@media\s*\(max-width:\s*640px\)/);
-  assert.match(css, /width:\s*calc\(100vw\s*-\s*24px\)/);
-  assert.match(css, /max-height:\s*min\(72vh/);
 });

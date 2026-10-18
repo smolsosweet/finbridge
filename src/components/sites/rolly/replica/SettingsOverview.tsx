@@ -307,10 +307,10 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
   const menuItems = [
     {
       id: "notifications",
-      title: SAFETY_COPY[lang].preferences,
-      subtitle: SAFETY_COPY[lang].emailPrefs,
-      icon: <Mail size={22} />,
-      onClick: () => navigate("safetyAlerts?view=preferences"),
+      title: SAFETY_COPY[lang].title,
+      subtitle: SAFETY_COPY[lang].subtitle,
+      icon: <ShieldCheck size={22} />,
+      onClick: () => navigate("safetyAlerts"),
     },
     {
       id: "account",
@@ -357,21 +357,15 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
       <FinBridgeHeader
         lang={lang}
         navigate={navigate}
+        eyebrow={t.eyebrow}
+        title={t.title}
+        subtitle={t.intro}
         theme={String(state.settings.theme || "light")}
         currentLanguage={String(state.settings.language || "Tiếng Việt")}
         onOpenCalendar={() => setCalendarLedgerOpen(true)}
         onToggleTheme={() => setSetting("theme", state.settings.theme === "dark" ? "light" : "dark")}
         onSelectLanguage={(val) => setSetting("language", val)}
       />
-
-      {/* Synchronized header & intro matching Home, Transactions, and Planning */}
-      <div className="fb-home-intro fb-settings-header">
-        <div>
-          <p className="fb-eyebrow">{t.eyebrow}</p>
-          <h1>{t.title}</h1>
-          <p>{t.intro}</p>
-        </div>
-      </div>
 
       {/* Grid of feature cards aligned with the layout of previous tabs */}
       <div className="fb-settings-cards">

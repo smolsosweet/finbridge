@@ -66,6 +66,13 @@ test("invalid wallet/category steps cannot advance or call the server", async ()
   reset(); await submit(); await submit(); await submit();
   assert.ok(find(tree(), n => n.props.role === "alert")); assert.equal(requests.length, 0); assert.equal(completed.length, 0);
 });
+test("fixed expenses cannot exceed the selected wallet opening balance", async () => {
+  reset(); fill("What should Jake call you?", "Synthetic"); await submit(); await submit(); fill("Wallet name", "Cash"); fill("Opening balance", "200000"); await submit(); click("Dining"); await submit(); click("Salary"); await submit();
+  click("Yes"); fill("Expense name", "Rent"); fill("Amount", "200001"); fill("Expense category", "Dining"); fill("First due date", "2026-10-15"); click("Add expense");
+  assert.ok(find(tree(), n => n.props.role === "alert" && text(n).includes("cannot exceed its opening balance")));
+  fill("Amount", "200000"); click("Add expense"); await submit(); await submit();
+  assert.equal(requests.length, 1); assert.equal(requests[0].body.commitments[0].amount, 200000);
+});
 test("a server failure keeps the draft for a retry and does not complete setup", async () => {
   reset(); fill("What should Jake call you?", "Synthetic"); await submit(); await submit(); fill("Wallet name", "Cash"); await submit(); click("Dining"); await submit(); click("Salary"); await submit(); await submit(); status = 503; await submit();
   assert.equal(completed.length, 0); assert.ok(find(tree(), n => n.props.role === "alert")); assert.ok(storage.get("finbridge-setup-draft:synthetic-user"));

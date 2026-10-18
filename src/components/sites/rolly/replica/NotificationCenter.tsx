@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { Bell, CheckCheck, Settings2, X } from "lucide-react";
 import { useSafety } from "@/components/safety/SafetyProvider";
 import { detectProactiveAlerts } from "@/lib/proactive-alerts";
-import { buildNotificationFeed, combineNotificationFeeds, notificationDestination, notificationReadIds } from "@/lib/notification-center";
+import { buildNotificationFeed, combineNotificationFeeds, notificationReadIds, NOTIFICATION_CENTER_OPEN_EVENT } from "@/lib/notification-center";
 import { safetyLanguage, type SafetyEvent } from "@/lib/safety-model";
 import { flushWorkspace, today, updateState, useAppState } from "./store";
 import { FinancialOutlook } from "./FinancialOutlook";
@@ -20,11 +20,17 @@ export function NotificationCenter({ navigate, floating = false }: { navigate: (
   const state = useAppState(), safety = useSafety();
   const lang = safetyLanguage(state.settings.language), t = copy[lang];
   const [open, setOpen] = useState(false), [unreadOnly, setUnreadOnly] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<"all" | "financial" | "safety">("all");
   const [reading, setReading] = useState(false), [readError, setReadError] = useState(false);
   const readLock = useRef(false);
   const root = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), closeButton = useRef<HTMLButtonElement>(null);
   const panelId = useId();
   const [asOf, setAsOf] = useState(today);
+  useEffect(() => {
+    const showAll = () => { setSourceFilter("all"); setUnreadOnly(false); setOpen(true); };
+    window.addEventListener(NOTIFICATION_CENTER_OPEN_EVENT, showAll);
+    return () => window.removeEventListener(NOTIFICATION_CENTER_OPEN_EVENT, showAll);
+  }, []);
   useEffect(() => {
     const refresh = () => setAsOf(today());
     const timer = window.setInterval(refresh, 60000);
@@ -34,8 +40,8 @@ export function NotificationCenter({ navigate, floating = false }: { navigate: (
   const alerts = useMemo(() => detectProactiveAlerts(state, asOf, [], true), [state, asOf]);
   const feed = useMemo(() => buildNotificationFeed(alerts, state.settings.readFinancialAlertIds, state.settings.dismissedFinancialAlerts), [alerts, state.settings.readFinancialAlertIds, state.settings.dismissedFinancialAlerts]);
   const combined = useMemo(() => combineNotificationFeeds(feed, safety?.doc.events), [feed, safety?.doc.events]);
-  const financialCount = unreadOnly ? feed.unreadCount : feed.items.length;
-  const visibleSafety = combined.safety.filter(event => !unreadOnly || !event.read);
+  const financialCount = sourceFilter === "safety" ? 0 : unreadOnly ? feed.unreadCount : feed.items.length;
+  const visibleSafety = sourceFilter === "financial" ? [] : combined.safety.filter(event => !unreadOnly || !event.read);
   const unreadCount = combined.unreadCount, totalCount = feed.items.length + combined.safety.length;
   const busy = reading || !!safety?.busy || !!safety?.loading;
 
@@ -78,14 +84,28 @@ export function NotificationCenter({ navigate, floating = false }: { navigate: (
 
   const close = () => { setOpen(false); trigger.current?.focus(); };
   const go = (path: string) => { close(); navigate(path); };
-  const time = (value: string) => new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+  const time = (value: string) => {
+    if (!value) return "—";
+    try {
+      const trimmed = value.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        const [y, m, d] = trimmed.split("-").map(Number);
+        return new Intl.DateTimeFormat(lang, { dateStyle: "medium" }).format(new Date(y, m - 1, d));
+      }
+      const parsed = new Date(trimmed);
+      if (!Number.isFinite(parsed.getTime())) return value;
+      return new Intl.DateTimeFormat(lang, { dateStyle: "medium", timeStyle: "short" }).format(parsed);
+    } catch {
+      return value;
+    }
+  };
   const money = (value: number | null, currency: string) => {
     if (value === null || !Number.isFinite(value) || !currency) return "—";
     try { return new Intl.NumberFormat(lang, { style: "currency", currency }).format(value); } catch { return "—"; }
   };
   const destination = (event: SafetyEvent) => {
     const rule = safety?.doc.rules.find(rule => rule.id === event.ruleId);
-    return rule ? notificationDestination({ targetType: rule.kind === "budget" ? "budget" : "wallet", targetId: rule.targetId }) : "safetyAlerts?view=history";
+    return rule ? `safetyAlerts?view=rules&query=${encodeURIComponent(rule.name)}` : "safetyAlerts?view=history";
   };
   return <div className={`${styles.root}${floating ? ` ${styles.floating}` : ""}`} ref={root}>
     <button ref={trigger} type="button" className={styles.trigger} aria-label={`${t.open}${unreadCount ? `, ${unreadCount}` : ""}`} aria-expanded={open} aria-controls={open ? panelId : undefined} aria-haspopup="dialog" onClick={() => setOpen(value => !value)}>
@@ -98,8 +118,10 @@ export function NotificationCenter({ navigate, floating = false }: { navigate: (
         <button ref={closeButton} type="button" className={styles.close} aria-label={t.close} onClick={close}><X size={20}/></button>
       </header>
       <div className={styles.filters} role="group" aria-label={t.filters}>
-        <button type="button" aria-pressed={!unreadOnly} onClick={() => setUnreadOnly(false)}>{t.all}<span>{totalCount}</span></button>
-        <button type="button" aria-pressed={unreadOnly} onClick={() => setUnreadOnly(true)}>{t.unread}<span>{unreadCount}</span></button>
+        <button type="button" aria-pressed={sourceFilter === "all"} onClick={() => setSourceFilter("all")}>{t.all}<span>{totalCount}</span></button>
+        <button type="button" aria-pressed={sourceFilter === "financial"} onClick={() => setSourceFilter("financial")}>{lang === "vi" ? "Nhắc việc" : lang === "zh" ? "提醒" : "Reminders"}<span>{feed.items.length}</span></button>
+        <button type="button" aria-pressed={sourceFilter === "safety"} onClick={() => setSourceFilter("safety")}>{lang === "vi" ? "Ngưỡng" : lang === "zh" ? "阈值" : "Thresholds"}<span>{combined.safety.length}</span></button>
+        <button type="button" className={styles.unreadToggle} aria-pressed={unreadOnly} onClick={() => setUnreadOnly(value => !value)}>{t.unread}<span>{unreadCount}</span></button>
       </div>
       <div className={styles.body}>
         {safety?.loading && <p className={styles.empty} role="status">{t.loading}</p>}
@@ -119,7 +141,7 @@ export function NotificationCenter({ navigate, floating = false }: { navigate: (
           {visibleSafety.length > 8 && <button type="button" className={styles.link} onClick={() => go("safetyAlerts?view=history")}>{t.history} ({visibleSafety.length})</button>}
         </section>}
         {financialCount > 0 && <h3 className={styles.sectionTitle}>{t.financial}<span>{financialCount}</span></h3>}
-        <FinancialOutlook editable notifications unreadOnly={unreadOnly} asOfDate={asOf} navigate={go}/>
+        {sourceFilter !== "safety" && <FinancialOutlook editable notifications unreadOnly={unreadOnly} asOfDate={asOf} navigate={go}/>}
       </div>
       <footer className={styles.footer}>
         <p>{t.readNote}</p>

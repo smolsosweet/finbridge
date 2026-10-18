@@ -31,6 +31,7 @@ const outlookUI = compile("FinancialOutlook.tsx", (name) => {
   if (name === "@/lib/proactive-alerts") return { detectProactiveAlerts: () => [], readDismissedAlertIds: () => [] };
   if (name.endsWith(".module.css")) return { default: new Proxy({}, { get: (_, key) => String(key) }) };
   if (name === "./store") return { useAppState: () => state, updateState: update => { state = update(state); }, today: () => "2026-10-13" };
+  if (name === "./Ui") return { Modal: ({ children }) => React.createElement("div", { role: "dialog" }, children) };
   return requireLocal(name);
 });
 const wallets = [{ id: "bank", name: "Bank", currency: "VND" }, { id: "ali", name: "Alipay", currency: "CNY" }];
@@ -78,7 +79,7 @@ const component = compile("Planning.tsx", (name) => {
   if (name === "./FinBridgeHeader") return header;
   if (name === "./CalendarLedgerModal") return { CalendarLedgerModal: () => null };
   if (name === "next/navigation") return { useSearchParams: () => new URLSearchParams() };
-  if (name === "./Ui") return { Modal: ({ children }) => React.createElement("div", { role: "dialog" }, children) };
+  if (name === "./Ui") return { Modal: ({ children }) => React.createElement("div", { role: "dialog" }, children), FinBridgeDropdown: (props) => React.createElement("select", { "aria-label": props.ariaLabel, value: props.value, onChange: (e) => props.onChange(e.target.value) }, props.options?.map(o => React.createElement("option", { key: o.value, value: o.value }, o.label))) };
   if (name === "./store") return { useAppState: () => state, workspaceOwner: () => "synthetic", workspacePersistence: () => "browser", flushWorkspace: async () => {}, getWorkspaceState: () => state, updateState: (update) => { state = update(state); } };
   return requireLocal(name);
 }).Planning;

@@ -8,5 +8,5 @@ export async function getSession() {
   try { auth = getAuth(); } catch { return null; }
   if (!auth) return null;
   try { return await auth.api.getSession({ headers: requestHeaders }); }
-  catch { console.error("AUTH_SESSION_UNAVAILABLE"); return null; }
+  catch { console.warn("AUTH_SESSION_UNAVAILABLE"); return null; }
 }
