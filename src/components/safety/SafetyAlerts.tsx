@@ -373,7 +373,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                   <span className={styles.channelStatus}><Check size={18}/></span>
                 </div>
                 <label className={`${styles.channel} ${!doc.emailAvailable ? styles.channelDisabled : ""}`}>
-                  <div className={styles.channelIcon}><Mail size={22}/></div>
+                  <span className={styles.channelIcon}><Mail size={22}/></span>
                   <span className={styles.channelText}>
                     <b>{t.email}</b>
                     <small>{t.emailHint}</small>

@@ -301,17 +301,15 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       primaryAction={<button type="button" className="fb-add-button fb-header-primary-action" disabled={!activeWallets.length} onClick={() => primaryForm === "fixed" ? open("fixed", parentFilter === "all" ? undefined : parentFilter) : open("budget")}><Plus size={18}/><span>{primaryForm === "fixed" ? t.addFixed : t.addBudget}</span></button>}
     />
 
-    <div className="fb-planning-action-row">
-      <div className="fb-planning-header-actions">
-        <label className="fb-period-control fb-wallet-period-control"><span>{t.wallet}</span><PlanningDropdown value={walletFilter} onChange={(val) => { setWalletFilter(val); setParentFilter("all"); setVisibleBudgetCount(5); setVisibleFixedCount(5); }} options={[{ value: "all", label: t.allWallets }, ...state.wallets.map((item) => ({ value: item.id, label: `${walletName(item.id)} · ${item.currency}` }))]} ariaLabel={t.wallet} /></label>
-      </div>
-    </div>
 
     <section className="fb-planning-management" aria-label={lang === "vi" ? "Ngân sách & Chi cố định" : lang === "zh" ? "预算与固定支出" : "Budgets & Fixed costs"}>
       <div className="fb-planning-toolbar">
-        <div className="fb-planning-tabs" role="tablist" aria-label={lang === "vi" ? "Chọn danh sách quản lý" : "Choose a management list"}>
-          <button type="button" role="tab" id="planning-tab-budget" aria-controls="fb-budget-section" aria-selected={tab === "budget"} onClick={() => setPlanningTab("budget")}><b>{t.budget}</b><small>{t.budgetHint}</small><span>{budgets.length} {t.countBudget}</span></button>
-          <button type="button" role="tab" id="planning-tab-fixed" aria-controls="fb-fixed-section" aria-selected={tab === "fixed"} onClick={() => setPlanningTab("fixed")}><b>{t.fixed}</b><small>{t.fixedHint}</small><span>{fixed.filter((item) => item.active).length} {t.countFixed}</span></button>
+        <div className="fb-planning-switcher">
+          <div className="fb-planning-tabs fb-planning-tabs-compact" role="tablist" aria-label={lang === "vi" ? "Chọn danh sách quản lý" : lang === "zh" ? "选择管理列表" : "Choose a management list"}>
+            <button type="button" role="tab" id="planning-tab-budget" aria-controls="fb-budget-section" aria-selected={tab === "budget"} title={t.budgetHint} onClick={() => setPlanningTab("budget")}><small>{lang === "vi" ? "Hạn mức" : lang === "zh" ? "限额" : "Limits"}</small><span className="fb-planning-tab-title"><b>{t.budget}</b><span className="fb-planning-tab-count">{budgets.length}</span></span></button>
+            <button type="button" role="tab" id="planning-tab-fixed" aria-controls="fb-fixed-section" aria-selected={tab === "fixed"} title={t.fixedHint} onClick={() => setPlanningTab("fixed")}><small>{lang === "vi" ? "Lịch thanh toán" : lang === "zh" ? "付款日程" : "Payment schedule"}</small><span className="fb-planning-tab-title"><b>{t.fixed}</b><span className="fb-planning-tab-count">{fixed.filter((item) => item.active).length}</span></span></button>
+          </div>
+          <label className="fb-planning-wallet-select"><span>{t.wallet}</span><PlanningDropdown value={walletFilter} onChange={(val) => { setWalletFilter(val); setParentFilter("all"); setVisibleBudgetCount(5); setVisibleFixedCount(5); }} options={[{ value: "all", label: t.allWallets }, ...state.wallets.map((item) => ({ value: item.id, label: `${walletName(item.id)} · ${item.currency}` }))]} ariaLabel={t.wallet} /></label>
         </div>
         <div className="fb-planning-filters">
           {tab === "fixed" && <label><span>{t.parent}</span><PlanningDropdown value={parentFilter} onChange={(val) => { setParentFilter(val); setVisibleFixedCount(5); }} options={[{ value: "all", label: t.allBudgets }, ...filteredBudgets.map((item) => ({ value: item.id, label: item.title }))]} ariaLabel={t.parent} /></label>}
