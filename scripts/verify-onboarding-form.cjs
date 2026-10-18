@@ -74,6 +74,15 @@ test("fixed expenses cannot exceed the selected wallet opening balance", async (
   fill("Amount", "200000"); click("Add expense"); await submit(); await submit();
   assert.equal(requests.length, 1); assert.equal(requests[0].body.commitments[0].amount, 200000);
 });
+test("a fixed-expense draft must be added before the user can continue", async () => {
+  reset(); fill("What should Jake call you?", "Synthetic"); await submit(); await submit(); fill("Wallet name", "Cash"); fill("Opening balance", "200000"); await submit(); click("Dining"); await submit(); click("Salary"); await submit();
+  click("Yes"); fill("Expense name", "Rent"); fill("Amount", "50000"); fill("Expense category", "Dining"); fill("First due date", "2026-10-15");
+  const next = find(tree(), n => n.type === "button" && text(n) === "Continue");
+  assert.equal(next.props.disabled, true);
+  assert.ok(find(tree(), n => n.props.role === "status" && text(n).includes("Add this fixed expense before continuing")));
+  click("Add expense");
+  assert.equal(find(tree(), n => n.type === "button" && text(n) === "Continue").props.disabled, false);
+});
 test("a custom fixed-expense category is added to the onboarding profile", async () => {
   reset(); fill("What should Jake call you?", "Synthetic"); await submit(); await submit(); fill("Wallet name", "Cash"); fill("Opening balance", "200000"); await submit(); click("Dining"); await submit(); click("Salary"); await submit();
   click("Yes"); fill("Expense name", "Club fee"); fill("Amount", "50000"); fill("Expense category", "__finbridge_other_expense_category__"); fill("Other expense category", "Professional membership"); fill("First due date", "2026-10-15"); click("Add expense"); await submit(); await submit();

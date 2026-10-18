@@ -26,6 +26,12 @@ const FIXED_BALANCE_COPY = {
   zh: { exceeds: "从此钱包支付的固定支出总额不能超过期初余额。请选择其他钱包或降低金额。", other: "其他", otherLabel: "其他支出类别" },
 } as const;
 
+const FIXED_STEP_COPY = {
+  en: { draft: "Add this fixed expense before continuing, so it is included in your plan.", none: "Add at least one fixed expense, or choose No if you do not have one." },
+  vi: { draft: "Hãy bấm “Thêm khoản chi” để lưu khoản này vào kế hoạch trước khi tiếp tục.", none: "Hãy thêm ít nhất một khoản chi, hoặc chọn “Không” nếu bạn không có khoản chi cố định." },
+  zh: { draft: "请先添加这笔固定支出，再继续，以便将其纳入计划。", none: "请至少添加一笔固定支出；如果没有固定支出，请选择“否”。" },
+} as const;
+
 const OTHER_CATEGORY = "__finbridge_other_expense_category__";
 
 export function OnboardingWizard({ userId, name, state, onComplete }: { userId: string; name: string; state: AppState; onComplete: (record: OnboardingRecord) => void }) {
@@ -107,6 +113,8 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
   const availableForFixed = selectedBillWallet ? Math.max(0, selectedBillWallet.initial - data.commitments.filter(item => item.walletId === selectedBillWallet.id).reduce((total, item) => total + item.amount, 0)) : 0;
   const enteredBillAmount = Number(bill.amount);
   const billAmountExceedsBalance = bill.amount !== "" && Number.isFinite(enteredBillAmount) && enteredBillAmount > availableForFixed + 0.000001;
+  const hasFixedDraft = Boolean(bill.title.trim() || bill.amount || bill.category || customBillCategory.trim());
+  const canContinueFixedStep = !hasFixed || (data.commitments.length > 0 && !hasFixedDraft);
   return <main lang={lang} className={`${theme.welcome} ${styles.page}`}>
     <div className={styles.shell}>
       <header className={styles.header}><b><span className={theme.fin}>Fin</span><span className={theme.bridge}>Bridge</span></b><div className={styles.headerControls}><LanguageSelector value={lang} onChange={l => { rememberPreferredLanguage(l); setData(d => ({ ...d, language: l })); }} /><button type="button" className={styles.exit} disabled={saving || exiting} onClick={exitSetup}><LogOut size={15} />{exiting ? exitText.pending : exitText.action}</button><span>{step + 1} / 7</span></div></header>
@@ -132,13 +140,14 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
             <div className={styles.row}><label>{t.interval}<select value={bill.intervalMonths} onChange={e => setBill(b => ({ ...b, intervalMonths: Number(e.target.value) }))}>{[1, 2, 3, 6, 12].map(n => <option key={n} value={n}>{n}</option>)}</select></label><label>{t.reminder}<select value={bill.reminderDays} onChange={e => setBill(b => ({ ...b, reminderDays: Number(e.target.value) }))}>{[0, 1, 3, 5, 7].map(n => <option key={n} value={n}>{n}</option>)}</select></label></div>
             <div className={styles.row}><label>{t.monthPosition}<select value={bill.monthPosition} onChange={e => setBill(b => ({ ...b, monthPosition: e.target.value as typeof b.monthPosition }))}>{["start", "end", "date"].map((p, i) => <option key={p} value={p}>{t.positions[i]}</option>)}</select></label><label>{t.due}<input type="date" value={bill.dueDate} onChange={e => setBill(b => ({ ...b, dueDate: e.target.value }))} /></label></div>
             <button type="button" className={styles.outline} disabled={billAmountExceedsBalance} onClick={addBill}><Plus size={16} />{t.addFixed}</button>
+            {!canContinueFixedStep && <p className={styles.fieldError} role="status">{hasFixedDraft ? FIXED_STEP_COPY[lang].draft : FIXED_STEP_COPY[lang].none}</p>}
             <ul className={styles.bills}>{data.commitments.map(c => <li key={c.id}><span><b>{c.title}</b><small>{c.amount.toLocaleString()} {data.wallets.find(w => w.id === c.walletId)?.currency} · {c.dueDate} · {c.intervalMonths} {t.interval}</small></span><button type="button" aria-label={`${t.remove} ${c.title}`} onClick={() => setData(d => ({ ...d, commitments: d.commitments.filter(item => item.id !== c.id) }))}><Trash2 size={16} /></button></li>)}</ul>
             <p className={styles.hint}>{t.planned}</p>
           </>}
         </>}
         {step === 6 && <><p>{t.reserveHint}</p>{data.wallets.map(w => <label key={w.id}>{t.reserve} · {w.name} ({w.currency})<input type="number" min={0} max={1e12} step="0.01" value={data.reserves.find(r => r.walletId === w.id)?.amount ?? 0} onChange={e => setReserve(w.id, e.target.valueAsNumber)} /></label>)}<small>{t.zero}</small></>}
         {error && <p role="alert" className={styles.error}>{error}</p>}
-        <footer className={styles.footer}><button type="button" disabled={step === 0 || saving} onClick={() => { setError(""); setStep(s => s - 1); }}><ArrowLeft size={16} />{t.back}</button><button type="submit" className={theme.start} disabled={saving}>{saving ? t.saving : step === 6 ? t.finish : t.next}<ArrowRight size={16} /></button></footer>
+        <footer className={styles.footer}><button type="button" disabled={step === 0 || saving} onClick={() => { setError(""); setStep(s => s - 1); }}><ArrowLeft size={16} />{t.back}</button><button type="submit" className={theme.start} disabled={saving || (step === 5 && !canContinueFixedStep)}>{saving ? t.saving : step === 6 ? t.finish : t.next}<ArrowRight size={16} /></button></footer>
       </form>
     </div>
   </main>;
