@@ -63,6 +63,7 @@
 .modalSectionAction b { color: var(--r-teal, #147d78); }
 .modalAssumption { display: block; font-size: 11px; color: var(--r-muted, #64748b); line-height: 1.5; }
 .modalActions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 6px; }
+.cause { white-space: pre-line; }
 .primaryModalAction { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px!important; min-height: 40px!important; border: 0!important; border-radius: 10px!important; background: var(--r-teal, #147d78)!important; color: #ffffff!important; font-size: 12px!important; font-weight: 600!important; cursor: pointer; transition: opacity 0.15s; }
 .primaryModalAction:hover { opacity: 0.9; }
 .closeBtn { min-height: 40px!important; padding: 10px 14px!important; border: 1px solid var(--r-line, #e2e8f0)!important; border-radius: 10px!important; background: transparent!important; color: var(--r-text, #172f3c)!important; font-size: 12px!important; cursor: pointer; }

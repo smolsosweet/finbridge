@@ -11,7 +11,7 @@ import { buildAuthOptions } from "../src/lib/auth-options.ts";
 import { testPool, cleanupFinance, workspaceFixture } from "./workspace-fixtures.mjs";
 import { workspaceRepository } from "../src/lib/workspace-repository.ts";
 import { internationalTransferRepository, INTERNATIONAL_TRANSFER_SQL } from "../src/lib/international-transfer-repository.ts";
-import { TRANSFER_VIEW_COPY } from "../src/components/transfers/transfer-copy.ts";
+import { TRANSFER_COPY, TRANSFER_VIEW_COPY } from "../src/components/transfers/transfer-copy.ts";
 import { REFERENCE_COPY } from "../src/components/transfers/reference-copy.ts";
 nextEnv.loadEnvConfig(process.cwd());
 const db = new URL(process.env.AUTH_TEST_DATABASE_URL || "https://invalid.invalid");
@@ -69,7 +69,7 @@ try {
   await page.screenshot({ path: path.join(directory, "reference-estimate-desktop.png") });
   await page.keyboard.press("Escape");
   await page.reload();
-  await referencePanel.locator("summary").click();
+  await referencePanel.locator("summary").filter({ hasText: REFERENCE_COPY.en.history }).click();
   await referencePanel.getByRole("button").filter({ hasText: "3,864,070" }).click();
   estimateModal = page.getByRole("dialog", { name: REFERENCE_COPY.en.details, exact: true }); await estimateModal.waitFor();
   await page.keyboard.press("Escape");
@@ -113,11 +113,11 @@ try {
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
   await page.reload(); await page.getByText(REFERENCE_COPY.en.test, { exact: true }).click(); await page.getByRole("tab", { name: /^Transferred/ }).click(); await page.getByRole("button", { name: "Test transfer receipt", exact: true }).click();
   await page.getByRole("dialog", { name: "Test transfer receipt", exact: true }).waitFor(); await page.keyboard.press("Escape");
-  await page.getByText("Payment controls", { exact: true }).click();
-  await page.getByRole("button", { name: "Pause new transfers", exact: true }).click();
-  await page.getByText(/Transfers paused\. Existing receipts are kept/).waitFor();
-  await page.getByRole("button", { name: "Resume transfers", exact: true }).click();
-  await page.getByRole("button", { name: "Pause new transfers", exact: true }).waitFor();
+  await page.getByText(TRANSFER_COPY.en.controls, { exact: true }).click();
+  await page.getByRole("button", { name: TRANSFER_COPY.en.pause, exact: true }).click();
+  await page.getByText(TRANSFER_COPY.en.paused, { exact: true }).waitFor();
+  await page.getByRole("button", { name: TRANSFER_COPY.en.resume, exact: true }).click();
+  await page.getByRole("button", { name: TRANSFER_COPY.en.pause, exact: true }).waitFor();
   const repo = internationalTransferRepository(pool);
   const mutate = command => repo.mutate(owner, { ...command, mutationId: randomUUID() });
   for (let i = 0; i < 12; i++) {

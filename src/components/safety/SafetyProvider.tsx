@@ -15,16 +15,29 @@ export function SafetyProvider({ children }: { children: ReactNode }) {
 function OwnedSafetyProvider({ children, owner }: { children: ReactNode; owner: string }) {
   const [doc, setDoc] = useState<SafetyPublic>(emptySafetyPublic), [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const current = useRef(doc), active = useRef(true), locked = useRef(false);
+  const refreshing = useRef<Promise<void> | null>(null), refreshAgain = useRef(false);
   const adopt = useCallback((value: SafetyPublic) => { if (active.current && workspaceOwner() === owner && value.revision >= current.current.revision) { current.current = value; setDoc(value); } }, [owner]);
-  const refresh = useCallback(async () => {
-    const response = await fetch("/api/safety", { cache: "no-store", headers: { "x-finbridge-workspace-owner": owner }, signal: AbortSignal.timeout(15000) });
-    if (!response.ok) throw new Error("UNAVAILABLE"); adopt(await response.json());
-    if (active.current) setError("");
+  const refresh = useCallback((): Promise<void> => {
+    if (refreshing.current) return refreshing.current;
+    const request = async () => {
+      do {
+        refreshAgain.current = false;
+        const response = await fetch("/api/safety", { cache: "no-store", headers: { "x-finbridge-workspace-owner": owner }, signal: AbortSignal.timeout(15000) });
+        if (!response.ok) throw new Error("UNAVAILABLE"); adopt(await response.json());
+        if (active.current) setError("");
+      } while (refreshAgain.current && active.current && !locked.current);
+    };
+    refreshing.current = request().finally(() => { refreshing.current = null; });
+    return refreshing.current;
   }, [adopt, owner]);
   useEffect(() => {
     active.current = true;
     void refresh().catch(() => { if (active.current) setError("UNAVAILABLE"); }).finally(() => { if (active.current) setLoading(false); });
-    const update = () => { if (!locked.current) void refresh().catch(() => { if (active.current) setError("UNAVAILABLE"); }); };
+    const update = () => {
+      if (locked.current) return;
+      if (refreshing.current) refreshAgain.current = true;
+      void refresh().catch(() => { if (active.current) setError("UNAVAILABLE"); });
+    };
     const timer = setInterval(update, 60000); window.addEventListener("finbridge:workspace-saved", update);
     return () => { active.current = false; clearInterval(timer); window.removeEventListener("finbridge:workspace-saved", update); };
   }, [refresh]);

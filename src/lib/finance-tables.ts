@@ -70,6 +70,24 @@ export async function writeFinanceTables(client: PoolClient, owner: string, s: A
 export async function writeAlertRules(client: PoolClient, owner: string, rules: SafetyRule[]) {
   await upsert(client, owner, "finbridge_alert_rules", { group_id: "TEXT", name: "TEXT", rule_kind: "TEXT", target_id: "TEXT", basis: "TEXT", threshold_unit: "TEXT", threshold_value: "NUMERIC", email_enabled: "BOOLEAN", active: "BOOLEAN", archived: "BOOLEAN" }, rules.map((r, position) => ({ id: r.id, data: r, position, group_id: r.groupId || null, name: r.name, rule_kind: r.kind, target_id: r.targetId, basis: r.basis, threshold_unit: r.unit, threshold_value: r.threshold, email_enabled: r.email, active: r.active, archived: !!r.archived })));
 }
+// Safety needs only these financial fields. Fetch them in one round trip instead
+// of loading categories, chat histories, recipients and drafts individually.
+export async function readSafetyFinanceTables(client: PoolClient, owner: string, fallback: AppState): Promise<AppState> {
+  const result = await client.query<Pick<AppState, "wallets" | "transactions" | "goals" | "settings">>(`
+    SELECT
+      COALESCE((SELECT jsonb_agg(data || jsonb_build_object('id',id,'name',name,'currency',trim(currency),'initial',opening_balance,'archived',archived) ORDER BY position)
+        FROM finbridge_wallets WHERE user_id=$1 AND deleted_at IS NULL), '[]'::jsonb) AS wallets,
+      COALESCE((SELECT jsonb_agg((t.data - 'targetWallet') || jsonb_build_object('id',t.id,'amount',t.amount,'type',t.direction,'wallet',t.wallet_id,'category',COALESCE(c.name,''),'date',t.occurred_on::text)
+        || CASE WHEN t.target_wallet_id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('targetWallet',t.target_wallet_id) END ORDER BY t.position)
+        FROM finbridge_transactions t LEFT JOIN finbridge_categories c ON c.user_id=t.user_id AND c.id=t.category_id
+        WHERE t.user_id=$1 AND t.deleted_at IS NULL), '[]'::jsonb) AS transactions,
+      COALESCE((SELECT jsonb_agg(b.data || jsonb_build_object('id',b.id,'kind','budget','title',b.title,'amount',b.amount,'currency',trim(b.currency),'wallet',b.wallet_id,'category',COALESCE(c.name,''),'date',b.starts_on::text,'cycle',b.cycle) ORDER BY b.position)
+        FROM finbridge_budgets b LEFT JOIN finbridge_categories c ON c.user_id=b.user_id AND c.id=b.category_id
+        WHERE b.user_id=$1 AND b.deleted_at IS NULL), '[]'::jsonb) AS goals,
+      COALESCE((SELECT jsonb_object_agg(preference_key,value) FROM finbridge_preferences WHERE user_id=$1 AND deleted_at IS NULL), '{}'::jsonb) AS settings
+  `, [owner]);
+  return { ...fallback, ...result.rows[0] };
+}
 export async function readFinanceTables(client: PoolClient, owner: string, fallback: AppState): Promise<AppState> {
   const rows = async (table: string, expression = "data") => (await client.query(`SELECT ${expression} AS data FROM ${table} WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position`, [owner])).rows.map(r => r.data);
   const wallets = await rows("finbridge_wallets", "data || jsonb_build_object('name',name,'currency',trim(currency),'initial',opening_balance,'type',wallet_type,'archived',archived)");

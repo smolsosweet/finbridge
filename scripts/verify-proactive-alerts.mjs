@@ -64,6 +64,25 @@ test("dismissed alerts stay hidden and dismissed ID parsing is safe", () => {
   assert.deepEqual(readDismissedAlertIds(JSON.stringify([id, 1, null])), [id]);
 });
 
+test("one monthly plan projects separate overdue and upcoming periods, never duplicate dates", () => {
+  const state = base(); state.settings.language = "vi"; state.goals = [];
+  state.wallets[0] = { ...state.wallets[0], currency: "VND", initial: 200000 };
+  state.fixedExpenses = [{ id: "travel", title: "Di Chuyển", amount: 150000, category: "Food", dueDate: "2026-10-16", recurrence: "monthly", intervalMonths: 1, active: true, walletId: "usd" }];
+  const alerts = detectProactiveAlerts(state, "2026-10-18");
+  const warning = alerts.find(a => a.kind === "cash-shortfall");
+  assert.equal(warning.amount, 100000);
+  assert.equal(warning.cause.split("\n").length, 2);
+  assert.match(warning.cause, /16\/10\/2026.*quá hạn/);
+  assert.match(warning.cause, /16\/11\/2026.*sắp đến hạn/);
+  state.transactions.push({ ...expense("paid", 150000, "2026-10-18"), fixedExpenseId: "travel", fixedExpenseDueDate: "2026-10-16", paymentConfirmation: "user" });
+  const afterPayment = detectProactiveAlerts(state, "2026-10-18").find(a => a.kind === "cash-shortfall");
+  assert.equal(afterPayment.cause.split("\n").length, 1);
+  assert.doesNotMatch(afterPayment.cause, /16\/10\/2026/);
+  assert.match(afterPayment.cause, /16\/11\/2026/);
+  state.transactions = []; state.fixedExpenses[0].dueDate = "2026-10-24";
+  assert.equal(detectProactiveAlerts(state, "2026-10-18").some(a => a.kind === "cash-shortfall"), false);
+});
+
 test("rejects malformed amount evidence instead of producing a budget alert", () => {
   const state = base();
   state.transactions.push(expense("bad", Number.NaN, "2026-10-10"));

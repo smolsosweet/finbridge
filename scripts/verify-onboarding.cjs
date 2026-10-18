@@ -22,6 +22,13 @@ const payload = { version: 1, displayName: "Synthetic Jake user", occupation: "s
   commitments: [{ id: "tuition", walletId: "bank", title: "Tuition", amount: 30000000, category: "Education", dueDate: "2026-10-31", intervalMonths: 3, monthPosition: "end", reminderDays: 7 }],
   reserves: [{ walletId: "bank", amount: 25000000 }, { walletId: "ali", amount: 500 }] };
 const record = { data: payload, completedAt: "2026-10-14T00:00:00Z" };
+test("category capitalization is normalized at the server boundary with matching references", () => {
+  assert.equal(onboarding.formatCategoryName("  dI  chuYển "), "Di Chuyển");
+  assert.equal(onboarding.formatCategoryName("di chuyển"), "Di Chuyển");
+  const parsed = onboarding.onboardingSchema.parse({ ...payload, expenseCategories: ["dI chuYển"], commitments: [{ ...payload.commitments[0], category: "DI CHUYỂN" }] });
+  assert.deepEqual(parsed.expenseCategories, ["Di Chuyển"]);
+  assert.equal(parsed.commitments[0].category, "Di Chuyển");
+});
 const fresh = { wallets: [{ id: "default", name: ".", currency: "USD", initial: 0, type: "cash" }], transactions: [], goals: [], fixedExpenses: [], recurring: [], rules: [], categories: [], categoryMeta: {}, settings: {} };
 const state = onboarding.applyOnboarding(fresh, record);
 test("valid setup supports separate VND/CNY wallets, reserves and quarterly tuition", () => assert.equal(onboarding.onboardingSchema.safeParse(payload).success, true));

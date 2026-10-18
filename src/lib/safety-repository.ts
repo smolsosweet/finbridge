@@ -1,13 +1,13 @@
 import type { Pool, PoolClient } from "pg";
 import { advanceSafety, emptySafetyDocument, type SafetyDocument, type SafetyEvent, type SafetyRule } from "./safety-model";
 import { evaluateSafety, safetySnapshot } from "./safety-model";
-import { readFinanceTables, writeAlertRules } from "./finance-tables";
+import { readSafetyFinanceTables, writeAlertRules } from "./finance-tables";
 import type { AppState } from "../components/sites/rolly/replica/store";
 
 export async function safetyWorkspace(client: PoolClient, userId: string) {
   const rows = await client.query("SELECT data,updated_at FROM finbridge_workspaces WHERE user_id=$1 FOR SHARE", [userId]);
   if (!rows.rows[0]?.data) return null;
-  const data = await readFinanceTables(client, userId, rows.rows[0].data);
+  const data = await readSafetyFinanceTables(client, userId, rows.rows[0].data);
   return { data, updatedAt: rows.rows[0].updated_at };
 }
 export function databaseSafety(doc: SafetyDocument, state: AppState, updatedAt: Date) {

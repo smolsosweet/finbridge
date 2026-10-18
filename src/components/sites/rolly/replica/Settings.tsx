@@ -283,23 +283,11 @@ export function AccountSettings({
         title={t.title}
         subtitle={t.intro}
         theme={String(state.settings.theme || "light")}
-        currentLanguage={String(state.settings.language || "Tiếng Việt")}
+        currentLanguage={lang === "vi" ? "Tiếng Việt" : lang === "zh" ? "中文" : "English"}
         onOpenCalendar={() => navigate("calendar")}
         onToggleTheme={() => setSetting("theme", state.settings.theme === "dark" ? "light" : "dark")}
-      >
-        <select
-          aria-label={t.langLabel}
-          className="fb-header-lang-select"
-          value={String(state.settings.language)}
-          onChange={(e) => setSetting("language", e.target.value)}
-        >
-          {["Tiếng Việt", "English", "中文", "Bahasa Indonesia", "Español", "Français"].map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
-      </FinBridgeHeader>
+        onSelectLanguage={value => setSetting("language", value)}
+      />
 
       {/* Profile Card matching Image 2 */}
       <div className="fb-account-profile-card">

@@ -1363,9 +1363,12 @@
 }
 
 /* Channels (Step 2) */
-.channel {
-  display: flex;
+.page .panel .channel {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 28px;
   align-items: center;
+  width: 100%;
+  min-width: 0;
   gap: 14px;
   padding: 16px;
   border: 1px solid var(--s-line);
@@ -1414,9 +1417,17 @@
   color: var(--s-ok);
   flex-shrink: 0;
 }
-.channel input {
+.page .panel .channel input[type="checkbox"] {
   width: 20px;
+  min-width: 20px;
+  max-width: 20px;
   height: 20px;
+  min-height: 20px;
+  max-height: 20px;
+  margin: 0;
+  padding: 0;
+  justify-self: center;
+  appearance: auto;
   accent-color: var(--s-accent);
 }
 

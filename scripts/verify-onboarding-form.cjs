@@ -11,6 +11,7 @@ const { OnboardingWizard } = compile("src/components/auth/OnboardingWizard.tsx",
   if (name === "react") return fakeReact;
   if (name === "@/components/sites/rolly/replica/store") return { workspacePersistence: () => "browser", getWorkspaceState: () => props.state, updateState: () => {} };
   if (name === "@/lib/onboarding") return setup;
+  if (name === "@/components/FinBridgeMascot") return compile("src/components/FinBridgeMascot.tsx");
   if (name === "@/lib/setup-copy") return copy;
   if (name === "@/lib/auth-copy") return authCopy;
   if (name === "@/lib/language-preference") return { rememberPreferredLanguage() {} };
@@ -100,15 +101,15 @@ test("custom categories reuse the existing name regardless of capitalization", a
   reset(); fill("What should Jake call you?", "Synthetic"); await submit(); await submit(); fill("Wallet name", "Cash"); fill("Opening balance", "200000"); await submit();
   fill("New category name", "Di chuyển"); click("Add category");
   fill("New category name", "di chuyển"); click("Add category"); await submit(); click("Salary"); await submit();
-  click("Yes"); fill("Expense name", "Di chuyển"); fill("Amount", "200000"); fill("Expense category", "__finbridge_other_expense_category__"); fill("Other expense category", "  di chuyển  "); fill("First due date", "2026-10-24"); await submit(); await submit();
-  assert.deepEqual(requests[0].body.expenseCategories, ["Di chuyển"]);
-  assert.equal(requests[0].body.commitments[0].category, "Di chuyển");
+  click("Yes"); fill("Expense name", "Di chuyển"); fill("Amount", "200000"); fill("Expense category", "__finbridge_other_expense_category__"); fill("Other expense category", "  dI chuYển  "); fill("First due date", "2026-10-24"); await submit(); await submit();
+  assert.deepEqual(requests[0].body.expenseCategories, ["Di Chuyển"]);
+  assert.equal(requests[0].body.commitments[0].category, "Di Chuyển");
 });
 test("a custom fixed-expense category is added to the onboarding profile", async () => {
   reset(); fill("What should Jake call you?", "Synthetic"); await submit(); await submit(); fill("Wallet name", "Cash"); fill("Opening balance", "200000"); await submit(); click("Dining"); await submit(); click("Salary"); await submit();
   click("Yes"); fill("Expense name", "Club fee"); fill("Amount", "50000"); fill("Expense category", "__finbridge_other_expense_category__"); fill("Other expense category", "Professional membership"); fill("First due date", "2026-10-15"); click("Add expense"); await submit(); await submit();
-  assert.deepEqual(requests[0].body.expenseCategories, ["Dining", "Professional membership"]);
-  assert.equal(requests[0].body.commitments[0].category, "Professional membership");
+  assert.deepEqual(requests[0].body.expenseCategories, ["Dining", "Professional Membership"]);
+  assert.equal(requests[0].body.commitments[0].category, "Professional Membership");
 });
 test("a server failure keeps the draft for a retry and does not complete setup", async () => {
   reset(); fill("What should Jake call you?", "Synthetic"); await submit(); await submit(); fill("Wallet name", "Cash"); await submit(); click("Dining"); await submit(); click("Salary"); await submit(); await submit(); status = 503; await submit();

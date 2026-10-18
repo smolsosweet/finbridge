@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ArrowRight } from "lucide-react";
-import { Mascot } from "page-mascot";
+import { FinBridgeMascot as Mascot } from "@/components/FinBridgeMascot";
 import { AUTH_COPY, authLanguage, type AuthLanguage } from "@/lib/auth-copy";
 import { readPreferredLanguage, rememberPreferredLanguage } from "@/lib/language-preference";
 import { LanguageSelector } from "./LanguageSelector";
@@ -26,7 +26,7 @@ export function WelcomeScreen({ onGetStarted, onLogIn, initialLang = "en", prefe
     </header>
     <section className={styles.hero} aria-labelledby="welcome-title">
       <div className={styles.mascotStage}>
-        <Mascot directions="/mascots/lac-directions.webp" reactions="/mascots/lac-reactions.webp" size={220} label={t.jack} className={styles.mascot} />
+        <Mascot size={220} label={t.jack} className={styles.mascot} />
       </div>
       <p className={styles.greeting}>{t.greeting}</p>
       <h1 id="welcome-title" className={styles.headline}>{t.headline}</h1>
