@@ -107,7 +107,7 @@ export function setSetting(name: string, value: string | boolean) {
 }
 export function currencySymbol(code: string) { return ({ USD: "$", VND: "₫", EUR: "€", GBP: "£", AUD: "A$", SGD: "S$", JPY: "¥" } as Record<string, string>)[code] || code + " "; }
 export function money(amount: number, currency = "USD", settings = current.settings) {
-  const text = new Intl.NumberFormat(settings.separator ? "de-DE" : "en-US", { maximumFractionDigits: 2, notation: settings.compact ? "compact" : "standard" }).format(amount);
+  const text = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2, notation: settings.compact ? "compact" : "standard" }).format(amount);
   return settings.symbolAfter ? text + currencySymbol(currency) : currencySymbol(currency) + text;
 }
 export function today() {

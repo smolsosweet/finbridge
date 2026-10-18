@@ -329,7 +329,7 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
     return [record.title, record.category, categoryDisplay, record.note, nameOfWallet(record.wallet)].join(" ").toLocaleLowerCase(locale).includes(search.trim().toLocaleLowerCase(locale));
   }).sort((a, b) => (b.occurredAt || b.date).localeCompare(a.occurredAt || a.date) || a.id.localeCompare(b.id));
   const currencyOf = (record: HistoryRecord) => record.currency || state.wallets.find((wallet) => wallet.id === record.wallet)?.currency;
-  const amount = (value: number, currency?: string) => new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(value) + (currency ? " " + currency : "");
+  const amount = (value: number, currency?: string) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value) + (currency ? " " + currency : "");
   const totals = (type: "income" | "expense") => {
     const selectedWallets = state.wallets.filter((wallet) => walletId === "all" || wallet.id === walletId);
     const groups = new Map<string, number>(selectedWallets.map((wallet) => [wallet.currency, 0]));

@@ -14,6 +14,7 @@ const { OnboardingWizard } = compile("src/components/auth/OnboardingWizard.tsx",
   if (name === "@/components/FinBridgeMascot") return compile("src/components/FinBridgeMascot.tsx");
   if (name === "@/lib/setup-copy") return copy;
   if (name === "@/lib/auth-copy") return authCopy;
+  if (name === "@/lib/currency-format") return compile("src/lib/currency-format.ts");
   if (name === "@/lib/language-preference") return { rememberPreferredLanguage() {} };
   if (name === "@/lib/sign-out") return { signOutGoogle: async () => { signOuts++; if (signOutFails) throw new Error("SIGN_OUT_FAILED"); } };
   if (name === "next/navigation") return { useRouter: () => ({ replace: path => routes.push(path) }) };

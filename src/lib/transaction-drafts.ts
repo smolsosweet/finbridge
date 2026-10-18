@@ -73,7 +73,7 @@ export function parseDraftAmountCorrection(message: string): ParsedTransactionAm
 export function formatTransactionMoney(amount: number, currency: string): string {
   const code = currency.trim().toUpperCase();
   const fractionDigits = code === "VND" || code === "JPY" || code === "KRW" ? 0 : 2;
-  const formatted = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: fractionDigits, maximumFractionDigits: 2 }).format(amount);
+  const formatted = new Intl.NumberFormat("en-US", { minimumFractionDigits: fractionDigits, maximumFractionDigits: 2 }).format(amount);
   return `${formatted} ${code}`;
 }
 

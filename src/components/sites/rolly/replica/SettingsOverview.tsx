@@ -536,7 +536,7 @@ export function WalletSettingsDirectory({
                 <div className="fb-wallet-dir-balance-wrap">
                   <small>{t.currentBalance}</small>
                   <span className="fb-wallet-directory-balance">
-                    {new Intl.NumberFormat(lang === "vi" ? "vi-VN" : "en-US").format(balance)} {w.currency}
+                    {new Intl.NumberFormat("en-US").format(balance)} {w.currency}
                   </span>
                 </div>
               </div>

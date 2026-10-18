@@ -101,7 +101,7 @@ export function NotificationCenter({ navigate, floating = false }: { navigate: (
   };
   const money = (value: number | null, currency: string) => {
     if (value === null || !Number.isFinite(value) || !currency) return "—";
-    try { return new Intl.NumberFormat(lang, { style: "currency", currency }).format(value); } catch { return "—"; }
+    try { return new Intl.NumberFormat("en-US", { style: "currency", currency }).format(value); } catch { return "—"; }
   };
   const destination = (event: SafetyEvent) => {
     const rule = safety?.doc.rules.find(rule => rule.id === event.ruleId);

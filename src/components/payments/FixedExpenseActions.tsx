@@ -20,7 +20,7 @@ export function FixedExpenseActions({ expense, lang, navigate }: { expense: Fixe
   const lock=useRef(false),scanVersion=useRef(0);
   const [existingId,setExistingId]=useState("");
   const suggestedDue=nextExpenseDue(state,expense,asOf),due=chosenDue||suggestedDue, payment=due?fixedExpensePayment(state,expense.id,due):undefined;
-  const currency=wallet?.currency||"", format=(n:number)=>new Intl.NumberFormat(lang,{style:"currency",currency:currency||"USD"}).format(n);
+  const currency=wallet?.currency||"", format=(n:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency:currency||"USD"}).format(n);
   const bank=catalog?.banks.find(b=>b.bin===recipient.bankBin), bankApp=catalog?.apps.find(a=>a.id===app);
   const validRecipient=bankRecipientSchema.safeParse(recipient).success, transferAmount=Number(amount), validTransfer=!!due && plannedOccurrences(expense,due,due).length>0 && validRecipient && Number.isSafeInteger(transferAmount)&&transferAmount>0&&transferAmount<=1e12;
   const lastPayment=state.transactions.filter(tx=>tx.fixedExpenseId===expense.id).sort((a,b)=>b.date.localeCompare(a.date))[0];

@@ -11,6 +11,7 @@ import { useSafety } from "./SafetyProvider";
 import { SAFETY_COPY } from "./safety-copy";
 import styles from "./SafetyAlerts.module.css";
 import "./SafetyTheme.css";
+import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 
 const EXTRA = {
   en: {
@@ -58,7 +59,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
   const budgets = snapshot?.budgets.filter(b => wallets.some(w => w.id === b.wallet && w.currency === b.currency)) || [];
   const target = draft?.kind === "budget" ? budgets.find(b => b.id === draft.targetId) : wallets.find(w => w.id === draft?.targetId);
   const isEditing = !!draft && groups.some(g => g.id === draft.groupId || g.rows.some(r => draft.conditions.some(c => c.id === r.id)));
-  const money = (n: number | null, currency: string) => n === null || !Number.isFinite(n) || !currency ? "—" : new Intl.NumberFormat(lang, { style: "currency", currency }).format(n);
+  const money = (n: number | null, currency: string) => n === null || !Number.isFinite(n) || !currency ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency }).format(n);
   const time = (date: string | null) => {
     if (!date) return "—";
     try {
@@ -307,13 +308,18 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                           <span>{t.threshold}</span>
                           <input
                             id={field + c.id}
-                            type="number"
-                            min="0.001"
-                            max={c.unit === "percent" ? 1000 : 1e12}
-                            step="any"
+                            type="text"
+                            inputMode="decimal"
                             required
-                            value={c.threshold || ""}
-                            onChange={e => setDraft({ ...draft, conditions: draft.conditions.map(row => row.id === c.id ? { ...row, threshold: e.target.valueAsNumber } : row) })}
+                            value={c.threshold ? formatCurrencyInput(c.threshold) : ""}
+                            onChange={e => {
+                              const val = parseCurrencyInput(e.target.value);
+                              setDraft({ ...draft, conditions: draft.conditions.map(row => row.id === c.id ? { ...row, threshold: val } : row) });
+                            }}
+                            onBlur={e => {
+                              const val = parseCurrencyInput(e.target.value);
+                              setDraft({ ...draft, conditions: draft.conditions.map(row => row.id === c.id ? { ...row, threshold: val } : row) });
+                            }}
                           />
                         </label>
                         <label htmlFor={field + c.id + "unit"} className={styles.unitSelectWrap}>

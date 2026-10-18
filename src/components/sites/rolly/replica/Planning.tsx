@@ -13,6 +13,7 @@ import { flushWorkspace, updateState, useAppState, type FixedExpense, type Goal 
 import { addBudgetCategory, expenseCategoriesForWallet } from "@/lib/budget-categories";
 import { nextExpenseDue, unpaidOccurrences } from "@/lib/fixed-expense-payments";
 import { FixedExpenseActions } from "@/components/payments/FixedExpenseActions";
+import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 
 
 const COPY = {
@@ -177,7 +178,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const repeatMonths = lang === "vi" ? "Lặp mỗi (tháng)" : lang === "zh" ? "每隔几个月重复" : "Repeat every (months)";
   const reminderLabel = lang === "vi" ? "Nhắc trước (ngày)" : lang === "zh" ? "提前几天提醒" : "Remind before (days)";
   const walletName = (id: string) => { const item = state.wallets.find((wallet) => wallet.id === id); return item?.name === "." ? t.mainWallet : item?.name || t.emptyWallet; };
-  const format = (value: number, currency: string) => new Intl.NumberFormat(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-GB", { maximumFractionDigits: 2 }).format(value) + " " + currency;
+  const format = (value: number, currency: string) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value) + " " + currency;
   const formatDate = (key: string) => new Intl.DateTimeFormat(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-GB", { dateStyle: "medium" }).format(new Date(key + "T12:00:00"));
   const open = (type: "budget" | "fixed", parent?: string, expense?: FixedExpense, targetBudget?: Goal) => {
     setAddingCategory(false); setNewCategory(""); setCategoryError("");
@@ -185,7 +186,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
     if (type === "budget" && targetBudget) {
       setEditingId(targetBudget.id);
       setTitle(targetBudget.title);
-      setAmount(String(targetBudget.amount));
+      setAmount(formatCurrencyInput(targetBudget.amount));
       setWalletId(targetBudget.wallet);
       setStartDate(targetBudget.date);
       setCycle(targetBudget.cycle);
@@ -193,7 +194,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       setForm(type);
       return;
     }
-    setEditingId(expense?.id || ""); setTitle(expense?.title || ""); setAmount(expense ? String(expense.amount) : "");
+    setEditingId(expense?.id || ""); setTitle(expense?.title || ""); setAmount(expense ? formatCurrencyInput(expense.amount) : "");
     setWalletId(expense?.walletId || activeWallets[0]?.id || ""); setStartDate(today); setCycle("monthly");
     const budget = budgets.find((item) => item.id === (parent || expense?.budgetId));
     setParentId(budget?.id || ""); setCategory(expense?.category || (type === "fixed" ? budget?.category || "" : ""));
@@ -210,8 +211,8 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const save = (event: FormEvent) => {
     event.preventDefault(); if (saveLock.current) return; setError("");
     if (form === "budget") {
-      if (!selectedWallet || !title.trim() || !Number.isFinite(Number(amount)) || Number(amount) <= 0 || !startDate || !["monthly", "weekly", "yearly"].includes(cycle)) { setError(t.invalid); return; }
-      const numericAmount = Number(amount);
+      const numericAmount = parseCurrencyInput(amount);
+      if (!selectedWallet || !title.trim() || !Number.isFinite(numericAmount) || numericAmount <= 0 || !startDate || !["monthly", "weekly", "yearly"].includes(cycle)) { setError(t.invalid); return; }
       if (editingId) {
         const existing = budgets.find((b) => b.id === editingId);
         if (!existing || (existing.currency !== selectedWallet.currency && fixed.some(f => f.budgetId === existing.id))) { setError(t.invalid); return; }
@@ -246,7 +247,8 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       const [year, month] = dueDate.split("-").map(Number);
       plannedDue = `${year}-${String(month).padStart(2, "0")}-${String(monthPosition === "start" ? 1 : new Date(year, month, 0).getDate()).padStart(2, "0")}`;
     }
-    const expense: FixedExpense = { ...fixed.find(item => item.id === editingId), id: editingId || crypto.randomUUID(), budgetId: parentId, walletId: selectedParent?.wallet || walletId, title: title.trim(), amount: Number(amount), category: selectedParent?.category || category, dueDate: plannedDue, recurrence, intervalMonths, reminderDays, monthPosition, active: editingId ? fixed.find((item) => item.id === editingId)?.active ?? true : true };
+    const parsedExpenseAmount = parseCurrencyInput(amount);
+    const expense: FixedExpense = { ...fixed.find(item => item.id === editingId), id: editingId || crypto.randomUUID(), budgetId: parentId, walletId: selectedParent?.wallet || walletId, title: title.trim(), amount: parsedExpenseAmount, category: selectedParent?.category || category, dueDate: plannedDue, recurrence, intervalMonths, reminderDays, monthPosition, active: editingId ? fixed.find((item) => item.id === editingId)?.active ?? true : true };
     if (!validFixedExpense(state, expense)) { setError(t.invalid); return; }
     let saved = false;
     updateState((current) => {
@@ -417,7 +419,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       {form === "fixed" && <><label>{t.parent}<select value={parentId} onChange={(event) => selectParent(event.target.value)}><option value="">{unassigned}</option>{budgets.filter((item) => activeWallets.some((wallet) => wallet.id === item.wallet && wallet.currency === item.currency)).map((item) => <option key={item.id} value={item.id}>{item.title} · {item.currency}</option>)}</select></label>{selectedParent && <p className="fb-planning-note">{t.parentContext} {walletName(selectedParent.wallet)} · {selectedParent.currency}</p>}</>}
       <label>{t.name}<input aria-label={t.name} placeholder={form === "budget" ? t.budgetPlaceholder : t.fixedPlaceholder} required maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
       {(form === "budget" || !selectedParent) && <label>{t.wallet}<select value={walletId} required onChange={(event) => { setWalletId(event.target.value); setCategory(""); setAmount(""); }}>{activeWallets.map((item) => <option key={item.id} value={item.id}>{walletName(item.id)} · {item.currency}</option>)}</select></label>}
-      <label>{t.amount} · {form === "fixed" && selectedParent ? selectedParent.currency : selectedWallet?.currency}<input aria-label={t.amount} type="number" min={1 / currencyScale((form === "fixed" ? selectedParent?.currency : undefined) || selectedWallet?.currency || "USD")} step={1 / currencyScale((form === "fixed" ? selectedParent?.currency : undefined) || selectedWallet?.currency || "USD")} required value={amount} onChange={(event) => setAmount(event.target.value)} /></label>
+      <label>{t.amount} · {form === "fixed" && selectedParent ? selectedParent.currency : selectedWallet?.currency}<input aria-label={t.amount} type="text" inputMode="decimal" required value={amount} onChange={(event) => setAmount(event.target.value)} onBlur={() => setAmount(formatCurrencyInput(amount))} /></label>
       {form === "fixed" && <><label>{repeatMonths}<input type="number" min={1} max={12} step={1} value={intervalMonths} onChange={event => setIntervalMonths(Number(event.target.value))} /></label><label>{reminderLabel}<input type="number" min={0} max={30} step={1} value={reminderDays} onChange={event => setReminderDays(Number(event.target.value))} /></label><label>{SETUP_COPY[lang].monthPosition}<select value={monthPosition} onChange={event => setMonthPosition(event.target.value as typeof monthPosition)}>{(["start", "end", "date"] as const).map((p, i) => <option key={p} value={p}>{SETUP_COPY[lang].positions[i]}</option>)}</select></label></>}
       <label>{t.category}<select aria-label={t.category} value={form === "fixed" && selectedParent?.category ? selectedParent.category : category} disabled={form === "fixed" && !!selectedParent?.category} required={form === "fixed"} onChange={(event) => setCategory(event.target.value)}><option value="">{form === "budget" ? t.allCategories : t.chooseCategory}</option>{Array.from(new Set([...expenseCategories, ...(selectedParent?.category ? [selectedParent.category] : [])])).map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
       {!(form === "fixed" && selectedParent?.category) && <div className="fb-budget-new-category"><button type="button" onClick={() => setAddingCategory(!addingCategory)}><Plus size={15}/>{categoryCopy.add}</button>{addingCategory && <div><label>{categoryCopy.name}<input aria-label={categoryCopy.name} value={newCategory} maxLength={80} onChange={e => setNewCategory(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); createBudgetCategory(); } }}/></label><button type="button" onClick={createBudgetCategory}>{categoryCopy.save}</button><small>{categoryCopy.hint}</small>{categoryError && <p role="alert">{categoryError}</p>}</div>}</div>}

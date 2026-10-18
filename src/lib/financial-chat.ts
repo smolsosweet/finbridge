@@ -188,7 +188,7 @@ function answerFinancialQuerySection(
   lang: Language
 ): QuerySectionResult {
   const labels = copy[lang];
-  const money = (amount: number, currency: string) => `${new Intl.NumberFormat(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: Math.round(Math.log10(currencyScale(currency))) }).format(amount)} ${currency}`;
+  const money = (amount: number, currency: string) => `${new Intl.NumberFormat("en-US", { maximumFractionDigits: Math.round(Math.log10(currencyScale(currency))) }).format(amount)} ${currency}`;
 
   if (action === "balance") {
     const figures = wallets.map((wallet) => {

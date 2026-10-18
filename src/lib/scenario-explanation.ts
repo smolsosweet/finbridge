@@ -13,7 +13,7 @@ export function scenarioCalculationExplanation(result: ScenarioResult, scenario:
     en: { heading: "How the previous forecast was calculated", now: "Balance as of", pace: "Average daily spending", future: "Further estimated spending", days: "days", other: "Other net scenario adjustments", end: "Projected balance", note: "Estimated using recorded spending history; no new income outside the scenario is added.", missing: "Some spending cannot be forecast from the available history; the projection includes only calculable items." },
     zh: { heading: "刚才预测的计算方式", now: "余额日期", pace: "日均支出", future: "后续预计支出", days: "天", other: "情景中其他净调整", end: "预计余额", note: "根据已记录的历史支出估算；未增加情景以外的新收入。", missing: "部分支出历史不足，预测仅包含可计算的项目。" },
   }[lang];
-  const money = (value: number, currency: string) => `${new Intl.NumberFormat(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: currency === "VND" ? 0 : 2 }).format(value)} ${currency}`;
+  const money = (value: number, currency: string) => `${new Intl.NumberFormat("en-US", { maximumFractionDigits: currency === "VND" ? 0 : 2 }).format(value)} ${currency}`;
   return [labels.heading, ...result.wallets.map(wallet => {
     const estimate = result.estimatedSpending.find(item => item.walletId === wallet.walletId && item.currency === wallet.currency);
     const spending = estimate?.amount || 0;

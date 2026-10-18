@@ -19,7 +19,7 @@ test("October 18 forecast reconciles 837000 spent, 13 future days and the displa
   assert.equal(result.estimatedSpending[0].amount, 604_500);
   assert.equal(result.wallets[0].projectedBalance, 8_558_500);
   const explanation = scenarioCalculationExplanation(result, plan, app.wallets, "2026-10-18", "vi");
-  for (const number of ["9.163.000 VND", "46.500 VND", "604.500 VND", "8.558.500 VND", "13 ngày"]) assert.ok(explanation.includes(number), number);
+  for (const number of ["9,163,000 VND", "46,500 VND", "604,500 VND", "8,558,500 VND", "13 ngày"]) assert.ok(explanation.includes(number), number);
   assert.doesNotMatch(explanation, /Giả định\/giới hạn|danh mục có tổng chi cao nhất/i);
   assert.deepEqual(app, before);
 });
@@ -223,9 +223,9 @@ test("answers wallet-wide spending queries with deterministic per-currency total
   const answer = answerFinancialQuery({ action: "spending_summary", walletId: null, scope: "all", periodStart: "2026-10-01", periodEnd: "2026-10-14", category: null, searchTerm: null, transactionType: null }, app, "vnd", "2026-10-14");
   assert.match(answer, /VND/);
   assert.match(answer, /USD/);
-  assert.match(answer, /100\.000 VND/);
+  assert.match(answer, /100,000 VND/);
   assert.doesNotMatch(answer, /Giả định\/giới hạn/);
-  assert.doesNotMatch(answer, /500\.100/);
+  assert.doesNotMatch(answer, /500,100/);
 });
 
 test("answers transaction follow-ups using the requested date and category filters", () => {
