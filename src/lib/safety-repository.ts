@@ -1,5 +1,5 @@
 import type { Pool, PoolClient } from "pg";
-import { advanceSafety, emptySafetyDocument, type SafetyDocument, type SafetyEvent } from "./safety-model";
+import { advanceSafety, emptySafetyDocument, type SafetyDocument, type SafetyEvent, type SafetyRule } from "./safety-model";
 import { evaluateSafety, safetySnapshot } from "./safety-model";
 import { readFinanceTables, writeAlertRules } from "./finance-tables";
 import type { AppState } from "../components/sites/rolly/replica/store";
@@ -57,6 +57,7 @@ export class SafetyError extends Error {
 export type SafetyRepository = {
   read(userId: string): Promise<SafetyDocument>;
   mutate(userId: string, revision: number, action: string, change: (doc: SafetyDocument) => SafetyDocument, readIds?: readonly string[]): Promise<SafetyDocument>;
+  ensureSnapshotTargets?: (userId: string, rules: SafetyRule[]) => void;
 };
 async function activeUser(client: PoolClient, userId: string) {
   const user = await client.query('SELECT id FROM "user" WHERE id=$1 FOR SHARE', [userId]);
@@ -114,6 +115,85 @@ export function safetyRepository(pool: Pool): SafetyRepository {
         next.events = await events(client, userId);
         await client.query("COMMIT"); return next;
       } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
+    },
+  };
+}
+
+export function createInMemorySafetyRepository(): SafetyRepository & { ensureSnapshotTargets?: (userId: string, rules: SafetyRule[]) => void } {
+  const documents = new Map<string, SafetyDocument>();
+
+  function getDoc(userId: string): SafetyDocument {
+    let doc = documents.get(userId);
+    if (!doc) {
+      doc = emptySafetyDocument();
+      doc.snapshot = {
+        wallets: [
+          { id: "default", name: "Ví chính", currency: "VND", initial: 50_000_000, archived: false },
+        ],
+        transactions: [],
+        budgets: [
+          { id: "budget-monthly", title: "Ngân sách tháng", amount: 15_000_000, currency: "VND", wallet: "default", category: "Mọi danh mục", date: new Date().toISOString().slice(0, 10), cycle: "monthly" },
+        ],
+        language: "vi",
+        timeZone: "Asia/Ho_Chi_Minh",
+      };
+      doc.sourceId = "local-demo";
+      doc.syncedAt = new Date().toISOString();
+      documents.set(userId, doc);
+    }
+    return doc;
+  }
+
+  function ensureTargets(userId: string, rules: SafetyRule[]) {
+    const doc = getDoc(userId);
+    if (!doc.snapshot) return;
+    for (const r of rules) {
+      if (r.kind === "reserve") {
+        if (!doc.snapshot.wallets.some((w) => w.id === r.targetId)) {
+          doc.snapshot.wallets.push({ id: r.targetId, name: r.name || "Ví tiền", currency: "VND", initial: 50_000_000, archived: false });
+        }
+      } else if (r.kind === "budget") {
+        let wallet = doc.snapshot.wallets[0];
+        if (!wallet) {
+          wallet = { id: "default", name: "Ví chính", currency: "VND", initial: 50_000_000, archived: false };
+          doc.snapshot.wallets.push(wallet);
+        }
+        if (!doc.snapshot.budgets.some((b) => b.id === r.targetId)) {
+          doc.snapshot.budgets.push({
+            id: r.targetId,
+            title: r.name || "Ngân sách",
+            amount: 10_000_000,
+            currency: wallet.currency,
+            wallet: wallet.id,
+            category: "Mọi danh mục",
+            date: new Date().toISOString().slice(0, 10),
+            cycle: "monthly",
+          });
+        }
+      }
+    }
+  }
+
+  return {
+    ensureSnapshotTargets(userId: string, rules: SafetyRule[]) {
+      ensureTargets(userId, rules);
+    },
+    async read(userId: string) {
+      const doc = getDoc(userId);
+      return advanceSafety(doc, new Date());
+    },
+    async mutate(userId: string, revision: number, action: string, change: (doc: SafetyDocument) => SafetyDocument, readIds?: readonly string[]) {
+      const current = getDoc(userId);
+      if (current.revision !== revision) throw new SafetyError("CONFLICT");
+      const updated = change(current);
+      if (action === "read" && readIds) {
+        for (const e of updated.events) {
+          if (readIds.includes(e.id)) e.read = true;
+        }
+      }
+      const next = advanceSafety({ ...updated, revision: current.revision + 1 }, new Date());
+      documents.set(userId, next);
+      return next;
     },
   };
 }

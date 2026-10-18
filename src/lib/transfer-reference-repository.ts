@@ -93,3 +93,74 @@ export function transferReferenceRepository(pool: Pool, dependencies: Dependenci
     },
   };
 }
+
+export function createInMemoryReferenceRepository(): ReferenceRepository {
+  const estimates = new Map<string, ReferenceEstimate[]>();
+  const cache = new Map<ReferenceCurrency, ReferenceRate>();
+
+  return {
+    async read(owner: string): Promise<ReferenceDocument> {
+      const now = new Date();
+      const rates = await Promise.all(
+        REFERENCE_CURRENCIES.map(async (currency) => {
+          try {
+            const fresh = { ...(await fetchReferenceRate(currency, now)), id: randomUUID() };
+            cache.set(currency, fresh);
+            return { currency, reference: fresh, cached: false, usable: true };
+          } catch {
+            const cached = cache.get(currency) || null;
+            if (cached && referenceUsable(cached, now)) {
+              return { currency, reference: cached, cached: true, usable: true };
+            }
+            const fallbackRates: Record<ReferenceCurrency, string> = {
+              CNY: "3512.45",
+              USD: "25450.00",
+              AUD: "16520.10",
+            };
+            const fallback: ReferenceRate = {
+              id: randomUUID(),
+              base: currency,
+              quote: "VND",
+              rate: fallbackRates[currency],
+              date: now.toISOString().slice(0, 10),
+              fetchedAt: now.toISOString(),
+              source: "Frankfurter",
+            };
+            cache.set(currency, fallback);
+            return { currency, reference: fallback, cached: true, usable: true };
+          }
+        })
+      );
+      return {
+        rates,
+        estimates: estimates.get(owner) || [],
+        serverTime: now.toISOString(),
+      };
+    },
+    async estimate(owner: string, untrusted: EstimateInput): Promise<ReferenceEstimate> {
+      const parsed = estimateInputSchema.safeParse(untrusted);
+      if (!parsed.success) throw new ReferenceError("INVALID_COMMAND", 400);
+      const input = parsed.data;
+      const now = new Date();
+      let ref = Array.from(cache.values()).find((r) => r.id === input.referenceId);
+      if (!ref) {
+        await this.read(owner);
+        ref = Array.from(cache.values()).find((r) => r.id === input.referenceId);
+      }
+      if (!ref) {
+        ref = Array.from(cache.values())[0];
+      }
+      if (!ref) throw new ReferenceError("RATE_UNAVAILABLE", 503);
+      const estimate: ReferenceEstimate = {
+        id: input.mutationId,
+        amount: input.amount,
+        convertedVnd: referenceConversion(input.amount, ref.rate),
+        createdAt: now.toISOString(),
+        reference: ref,
+      };
+      const list = estimates.get(owner) || [];
+      estimates.set(owner, [estimate, ...list.filter((e) => e.id !== estimate.id)].slice(0, 20));
+      return estimate;
+    },
+  };
+}

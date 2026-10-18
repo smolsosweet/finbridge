@@ -635,9 +635,10 @@ export function normalizePlannerResponse(
 
   const raw = (rawDecoded && typeof rawDecoded === "object" ? rawDecoded : {}) as Record<string, unknown>;
 
-  let intent: "financial_query" | "scenario" | "general_advice" | "clarification" | "unsupported" =
+  type IntentType = "financial_query" | "scenario" | "general_advice" | "clarification" | "unsupported";
+  const intent: IntentType =
     typeof raw.intent === "string" && ["financial_query", "scenario", "general_advice", "clarification", "unsupported"].includes(raw.intent)
-      ? (raw.intent as any)
+      ? (raw.intent as IntentType)
       : parsedExpr.intentHint || "scenario";
 
   let reply = typeof raw.reply === "string" ? raw.reply.trim().slice(0, 2000) : "";

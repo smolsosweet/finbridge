@@ -176,3 +176,155 @@ export function internationalTransferRepository(pool: Pool, clock: () => Date = 
     },
   };
 }
+
+export function createInMemoryTransferRepository(): TransferRepository {
+  const documents = new Map<string, TransferDocument>();
+
+  function getDoc(owner: string): TransferDocument {
+    let doc = documents.get(owner);
+    if (!doc) {
+      doc = {
+        mode: "sandbox",
+        sandboxEnabled: true,
+        paused: false,
+        reserve: TRANSFER_RESERVE,
+        accounts: [
+          { id: "ALIPAY", opening: TRANSFER_OPENING, spent: 0, balance: TRANSFER_OPENING },
+          { id: "BANK_A", opening: TRANSFER_OPENING, spent: 0, balance: TRANSFER_OPENING },
+        ],
+        bills: [],
+        quotes: [],
+        plans: [],
+        receipts: [],
+        audit: [],
+        serverTime: new Date().toISOString(),
+        hasMore: false,
+      };
+      documents.set(owner, doc);
+    }
+    return doc;
+  }
+
+  return {
+    async read(owner: string): Promise<TransferDocument> {
+      const doc = getDoc(owner);
+      return { ...doc, serverTime: new Date().toISOString() };
+    },
+    async mutate(owner: string, command: TransferCommand): Promise<TransferDocument & { resultId?: string }> {
+      const doc = getDoc(owner);
+      const now = new Date();
+      let resultId: string | undefined;
+
+      switch (command.action) {
+        case "saveBill": {
+          if (command.id) {
+            const index = doc.bills.findIndex((b) => b.id === command.id);
+            if (index < 0) throw new TransferError("NOT_FOUND", 404);
+            const existing = doc.bills[index];
+            if (doc.plans.some((p) => p.bill.id === existing.id && p.status === "completed")) {
+              throw new TransferError("ALREADY_COMPLETED", 400);
+            }
+            doc.bills[index] = {
+              ...command.bill,
+              id: existing.id,
+              version: (command.version || existing.version) + 1,
+              archived: existing.archived,
+              createdAt: existing.createdAt,
+            };
+          } else {
+            if (doc.bills.some((b) => b.schoolId === command.bill.schoolId && b.reference === command.bill.reference)) {
+              throw new TransferError("DUPLICATE_REFERENCE", 400);
+            }
+            doc.bills.unshift({
+              ...command.bill,
+              id: randomUUID(),
+              version: 1,
+              archived: false,
+              createdAt: now.toISOString(),
+            });
+          }
+          break;
+        }
+        case "archiveBill": {
+          const b = doc.bills.find((item) => item.id === command.id);
+          if (!b) throw new TransferError("NOT_FOUND", 404);
+          b.archived = command.archived;
+          break;
+        }
+        case "quote": {
+          const b = doc.bills.find((item) => item.id === command.id);
+          if (!b) throw new TransferError("NOT_FOUND", 404);
+          if (doc.plans.some((p) => p.bill.id === b.id && p.status === "completed")) {
+            throw new TransferError("ALREADY_COMPLETED", 400);
+          }
+          const quotes: TransferQuote[] = TRANSFER_PROVIDERS.map((p) => quoteTransfer(b, p, now, randomUUID()));
+          doc.quotes = [...doc.quotes.filter((q) => q.billId !== b.id), ...quotes];
+          break;
+        }
+        case "draft": {
+          const q = doc.quotes.find((item) => item.id === command.quoteId);
+          if (!q) throw new TransferError("NOT_FOUND", 404);
+          if (!q.eligible) throw new TransferError("CHANNEL_UNAVAILABLE", 400);
+          const b = doc.bills.find((item) => item.id === q.billId);
+          if (!b) throw new TransferError("NOT_FOUND", 404);
+          const account = doc.accounts.find((a) => a.id === q.provider);
+          if (account && account.balance - q.total < doc.reserve) {
+            throw new TransferError("INSUFFICIENT_RESERVE", 400);
+          }
+          const p: TransferPlan = {
+            id: randomUUID(),
+            bill: b,
+            quote: q,
+            status: "review",
+            createdAt: now.toISOString(),
+          };
+          doc.plans.unshift(p);
+          resultId = p.id;
+          break;
+        }
+        case "approve": {
+          const p = doc.plans.find((item) => item.id === command.id);
+          if (!p) throw new TransferError("NOT_FOUND", 404);
+          p.status = "approved";
+          p.approvedAt = now.toISOString();
+          break;
+        }
+        case "execute": {
+          const p = doc.plans.find((item) => item.id === command.id);
+          if (!p) throw new TransferError("NOT_FOUND", 404);
+          if (p.status !== "approved") throw new TransferError("APPROVAL_REQUIRED", 400);
+          p.status = "completed";
+          p.completedAt = now.toISOString();
+          p.receiptId = randomUUID();
+          const account = doc.accounts.find((a) => a.id === p.quote.provider);
+          if (account) {
+            p.balanceBefore = account.balance;
+            account.spent += p.quote.total;
+            account.balance -= p.quote.total;
+            p.balanceAfter = account.balance;
+          }
+          doc.receipts.unshift(p);
+          doc.audit.unshift({
+            id: randomUUID(),
+            event: "completed",
+            targetId: p.id,
+            createdAt: now.toISOString(),
+          });
+          break;
+        }
+        case "cancel": {
+          const p = doc.plans.find((item) => item.id === command.id);
+          if (!p) throw new TransferError("NOT_FOUND", 404);
+          p.status = "cancelled";
+          break;
+        }
+        case "pause": {
+          doc.paused = command.paused;
+          break;
+        }
+      }
+
+      return { ...doc, resultId, serverTime: now.toISOString() };
+    },
+  };
+}
