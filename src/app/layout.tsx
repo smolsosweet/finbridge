@@ -15,7 +15,16 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "FinBridge · Your financial workspace",
   description: "Your money, your decisions. Track your everyday finances with FinBridge.",
-  icons: { icon: "/finbridge-icon.svg" },
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/mascots/finbridge-penguin-logo-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/mascots/finbridge-penguin-logo-64.png", sizes: "64x64", type: "image/png" },
+      { url: "/finbridge-icon.svg", type: "image/svg+xml" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/mascots/finbridge-penguin-logo-128.png",
+  },
 };
 
 export default function RootLayout({
