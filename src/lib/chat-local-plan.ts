@@ -1,8 +1,14 @@
 import type { AppState, ChatMessage } from "../components/sites/rolly/replica/store";
 import { financialOutlook } from "./financial-outlook";
 export function modelHistory(messages: ChatMessage[]) {
-  // Local planning facts and personalized copy never enter Gemini's history.
-  return messages.filter(m => !m.localOnly).slice(-8).map(({ role, text }) => ({ role, text: text.slice(0, 600) }));
+  // Never send locally computed amounts to Gemini. Preserve only non-sensitive
+  // entity/date metadata so follow-ups such as "that category" can be resolved.
+  return messages.filter(m => !m.localOnly || m.financialContext || m.scenarios).slice(-8).map(({ role, text, localOnly, financialContext, scenarios }) => ({
+    role,
+    text: scenarios?.length ? `Previous hypothetical assumptions only (recalculate from current data): ${JSON.stringify(scenarios)}`.slice(0, 1000) : localOnly && financialContext
+      ? `Previous financial result context (recalculate from current data; do not reuse prior amounts): action=${financialContext.action}; category=${financialContext.category || "unspecified"}; period=${financialContext.periodStart || "default"}..${financialContext.periodEnd || "default"}; percentage=${financialContext.percentage ?? "unspecified"}.`
+      : text.slice(0, 600),
+  }));
 }
 export function localPlanReply(state: AppState, asOf: string, walletIds?: string[]) {
   const lang = /中文|zh/.test(String(state.settings.language)) ? "zh" : /Việt|vi/.test(String(state.settings.language)) ? "vi" : "en";

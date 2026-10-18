@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTimeoutTransactionDraft, editDraftById, inferDraftCategory, isNewTransactionMessage, matchDraftCategoryAnswer, readyDrafts, removeDraftById, requestedDraftCategory, validateAndCommitDrafts, validateDraftForState } from "../src/lib/transaction-drafts.ts";
+import { applyDraftAmountCorrection, categoryResolutionDraftIds, createTimeoutTransactionDraft, editDraftById, formatTransactionMoney, inferDraftCategory, isNewTransactionMessage, isValidDraftCategoryName, matchDraftCategoryAnswer, parseDraftAmountCorrection, parseTransactionAmounts, readyDrafts, reconcileTransactionDraftAmounts, removeDraftById, requestedDraftCategory, similarDraftCategories, validateAndCommitDrafts, validateDraftForState } from "../src/lib/transaction-drafts.ts";
 import { inferTransactionCurrency, resolveExplicitWallet, resolveUniqueCurrencyWallet } from "../src/lib/transaction-currency.ts";
+import { answerFinancialQuery, asksForAllWalletBalances, resolveFinancialFollowup } from "../src/lib/financial-chat.ts";
+import { modelHistory } from "../src/lib/chat-local-plan.ts";
 
 const state = () => ({
   wallets: [{ id: "cash", currency: "VND" }, { id: "usd", currency: "USD" }, { id: "old", currency: "VND", archived: true }],
@@ -11,6 +13,27 @@ const state = () => ({
 });
 const draft = (overrides = {}) => ({
   id: "batch-1:0", title: "Ăn cơm tấm", amount: 35_000, type: "expense", category: "Thức ăn & Đồ uống", date: "2026-10-12", wallet: "cash", currency: "VND", needsReview: [], ...overrides,
+});
+
+test("restores inline resolution for a saved fallback missing type and category without duplicating controls", () => {
+  const app = state();
+  const pending = validateDraftForState(draft({ title: "học thêm", amount: 100_000, type: null, category: null }), app);
+  const messages = [{ draftIds: [pending.id] }];
+  assert.deepEqual(categoryResolutionDraftIds(messages, 0, [pending]), [pending.id]);
+  assert.deepEqual(readyDrafts([pending], app), []);
+  const expense = editDraftById([pending], pending.id, { type: "expense" }, app)[0];
+  assert.deepEqual(categoryResolutionDraftIds(messages, 0, [expense]), [pending.id]);
+  const resolved = editDraftById([expense], expense.id, { category: "Mua sắm" }, app)[0];
+  for (const key of ["amount", "currency", "date", "wallet", "title"]) assert.equal(resolved[key], pending[key]);
+  assert.deepEqual(categoryResolutionDraftIds(messages, 0, [resolved]), []);
+  assert.equal(app.transactions.length, 0);
+  const repeated = [...messages, { draftIds: [pending.id], categoryChoiceDraftIds: [pending.id] }];
+  assert.deepEqual(categoryResolutionDraftIds(repeated, 0, [pending]), []);
+  assert.deepEqual(categoryResolutionDraftIds(repeated, 1, [pending]), [pending.id]);
+  assert.deepEqual(categoryResolutionDraftIds(repeated, 1, []), []);
+  const committed = validateAndCommitDrafts(app, [resolved]);
+  assert.equal(committed.state.transactions[0].category, "Mua sắm");
+  assert.equal(committed.state.transactions[0].amount, 100_000);
 });
 
 test("validates multiple normalized VND drafts and relative-date result before commit", () => {
@@ -24,6 +47,36 @@ test("validates multiple normalized VND drafts and relative-date result before c
   assert.deepEqual(result.committed, ["batch-1:0", "batch-1:1"]);
   assert.equal(result.state.transactions.length, 2);
   assert.equal(result.state.transactions[1].amount, 45_000);
+});
+
+test("a staged medical category closes stale choices and requires only a compatible wallet before confirmation", () => {
+  const app = state();
+  const pending = validateDraftForState(draft({ title: "Bệnh viện Quận 1", amount: 129_600, date: "2019-10-16", category: null, newCategory: { name: "Y tế", type: "expense" }, wallet: null }), app);
+  const messages = [{ draftIds: [pending.id], categoryChoiceDraftIds: [pending.id] }];
+  assert.deepEqual(pending.needsReview, ["wallet"]);
+  assert.deepEqual(categoryResolutionDraftIds(messages, 0, [pending]), []);
+  assert.deepEqual(readyDrafts([pending], app), []);
+  assert.deepEqual(validateAndCommitDrafts(app, [pending]).committed, []);
+  assert.equal(app.categories.includes("Y tế"), false);
+  const wrongCurrency = editDraftById([pending], pending.id, { wallet: "usd" }, app)[0];
+  assert.equal(wrongCurrency.wallet, null); assert.equal(wrongCurrency.currency, "VND");
+  const selected = editDraftById([pending], pending.id, { wallet: "cash" }, app)[0];
+  assert.deepEqual(selected.needsReview, []); assert.equal(readyDrafts([selected], app).length, 1);
+  const saved = validateAndCommitDrafts(app, [selected]);
+  assert.equal(saved.state.categories.filter(name => name === "Y tế").length, 1);
+  assert.equal(saved.state.transactions[0].category, "Y tế");
+  assert.equal(saved.state.transactions[0].wallet, "cash"); assert.equal(saved.state.transactions[0].amount, 129_600);
+  assert.equal(saved.state.transactions[0].date, "2019-10-16");
+  assert.deepEqual(validateAndCommitDrafts(saved.state, [selected]).committed, []);
+});
+
+test("resolved existing categories close choices without hiding another unresolved draft", () => {
+  const app = state(), unresolved = validateDraftForState(draft({ id: "other", category: null }), app);
+  const resolved = validateDraftForState(draft(), app);
+  const messages = [{ draftIds: [resolved.id, unresolved.id], categoryChoiceDraftIds: [resolved.id, unresolved.id] }];
+  assert.deepEqual(categoryResolutionDraftIds(messages, 0, [resolved, unresolved]), [unresolved.id]);
+  const cleared = editDraftById([resolved], resolved.id, { category: null }, app)[0];
+  assert.deepEqual(categoryResolutionDraftIds(messages, 0, [cleared, unresolved]), [resolved.id, unresolved.id]);
 });
 
 test("allows approving one draft, then all remaining valid drafts", () => {
@@ -70,12 +123,73 @@ test("clarifications match categories and a new transaction is not attached to t
   app.categoryMeta["Học phí"] = { type: "expense" };
   const pending = draft({ category: null, needsReview: ["category"] });
   assert.equal(matchDraftCategoryAnswer("danh mục học phí", pending, app), "Học phí");
+  assert.equal(matchDraftCategoryAnswer("chọn Ăn uống", draft({ category: null }), app), "Thức ăn & Đồ uống");
+  app.categories.push("Khác"); app.categoryMeta["Khác"] = { type: "expense" };
+  assert.equal(matchDraftCategoryAnswer("choose Other", draft({ category: null }), app), "Khác");
+  assert.equal(requestedDraftCategory("tạo danh mục Đồ dùng cá nhân"), "Đồ dùng cá nhân");
+  assert.equal(requestedDraftCategory("tạo danh mục mới Đồ dùng cá nhân"), "Đồ dùng cá nhân");
+  assert.equal(requestedDraftCategory("create a new category Personal Care"), "Personal Care");
+  assert.equal(isValidDraftCategoryName("Đồ dùng cá nhân"), true);
+  assert.equal(isValidDraftCategoryName("__proto__"), false);
+  assert.deepEqual(similarDraftCategories("Mua sam", app.categories), ["Mua sắm"]);
   assert.equal(isNewTransactionMessage("học phí"), false, "category-only replies are not treated as new transactions");
   assert.equal(requestedDraftCategory("danh mục học phí"), "học phí");
   assert.equal(inferDraftCategory("đóng học phí 10 triệu", "expense", app), "Học phí");
   assert.equal(inferDraftCategory("ăn cơm hôm qua hết 10 ngàn", "expense", app), "Thức ăn & Đồ uống");
   assert.equal(isNewTransactionMessage("ăn cơm hôm qua hết 10 ngàn"), true);
   assert.equal(isNewTransactionMessage("ngày hôm qua"), false);
+});
+
+test("new categories stay temporary until valid transaction confirmation and then persist to selectors", () => {
+  const app = state();
+  app.walletCategories = { cash: ["Thức ăn & Đồ uống", "Mua sắm", "Lương"] };
+  const pending = draft({ category: null, newCategory: { name: "Đồ dùng cá nhân", type: "expense" }, needsReview: ["category"] });
+  const checked = validateDraftForState(pending, app);
+  assert.equal(checked.needsReview.includes("category"), false);
+  assert.equal(readyDrafts([checked], app).length, 1);
+  assert.equal(app.categories.includes("Đồ dùng cá nhân"), false, "category creation is still draft-only before confirmation");
+  const cancelled = removeDraftById([checked], checked.id);
+  assert.equal(cancelled.length, 0);
+  assert.equal(app.categories.includes("Đồ dùng cá nhân"), false, "abandoning the draft does not persist the category");
+
+  const result = validateAndCommitDrafts(app, [checked]);
+  assert.deepEqual(result.committed, [checked.id]);
+  assert.equal(result.state.categories.includes("Đồ dùng cá nhân"), true);
+  assert.equal(result.state.categoryMeta["Đồ dùng cá nhân"].type, "expense");
+  assert.equal(result.state.walletCategories.cash.includes("Đồ dùng cá nhân"), true);
+  assert.equal(result.state.transactions[0].category, "Đồ dùng cá nhân");
+  const retry = validateAndCommitDrafts(result.state, [checked]);
+  assert.deepEqual(retry.committed, [], "repeated confirmation does not create a second transaction");
+  assert.equal(retry.state.categories.filter((name) => name === "Đồ dùng cá nhân").length, 1);
+});
+
+test("category resolution keeps multiple drafts separate and rejects duplicate or mismatched category types", () => {
+  const app = state();
+  const first = draft({ id: "multi:0", title: "Khám bệnh", category: null, newCategory: { name: "Sức khỏe", type: "expense" }, needsReview: ["category"] });
+  const second = draft({ id: "multi:1", title: "Tiền thưởng", type: "income", category: null, newCategory: { name: "Thưởng", type: "income" }, needsReview: ["category"] });
+  const selectedCategory = matchDraftCategoryAnswer("chọn Ăn uống", draft({ id: "multi:0", title: "Khám bệnh", category: null }), app);
+  const updatedDrafts = editDraftById([draft({ id: "multi:0", category: null, needsReview: ["category"] }), draft({ id: "multi:1", category: null, needsReview: ["category"] })], "multi:0", { category: selectedCategory }, app);
+  assert.equal(updatedDrafts[0].category, "Thức ăn & Đồ uống");
+  assert.equal(updatedDrafts[1].category, null, "a category choice only updates its target draft");
+  assert.equal(updatedDrafts[0].amount, 35_000);
+  assert.equal(updatedDrafts[0].currency, "VND");
+  const committed = validateAndCommitDrafts(app, [first, second]);
+  assert.deepEqual(committed.committed, ["multi:0", "multi:1"]);
+  assert.deepEqual(committed.state.transactions.map((item) => item.category), ["Sức khỏe", "Thưởng"]);
+  assert.deepEqual(committed.state.categories.slice(-2), ["Sức khỏe", "Thưởng"]);
+
+  const duplicateState = state();
+  const duplicate = draft({ category: null, newCategory: { name: "thức ăn & đồ uống", type: "expense" }, needsReview: ["category"] });
+  const duplicateResult = validateAndCommitDrafts(duplicateState, [duplicate]);
+  assert.deepEqual(duplicateResult.committed, [duplicate.id]);
+  assert.equal(duplicateResult.state.categories.length, duplicateState.categories.length, "case-insensitive duplicate resolves to the existing category");
+  assert.equal(duplicateResult.state.transactions[0].category, "Thức ăn & Đồ uống");
+
+  const invalid = draft({ category: null, newCategory: { name: "Lương", type: "expense" }, needsReview: ["category"] });
+  const invalidResult = validateAndCommitDrafts(state(), [invalid]);
+  assert.deepEqual(invalidResult.committed, [], "a name owned by a different transaction type is not assigned");
+  assert.equal(invalidResult.state.categories.includes("Lương"), true);
+  assert.equal(invalidResult.state.transactions.length, 0);
 });
 
 test("timeout fallback drafts preserve explicit amount and date, and request missing category and wallet", () => {
@@ -99,9 +213,61 @@ test("detects Vietnamese currency wording without confusing ordinary words", () 
   assert.equal(inferTransactionCurrency("chi 25 nghìn tiền ăn"), "VND");
   assert.equal(inferTransactionCurrency("trả 10 đô la"), "USD");
   assert.equal(inferTransactionCurrency("spent 20 dollars"), "USD");
+  assert.equal(inferTransactionCurrency("chi 25k USD"), "USD", "an explicit currency after shorthand takes precedence");
   assert.equal(inferTransactionCurrency("mua đồ giá 5 tệ"), "CNY");
+  assert.equal(inferTransactionCurrency("chi 1,5 triệu"), "VND");
   assert.equal(inferTransactionCurrency("do tôi quên mang ví"), null);
   assert.equal(inferTransactionCurrency("25k và 10 đô"), null, "conflicting cues require review");
+});
+
+test("normalizes explicit shorthand and currency amounts without mixing their ISO currency", () => {
+  assert.deepEqual(parseTransactionAmounts("ăn sáng 25k"), [{ amount: 25_000, currency: "VND" }]);
+  assert.deepEqual(parseTransactionAmounts("mua áo hết 350k"), [{ amount: 350_000, currency: "VND" }]);
+  assert.deepEqual(parseTransactionAmounts("đóng học phí 1,5 triệu"), [{ amount: 1_500_000, currency: "VND" }]);
+  assert.deepEqual(parseTransactionAmounts("spent 20 USD"), [{ amount: 20, currency: "USD" }]);
+  assert.deepEqual(parseTransactionAmounts("mua đồ hết 5 tệ"), [{ amount: 5, currency: "CNY" }]);
+  assert.deepEqual(parseTransactionAmounts("paid $1,250.50"), [{ amount: 1_250.5, currency: "USD" }]);
+  assert.deepEqual(parseTransactionAmounts("chi 25k USD"), [{ amount: 25_000, currency: "USD" }]);
+  assert.equal(formatTransactionMoney(350_000, "VND"), "350.000 VND");
+  assert.equal(formatTransactionMoney(20, "USD"), "20,00 USD");
+  assert.equal(formatTransactionMoney(5, "CNY"), "5,00 CNY");
+});
+
+test("binds each explicit amount to its draft and asks for review when counts do not match", () => {
+  const drafts = [{ amount: 25, needsReview: [] }, { amount: 50, needsReview: ["amount"] }];
+  const matched = reconcileTransactionDraftAmounts("sáng 25k, trưa 1,5 triệu", drafts);
+  assert.deepEqual(matched.parsedAmounts, [{ amount: 25_000, currency: "VND" }, { amount: 1_500_000, currency: "VND" }]);
+  assert.deepEqual(matched.drafts.map((item) => item.amount), [25_000, 1_500_000]);
+  assert.deepEqual(matched.drafts.map((item) => item.needsReview), [[], []]);
+  const mismatch = reconcileTransactionDraftAmounts("sáng 25k, trưa 50k, tối 70k", drafts);
+  assert.equal(mismatch.mismatch, true);
+  assert.deepEqual(mismatch.drafts.map((item) => item.amount), [null, null]);
+  assert.deepEqual(mismatch.drafts.map((item) => item.needsReview), [["amount"], ["amount"]]);
+});
+
+test("multiple wallets in the same currency remain an unresolved required choice", () => {
+  const app = state();
+  app.wallets.push({ id: "bank-vnd", currency: "VND" });
+  const unresolved = validateDraftForState(draft({ wallet: null, currency: "VND" }), app);
+  assert.equal(unresolved.wallet, null);
+  assert.equal(unresolved.currency, "VND");
+  assert.deepEqual(unresolved.needsReview, ["wallet"]);
+  assert.deepEqual(validateAndCommitDrafts(app, [unresolved]).committed, []);
+  const chosen = editDraftById([unresolved], unresolved.id, { wallet: "bank-vnd", currency: "VND" }, app)[0];
+  assert.equal(readyDrafts([chosen], app).length, 1);
+  const saved = validateAndCommitDrafts(app, [chosen]).state.transactions[0];
+  assert.equal(saved.wallet, "bank-vnd");
+  assert.equal(app.wallets.find((wallet) => wallet.id === saved.wallet)?.currency, "VND", "saved wallet reference preserves the transaction currency");
+  assert.equal(saved.amount, 35_000, "persisted transaction amount stays numeric and does not include a currency symbol");
+});
+
+test("rejects a wallet whose currency conflicts with the draft instead of silently changing it", () => {
+  const app = state();
+  const invalid = validateDraftForState(draft({ wallet: "usd", currency: "VND" }), app);
+  assert.equal(invalid.wallet, null);
+  assert.equal(invalid.currency, "VND");
+  assert.deepEqual(invalid.needsReview, ["wallet"]);
+  assert.deepEqual(validateAndCommitDrafts(app, [invalid]).committed, []);
 });
 
 test("auto-selects only a unique active wallet matching the detected currency", () => {
@@ -114,4 +280,132 @@ test("auto-selects only a unique active wallet matching the detected currency", 
   assert.deepEqual(resolveUniqueCurrencyWallet("10 euro", wallets), { currency: null, walletId: null, ambiguous: false });
   assert.equal(resolveExplicitWallet("chi từ AmericaBank", wallets), "usd");
   assert.equal(resolveExplicitWallet("ghi vào ví tiền mặt", wallets), "cash");
+});
+
+test("detects an explicit amount correction without treating it as a new entry", () => {
+  assert.deepEqual(parseDraftAmountCorrection("Tôi nhầm, là 250k"), { amount: 250_000, currency: "VND" });
+  assert.deepEqual(parseDraftAmountCorrection("Actually, I meant $20"), { amount: 20, currency: "USD" });
+  assert.equal(parseDraftAmountCorrection("250k"), null, "a bare amount does not silently target a draft");
+  assert.equal(parseDraftAmountCorrection("nhầm, là 250k hoặc 300k"), null, "multiple possible corrected values need clarification");
+  const app = state();
+  const pending = draft({ id: "correction:0", amount: 350_000, currency: "VND" });
+  const correction = applyDraftAmountCorrection([pending], pending.id, "Tôi nhầm, là 250k", app);
+  assert.equal(correction?.draft.id, pending.id, "correction keeps the pending draft identity");
+  assert.equal(correction?.draft.amount, 250_000);
+  assert.equal(correction?.draft.currency, "VND");
+  assert.equal(app.transactions.length, 0, "correction does not commit or create a transaction");
+  const once = validateAndCommitDrafts(app, correction ? [correction.draft] : []);
+  const twice = validateAndCommitDrafts(once.state, correction ? [correction.draft] : []);
+  assert.equal(once.state.transactions.length, 1);
+  assert.equal(twice.state.transactions.length, 1, "duplicate confirmations keep one transaction");
+});
+
+function financialFixture() {
+  const items = [100_000, 90_000, 85_000, 80_000, 75_000, 70_000, 127_000].map((amount, index) => ({
+    id: `food-${index}`, title: `Bữa ăn ${index + 1}`, amount, type: "expense", category: "Thức ăn & Đồ uống", date: `2026-10-${String(index + 1).padStart(2, "0")}`, wallet: "vnd", note: "",
+  }));
+  items.push({ id: "shopping-1", title: "Áo", amount: 200_000, type: "expense", category: "Mua sắm", date: "2026-10-10", wallet: "vnd", note: "" });
+  items.push({ id: "usd-food-1", title: "Lunch", amount: 12, type: "expense", category: "Food & Drinks", date: "2026-10-10", wallet: "usd", note: "" });
+  return {
+    wallets: [{ id: "vnd", name: "Vietinbank", currency: "VND", initial: 10_000_000 }, { id: "usd", name: "AmericaBank", currency: "USD", initial: 500 }],
+    transactions: items,
+    goals: [], fixedExpenses: [], settings: { language: "Tiếng Việt", monthStart: "1" },
+  };
+}
+
+test("ranks this-month categories and calculates a contextual 20% reduction from recorded spending", () => {
+  const app = financialFixture();
+  const top = answerFinancialQuery({ action: "top_category", walletId: "vnd", scope: "selected", periodStart: "2026-10-01", periodEnd: "2026-10-18", category: null, searchTerm: null, transactionType: "expense" }, app, "vnd", "2026-10-18");
+  assert.match(top, /Thức ăn & Đồ uống/);
+  assert.match(top, /627\.000/);
+  assert.match(top, /7/);
+  assert.match(top, /76%/);
+  const autoPeriod = answerFinancialQuery({ action: "top_category", walletId: "vnd", scope: "selected", periodStart: null, periodEnd: null, category: null, searchTerm: null, transactionType: "expense" }, app, "vnd", "2026-10-18");
+  assert.match(autoPeriod, /2026-10-01.*2026-10-18/);
+  const savings20 = answerFinancialQuery({ action: "category_savings", walletId: "vnd", scope: "selected", periodStart: "2026-10-01", periodEnd: "2026-10-18", category: "Thức ăn & Đồ uống", searchTerm: null, transactionType: "expense", percentage: 20 }, app, "vnd", "2026-10-18");
+  assert.match(savings20, /125\.400/);
+  assert.match(savings20, /501\.600/);
+  const savings10 = answerFinancialQuery({ action: "category_savings", walletId: "vnd", scope: "selected", periodStart: "2026-10-01", periodEnd: "2026-10-18", category: "Thức ăn & Đồ uống", searchTerm: null, transactionType: "expense", percentage: 10 }, app, "vnd", "2026-10-18");
+  assert.match(savings10, /62\.700/);
+  assert.match(savings10, /564\.300/);
+});
+
+test("enumerates balances by wallet and keeps different currencies separate", () => {
+  const app = financialFixture();
+  const answer = answerFinancialQuery({ action: "balance", walletId: null, scope: "all", periodStart: null, periodEnd: null, category: null, searchTerm: null, transactionType: null }, app, "vnd", "2026-10-18");
+  assert.match(answer, /Vietinbank/);
+  assert.match(answer, /AmericaBank/);
+  assert.match(answer, /USD/);
+  assert.match(answer, /VND|₫/);
+  assert.doesNotMatch(answer, /Tổng số dư|Total balance/);
+  assert.equal(asksForAllWalletBalances("Cho tôi số dư các tài khoản"), true);
+  assert.equal(asksForAllWalletBalances("show balances across all accounts"), true);
+  assert.equal(asksForAllWalletBalances("số dư Vietinbank"), false);
+  const ranking = answerFinancialQuery({ action: "top_category", walletId: null, scope: "all", periodStart: "2026-10-01", periodEnd: "2026-10-18", category: null, searchTerm: null, transactionType: "expense" }, app, "vnd", "2026-10-18");
+  assert.match(ranking, /Vietinbank · Thức ăn & Đồ uống/);
+  assert.match(ranking, /AmericaBank ·/);
+  assert.doesNotMatch(ranking, /total.*USD.*VND|Tổng.*USD.*VND/i);
+});
+
+test("follow-up context keeps category and period references but does not send prior computed amounts", () => {
+  const history = modelHistory([
+    { role: "assistant", text: "Thức ăn & Đồ uống · 627.000 VND", localOnly: true, financialContext: { action: "top_category", category: "Thức ăn & Đồ uống", periodStart: "2026-10-01", periodEnd: "2026-10-18" } },
+    { role: "user", text: "Nếu giảm danh mục đó 20% thì sao?" },
+  ]);
+  assert.equal(history.length, 2);
+  assert.match(history[0].text, /category=Thức ăn & Đồ uống/);
+  assert.match(history[0].text, /period=2026-10-01\.\.2026-10-18/);
+  assert.doesNotMatch(history[0].text, /627/);
+  assert.match(history[1].text, /20%/);
+});
+
+test("category follow-ups change the tool, preserve the period and show every recorded category", () => {
+  const app = financialFixture(), before = structuredClone(app);
+  const query = { action: "spending_summary", walletId: "vnd", scope: "selected", periodStart: null, periodEnd: null, category: "Thức ăn & Đồ uống", searchTerm: null, transactionType: null };
+  const history = modelHistory([{ role: "assistant", text: "old amounts", localOnly: true, financialContext: { action: "spending_summary", periodStart: "2026-10-01", periodEnd: "2026-10-18" } }]);
+  for (const text of ["chi cho những mục gì", "đã chi cho những danh mục nào", "chi gồm những cái gì", "what categories did I spend on?", "where did my money go?", "按类别查看支出"]) {
+    const resolved = resolveFinancialFollowup(text, query, history);
+    assert.equal(resolved.action, "category_breakdown", text);
+    assert.equal(resolved.category, null); assert.equal(resolved.periodStart, "2026-10-01");
+    const answer = answerFinancialQuery(resolved, app, "vnd", "2026-10-18");
+    assert.match(answer, /Thức ăn & Đồ uống: \*\*627\.000 VND/);
+    assert.match(answer, /Mua sắm: \*\*200\.000 VND/);
+    assert.match(answer, /Tổng đã chi: \*\*827\.000 VND/);
+    assert.doesNotMatch(answer, /AmericaBank|USD|Tổng hợp thu chi|₫/);
+  }
+  assert.deepEqual(app, before);
+  const september = resolveFinancialFollowup("đã chi cho những danh mục nào", { ...query, periodStart: "2026-09-01", periodEnd: "2026-09-30" }, history);
+  assert.equal(september.periodStart, "2026-09-01");
+  assert.match(answerFinancialQuery(september, app, "vnd", "2026-10-18"), /Chưa có giao dịch/);
+  assert.equal(resolveFinancialFollowup("Nếu giảm ăn uống 20%", { ...query, action: "category_savings" }, history).action, "category_savings");
+});
+
+test("category breakdown lists more than five categories and isolates wallets and currencies", () => {
+  const app = financialFixture();
+  for (let i = 0; i < 6; i++) app.transactions.push({ id: `extra-${i}`, title: `Item ${i}`, amount: 1_000, category: `Danh mục ${i}`, type: "expense", wallet: "vnd", date: "2026-10-18", note: "" });
+  const query = { action: "category_breakdown", walletId: null, scope: "all", periodStart: "2026-10-01", periodEnd: "2026-10-18", category: null, searchTerm: null, transactionType: "expense" };
+  const answer = answerFinancialQuery(query, app, "vnd", "2026-10-18");
+  for (let i = 0; i < 6; i++) assert.ok(answer.includes(`Danh mục ${i}:`));
+  assert.match(answer, /833\.000 VND/); assert.match(answer, /12 USD/);
+  assert.doesNotMatch(answer, /833\.012/);
+});
+
+test("spending answers count actual expenses only, format each language and respect period boundaries", () => {
+  const app = financialFixture();
+  app.transactions.push(
+    { id: "income", title: "Salary", amount: 5_000_000, category: "Income", type: "income", wallet: "vnd", date: "2026-10-18", note: "" },
+    { id: "future", title: "Future", amount: 100_000, category: "Shopping", type: "expense", wallet: "vnd", date: "2026-10-19", note: "" },
+    { id: "old", title: "Old", amount: 100_000, category: "Shopping", type: "expense", wallet: "vnd", date: "2026-09-30", note: "" },
+  );
+  const query = { action: "spending_summary", walletId: "vnd", scope: "selected", periodStart: "2026-10-01", periodEnd: "2026-10-31", category: null, searchTerm: null, transactionType: null };
+  let answer = answerFinancialQuery(query, app, "vnd", "2026-10-18");
+  assert.match(answer, /827\.000 VND/); assert.match(answer, /8 khoản chi/);
+  assert.match(answer, /5\.000\.000 VND/); assert.match(answer, /2026-10-18/);
+  assert.doesNotMatch(answer, /927\.000|9 khoản chi|₫|USD/);
+  app.settings.language = "English";
+  answer = answerFinancialQuery(query, app, "vnd", "2026-10-18");
+  assert.match(answer, /827,000 VND/); assert.match(answer, /8 expenses/); assert.doesNotMatch(answer, /Bạn|khoản chi/);
+  app.settings.language = "中文";
+  answer = answerFinancialQuery(query, app, "vnd", "2026-10-18");
+  assert.match(answer, /827,000 VND/); assert.match(answer, /8 笔支出/);
 });

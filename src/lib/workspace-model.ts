@@ -20,7 +20,7 @@ export const workspaceSchema = z.object({
   settings: z.record(key, z.union([z.string().max(20000), z.boolean()])),
   walletCategories: z.record(id, z.array(key).max(500)).optional(),
   receiptDraft: z.string().max(3_000_000).optional(),
-  transactionChat: z.object({ messages: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(50000) }).catchall(json)).max(1000), drafts: z.array(z.record(z.string(), json)).max(500), clarifyingDraftId: z.string().nullable() }).optional(),
+  transactionChat: z.object({ messages: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(50000) }).catchall(json)).max(1000), drafts: z.array(z.record(z.string(), json)).max(500), clarifyingDraftId: z.string().nullable(), activeDraftId: z.string().max(100).nullable().optional(), referencedCategories: z.array(z.string().max(100)).max(20).optional() }).optional(),
   planningChat: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(50000) }).catchall(json)).max(100).optional(),
   onboardingDraft: onboardingDraftSchema.optional(),
 }).strict().superRefine((s, ctx) => {

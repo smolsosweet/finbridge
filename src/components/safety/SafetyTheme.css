@@ -1,0 +1,40 @@
+/* Shared safety tokens for portal dialogs; global selectors belong outside CSS Modules. */
+:root,
+.r-dialog,
+.r-wide-dialog {
+  --s-card: #fff;
+  --s-ink: #203343;
+  --s-muted: #64748b;
+  --s-line: #e2e7ef;
+  --s-soft: #f8fafc;
+  --s-accent: #6366f1;
+  --s-alarm: #ef4444;
+  --s-alarm-soft: #fef2f2;
+  --s-alarm-line: #fecaca;
+  --s-ok: #10b981;
+  --s-ok-soft: #ecfdf5;
+  --s-ok-line: #a7f3d0;
+  --s-paused: #64748b;
+  --s-paused-soft: #f1f5f9;
+  --s-paused-line: #cbd5e1;
+}
+
+.r-dark,
+.r-dark .r-dialog,
+.r-dark .r-wide-dialog {
+  --s-card: #1e293b;
+  --s-ink: #f8fafc;
+  --s-muted: #94a3b8;
+  --s-line: #334155;
+  --s-soft: #0f172a;
+  --s-accent: #818cf8;
+  --s-alarm: #f87171;
+  --s-alarm-soft: #451a1a;
+  --s-alarm-line: #7f1d1d;
+  --s-ok: #34d399;
+  --s-ok-soft: #064e3b;
+  --s-ok-line: #065f46;
+  --s-paused: #94a3b8;
+  --s-paused-soft: #1e293b;
+  --s-paused-line: #475569;
+}

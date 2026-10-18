@@ -19,7 +19,9 @@ function detectCurrencyCues(message: string): Set<string> {
 
   if (/(?:\$|\busd\b|\bdollars?\b|\bdo\s+la\b|\b\d[\d.,]*\s*do\b)/i.test(normalized)) detected.add("USD");
   if (/(?:\bcny\b|\brmb\b|\byuan\b|\brenminbi\b|\bnhan\s+dan\s+te\b|\b\d[\d.,]*\s*te\b)/i.test(normalized)) detected.add("CNY");
-  if (/(?:\bvnd\b|\bdong\b|₫|\b\d[\d.,]*\s*(?:k|nghin|ngan|d)\b)/i.test(normalized)) detected.add("VND");
+  const explicitForeignCurrencyAfterShorthand = /\b\d[\d.,]*\s*(?:k|nghin|ngan|trieu|tr)\s*(?:usd|dollars?|dollar|do\s*la|do|cny|rmb|yuan|te)\b/i.test(normalized);
+  if (/(?:\bvnd\b|\bdong\b|₫)/i.test(normalized)
+    || (!explicitForeignCurrencyAfterShorthand && /\b\d[\d.,]*\s*(?:k|nghin|ngan|trieu|tr)\b/i.test(normalized))) detected.add("VND");
 
   return detected;
 }

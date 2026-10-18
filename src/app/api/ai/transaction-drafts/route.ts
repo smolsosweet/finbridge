@@ -87,7 +87,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "UNAUTHENTICATED", message: "Hãy đăng nhập để dùng trợ lý giao dịch." }, { status: 401 });
   }
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED", message: "Máy chủ chưa cấu hình Gemini." }, { status: 503 });
+  if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED", message: "Phân tích giao dịch hiện chưa sẵn sàng. Vui lòng thử lại sau." }, { status: 503 });
 
   let raw: unknown;
   try { raw = await request.json(); }

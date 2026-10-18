@@ -17,13 +17,13 @@ export function Icon({ code, className = "" }: { code: string; className?: strin
 export function EmptyState({ title, text, className = "" }: { title: string; text?: string; className?: string }) {
   return <div className={"r-empty " + className}><Animation name="empty_list" className="r-empty-animation" /><p>{title}</p>{text && <p>{text}</p>}</div>;
 }
-export function Mascot({ greeting, className = "" }: { greeting?: string; className?: string }) {
+export function Mascot({ greeting, className = "", size = 120 }: { greeting?: string; className?: string; size?: number }) {
   return (
     <div className={"r-mascot " + className}>
       {greeting && <p className="r-bubble">{greeting}</p>}
       <div className="r-mascot-lac-wrap r-mascot-3d">
         <FinBridgeMascot
-          size={120}
+          size={size}
           label="Finn, FinBridge Mascot"
         />
       </div>

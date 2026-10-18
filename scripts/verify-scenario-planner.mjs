@@ -3,6 +3,31 @@ import test from "node:test";
 import { calculateScenario, scenarioContext } from "../src/lib/scenario-planner.ts";
 import { answerFinancialQuery } from "../src/lib/financial-chat.ts";
 import { weeklyPeriodStatus, weeklySpendingRows } from "../src/components/sites/rolly/replica/planningModel.ts";
+import { asksForCalculationExplanation, scenarioCalculationExplanation } from "../src/lib/scenario-explanation.ts";
+
+test("October 18 forecast reconciles 837000 spent, 13 future days and the displayed balance", () => {
+  const app = state();
+  app.wallets = [{ id: "vnd", name: "Vietinbank", currency: "VND", initial: 10_000_000, type: "cash" }];
+  app.transactions = [627_000, 200_000, 10_000].map((amount, i) => ({ id: `actual-${i}`, title: `Recorded ${i}`, amount, type: "expense", category: ["Food", "Shopping", "Medical"][i], wallet: "vnd", date: "2026-10-18", note: "" }));
+  app.fixedExpenses = []; app.goals = [];
+  const before = structuredClone(app);
+  const plan = scenario({ changes: [], estimateSpending: true, horizonEnd: "2026-10-31" });
+  const result = calculateScenario(app, plan, "2026-10-18");
+  assert.equal(result.wallets[0].balanceNow, 9_163_000);
+  assert.equal(result.estimatedSpending[0].dailyAverage, 46_500);
+  assert.equal(result.estimatedSpending[0].days, 13);
+  assert.equal(result.estimatedSpending[0].amount, 604_500);
+  assert.equal(result.wallets[0].projectedBalance, 8_558_500);
+  const explanation = scenarioCalculationExplanation(result, plan, app.wallets, "2026-10-18", "vi");
+  for (const number of ["9.163.000 VND", "46.500 VND", "604.500 VND", "8.558.500 VND", "13 ngày"]) assert.ok(explanation.includes(number), number);
+  assert.doesNotMatch(explanation, /Giả định\/giới hạn|danh mục có tổng chi cao nhất/i);
+  assert.deepEqual(app, before);
+});
+
+test("calculation follow-up resolves to the preceding result rather than category ranking", () => {
+  for (const text of ["bạn tính số tiền đó như nào", "bạn tính số tiền đó như thế nào?", "cách tính", "giải thích phép tính", "how did you calculate that?", "怎么算的"]) assert.equal(asksForCalculationExplanation(text), true, text);
+  for (const text of ["danh mục nào nhiều nhất", "nếu mai tôi chi 25k thì sao", "bạn tính tiền ăn tháng trước giúp tôi"]) assert.equal(asksForCalculationExplanation(text), false, text);
+});
 
 const state = () => ({
   wallets: [
@@ -198,7 +223,8 @@ test("answers wallet-wide spending queries with deterministic per-currency total
   const answer = answerFinancialQuery({ action: "spending_summary", walletId: null, scope: "all", periodStart: "2026-10-01", periodEnd: "2026-10-14", category: null, searchTerm: null, transactionType: null }, app, "vnd", "2026-10-14");
   assert.match(answer, /VND/);
   assert.match(answer, /USD/);
-  assert.match(answer, /100,000/);
+  assert.match(answer, /100\.000 VND/);
+  assert.doesNotMatch(answer, /Giả định\/giới hạn/);
   assert.doesNotMatch(answer, /500\.100/);
 });
 
@@ -216,7 +242,7 @@ test("budget questions keep limits separate from actual balance and scheduled bi
   app.settings = { language: "English" };
   const answer = answerFinancialQuery({ action: "budget_status", walletId: "vnd", scope: "selected", periodStart: null, periodEnd: null, category: null, searchTerm: null, transactionType: null }, app, "vnd", "2026-10-14");
   assert.match(answer, /500,000/);
-  assert.match(answer, /Spent ₫0/);
+  assert.match(answer, /Spent 0 VND/);
   assert.match(answer, /200,000/);
   assert.match(answer, /budget limit is not a wallet balance/i);
 });

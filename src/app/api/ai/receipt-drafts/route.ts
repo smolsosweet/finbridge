@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "IMAGE_TOO_LARGE", message: "Ảnh quá lớn. Vui lòng chọn ảnh dưới 5 MB." }, { status: 413 });
   }
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED", message: "Máy chủ chưa cấu hình Gemini." }, { status: 503 });
+  if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED", message: "Đọc hóa đơn hiện chưa sẵn sàng. Vui lòng thử lại sau." }, { status: 503 });
 
   let raw: unknown;
   try { raw = await request.json(); }
@@ -127,9 +127,9 @@ export async function POST(request: Request) {
     const status = error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : null;
     const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
     console.error("[FinBridge AI] receipt failed", { durationMs: Date.now() - startedAt, status, name: error instanceof Error ? error.name : "UnknownError" });
-    if (status === 429) return Response.json({ error: "AI_QUOTA_OR_RATE_LIMIT", message: "Gemini đang giới hạn lượt dùng. Hãy kiểm tra Usage và Rate limits trong AI Studio rồi thử lại." }, { status: 429 });
-    if (status === 503) return Response.json({ error: "AI_BUSY", message: "Gemini đang bận. Vui lòng thử lại sau." }, { status: 503 });
-    if (status === 400 || status === 401 || status === 403) return Response.json({ error: "AI_CONFIGURATION_ERROR", message: "Gemini từ chối yêu cầu đọc ảnh. Hãy kiểm tra API key và quyền truy cập model trong AI Studio." }, { status: 502 });
-    return Response.json({ error: timedOut ? "AI_TIMEOUT" : "AI_REQUEST_FAILED", message: timedOut ? "Gemini đọc ảnh quá lâu. Hãy thử ảnh nhỏ, rõ hơn hoặc gửi lại sau." : "Không thể đọc hóa đơn lúc này. Vui lòng thử lại." }, { status: timedOut ? 504 : 502 });
+    if (status === 429) return Response.json({ error: "AI_QUOTA_OR_RATE_LIMIT", message: "Hiện có quá nhiều yêu cầu. Hãy thử đọc hóa đơn lại sau ít phút." }, { status: 429 });
+    if (status === 503) return Response.json({ error: "AI_BUSY", message: "Dịch vụ đang bận. Vui lòng thử lại sau." }, { status: 503 });
+    if (status === 400 || status === 401 || status === 403) return Response.json({ error: "AI_CONFIGURATION_ERROR", message: "Đọc hóa đơn tạm thời không khả dụng. Vui lòng thử lại sau hoặc liên hệ hỗ trợ." }, { status: 502 });
+    return Response.json({ error: timedOut ? "AI_TIMEOUT" : "AI_REQUEST_FAILED", message: timedOut ? "Đọc hóa đơn mất nhiều thời gian hơn dự kiến. Hãy thử ảnh nhỏ, rõ hơn hoặc gửi lại sau." : "Không thể đọc hóa đơn lúc này. Vui lòng thử lại." }, { status: timedOut ? 504 : 502 });
   }
 }

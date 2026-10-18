@@ -10,6 +10,7 @@ import { evaluateSafety, safetyLanguage, safetyRuleSchema, safetySnapshot, type 
 import { useSafety } from "./SafetyProvider";
 import { SAFETY_COPY } from "./safety-copy";
 import styles from "./SafetyAlerts.module.css";
+import "./SafetyTheme.css";
 
 const EXTRA = {
   en: {

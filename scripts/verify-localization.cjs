@@ -977,21 +977,6 @@ test("Tier 1 & 2: AI Assistant & Chat Drafts Localization (F10)", async (t) => {
 
       const customTransactions = compileFile(path.join(directory, "Transactions.tsx"), (name) => {
         if (name === "./store") return mockStore;
-        if (name === "@/lib/transaction-drafts") {
-          return {
-            readyDrafts: () => [],
-            normalizeVietnameseMessage: (m) => m,
-            isNewTransactionMessage: () => false,
-            validateAndCommitDrafts: () => ({ committed: [], remaining: [] }),
-            validateDraftForState: () => ({ valid: true, missing: [] }),
-            inferDraftCategory: () => null,
-            matchDraftCategoryAnswer: () => null,
-            requestedDraftCategory: () => null,
-            createTimeoutTransactionDraft: () => ({}),
-            editDraftById: () => [],
-            removeDraftById: () => [],
-          };
-        }
         if (name === "@/lib/financial-chat") {
           return { answerFinancialQuery: async () => ({ text: "" }) };
         }

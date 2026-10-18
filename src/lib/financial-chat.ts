@@ -3,8 +3,12 @@ import { budgetSummary, currencyScale, occurrencePayment, plannedOccurrences } f
 import { trackedBalance } from "./financial-outlook";
 
 const normalizeVietnameseMessage = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("vi").replace(/đ/g, "d").trim();
-const symbols: Record<string, string> = { USD: "$", VND: "₫", EUR: "€", GBP: "£", AUD: "A$", SGD: "S$", JPY: "¥" };
-const money = (amount: number, currency: string) => `${symbols[currency] || `${currency} `}${new Intl.NumberFormat("en-US", { maximumFractionDigits: Math.round(Math.log10(currencyScale(currency))) }).format(amount)}`;
+export function asksForAllWalletBalances(message: string): boolean {
+  const text = normalizeVietnameseMessage(message);
+  return /\b(?:tat ca|cac|moi) (?:vi|tai khoan)\b/.test(text)
+    || /\b(?:all|every) (?:my )?(?:wallets|accounts)\b/.test(text)
+    || /\bacross (?:all )?(?:wallets|accounts)\b/.test(text);
+}
 type Language = "vi" | "en" | "zh";
 const copy: Record<Language, { conclusion: string; figures: string; analysis: string; suggestions: string; limits: string; noWallet: string; noTransactions: string; noBudgets: string; assumptions: string; balanceConclusion: string; income: string; expense: string; transferOut: string; transferIn: string; incomplete: string; malformed: string; period: string; wallet: string; summary: (range: string) => string; totalIncome: string; totalExpense: string; noBudgetSuggestion: string; budgetConclusion: string; budgetLimit: string; spent: string; fixed: string; afterFixed: string; over: string; upcoming: string; extraFixed: string; budgetAnalysis: string }> = {
   vi: { conclusion: "Kết luận", figures: "Số liệu liên quan", analysis: "Phân tích", suggestions: "Đề xuất", limits: "Giả định/giới hạn", noWallet: "Chưa có ví đang hoạt động để tính.", noTransactions: "Chưa có giao dịch phù hợp trong khoảng thời gian này.", noBudgets: "Chưa thấy ngân sách phù hợp trong ví đã chọn.", assumptions: "Tính từ dữ liệu đã lưu trong FinBridge; các ví được tính riêng theo tiền tệ, không quy đổi.", balanceConclusion: "Số dư được tính từ số dư ban đầu và giao dịch đã lưu.", income: "Thu", expense: "Chi", transferOut: "Chuyển đi", transferIn: "Chuyển đến", incomplete: "Chuyển khoản khác tiền tệ thiếu số tiền nhận; số dư chưa đầy đủ", malformed: "Bỏ qua giao dịch sai số tiền", period: "Kỳ", wallet: "Ví", summary: (range) => `Tổng hợp thu chi ${range} theo dữ liệu đã ghi nhận.`, totalIncome: "thu", totalExpense: "chi", noBudgetSuggestion: "Tạo ngân sách trong trang Kế hoạch để theo dõi hạn mức và khoản cố định.", budgetConclusion: "Tình hình ngân sách và khoản cố định theo chu kỳ hiện tại.", budgetLimit: "Hạn mức", spent: "Đã chi", fixed: "Chi cố định dự kiến", afterFixed: "Còn sau khoản cố định", over: "Có thể vượt hạn mức", upcoming: "Sắp đến hạn", extraFixed: "Khoản cố định 30 ngày tới chưa gắn ngân sách", budgetAnalysis: "Hạn mức ngân sách không phải số dư ví. Chi cố định được trình bày riêng với khoản đã chi." },
@@ -12,7 +16,7 @@ const copy: Record<Language, { conclusion: string; figures: string; analysis: st
   zh: { conclusion: "结论", figures: "相关数据", analysis: "分析", suggestions: "建议", limits: "假设/限制", noWallet: "没有可用于计算的活跃钱包。", noTransactions: "此时间段没有符合条件的交易。", noBudgets: "所选钱包没有符合条件的预算。", assumptions: "根据 FinBridge 已保存的数据计算；不同币种的钱包分别计算，不进行换算。", balanceConclusion: "余额根据钱包初始余额和已保存交易计算。", income: "收入", expense: "支出", transferOut: "转出", transferIn: "转入", incomplete: "跨币种转账缺少收款金额；此余额不完整", malformed: "已跳过金额无效的交易", period: "期间", wallet: "钱包", summary: (range) => `${range}的已记录收入与支出。`, totalIncome: "收入", totalExpense: "支出", noBudgetSuggestion: "请在计划页面创建预算以跟踪限额和固定支出。", budgetConclusion: "当前周期的预算和固定支出情况。", budgetLimit: "限额", spent: "已支出", fixed: "预计固定支出", afterFixed: "扣除固定支出后剩余", over: "可能超出限额", upcoming: "即将到期", extraFixed: "未来30天内未关联预算的固定支出", budgetAnalysis: "预算限额不等于钱包余额。固定支出与已记录支出分开显示。" },
 };
 export type FinancialState = Pick<AppState, "wallets" | "transactions" | "goals" | "fixedExpenses" | "settings">;
-export type FinancialAction = "balance" | "spending_summary" | "top_category" | "transactions" | "budget_status" | "safe_daily_allowance" | "upcoming_obligations" | "goals" | "spending_trend" | "anomalies" | "explain" | "unknown";
+export type FinancialAction = "balance" | "spending_summary" | "category_breakdown" | "top_category" | "category_savings" | "transactions" | "budget_status" | "safe_daily_allowance" | "upcoming_obligations" | "goals" | "spending_trend" | "anomalies" | "explain" | "unknown";
 export interface FinancialQuery {
   action: FinancialAction;
   actions?: FinancialAction[];
@@ -23,8 +27,25 @@ export interface FinancialQuery {
   category: string | null;
   searchTerm: string | null;
   transactionType: "expense" | "income" | null;
+  percentage?: number | null;
 }
 export interface FinancialHighlight { label: string; amount: number; currency: string; tone?: "positive" | "warning" | "neutral"; }
+
+/** Repair a specific, explicit breakdown request without copying the previous
+ * action. Other financial intents remain the structured model's responsibility. */
+export function resolveFinancialFollowup(message: string, query: FinancialQuery, history: Array<{ role: string; text: string }> = []): FinancialQuery {
+  const text = normalizeVietnameseMessage(message);
+  const breakdown = /\b(?:chi(?: tieu)? (?:cho|vao|theo) (?:nhung |cac )?(?:danh )?muc (?:gi|nao)|chi (?:cho )?(?:nhung |cac )?danh muc nao|chi gom (?:nhung |cac )?(?:cai|muc) gi|danh muc (?:da chi|chi tieu)|spending (?:by|breakdown)|(?:which|what) categories|where did my money go)\b|支出类别|按类别/.test(text);
+  if (!breakdown || !["spending_summary", "category_breakdown", "top_category", "explain", "unknown"].includes(query.action)) return query;
+  if (query.actions && new Set(query.actions).size > 1) return query;
+  // Only inherit an omitted period on a contextual question, never replace an
+  // explicit model-parsed date range or use prior calculated monetary values.
+  const context = [...history].reverse().find(item => item.role === "assistant" && item.text.startsWith("Previous financial result context"));
+  const changesPeriod = /\b(?:thang|tuan|hom|ngay|month|week|today|yesterday|between|since)\b|\d{1,4}[/-]\d{1,2}|本月|上月|今天|本周/.test(text);
+  const period = !changesPeriod ? context?.text.match(/period=(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})/) : null;
+  return { ...query, action: "category_breakdown", actions: ["category_breakdown"], category: null, searchTerm: null, transactionType: "expense",
+    periodStart: query.periodStart || period?.[1] || null, periodEnd: query.periodEnd || period?.[2] || null };
+}
 
 interface QuerySectionResult {
   conclusion: string;
@@ -142,10 +163,12 @@ function addDays(date: string, amount: number) {
 function periodLabel(start: string, end: string, lang: Language) { return start === end ? start : `${start} ${lang === "vi" ? "đến" : lang === "zh" ? "至" : "to"} ${end}`; }
 function render(lang: Language, sections: Partial<Record<"conclusion" | "figures" | "analysis" | "suggestions" | "limits", string>>) {
   const labels = copy[lang];
-  return (["conclusion", "figures", "analysis", "suggestions", "limits"] as const)
-    .filter((key) => sections[key])
-    .map((key) => `${labels[key].toLocaleUpperCase()}\n${sections[key]}`)
-    .join("\n\n");
+  const lines = [sections.conclusion];
+  if (sections.figures) lines.push(`${labels.figures}:\n${sections.figures}`);
+  if (sections.analysis) lines.push(`${labels.analysis}: ${sections.analysis}`);
+  if (sections.suggestions) lines.push(`${labels.suggestions}: ${sections.suggestions}`);
+  if (sections.limits && sections.limits !== labels.assumptions) lines.push(sections.limits);
+  return lines.filter(Boolean).join("\n\n");
 }
 function getLanguage(state: FinancialState): Language {
   const value = String(state.settings?.language || "");
@@ -165,6 +188,7 @@ function answerFinancialQuerySection(
   lang: Language
 ): QuerySectionResult {
   const labels = copy[lang];
+  const money = (amount: number, currency: string) => `${new Intl.NumberFormat(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: Math.round(Math.log10(currencyScale(currency))) }).format(amount)} ${currency}`;
 
   if (action === "balance") {
     const figures = wallets.map((wallet) => {
@@ -217,8 +241,8 @@ function answerFinancialQuerySection(
     });
     if (!records.length) return { conclusion: labels.noTransactions, figures: `• ${labels.period}: ${range}`, limits: labels.assumptions };
     const figures = perWallet.filter(({ own }) => own.length).map(({ wallet, own, income, expense }) =>
-      `• ${walletName(wallet.name, lang)} · ${wallet.currency}: ${labels.totalIncome} ${money(income, wallet.currency)}, ${labels.totalExpense} ${money(expense, wallet.currency)} (${own.length}).`).join("\n");
-    return { conclusion: labels.summary(range), figures, limits: labels.assumptions };
+      `• ${walletName(wallet.name, lang)} · ${wallet.currency}: ${labels.expense} **${money(expense, wallet.currency)}** · ${own.filter(item => item.type === "expense").length} ${localized(lang, "khoản chi", "expenses", "笔支出")}\n  ${labels.income}: ${money(income, wallet.currency)}`).join("\n");
+    return { conclusion: localized(lang, "Đây là số tiền bạn đã chi trong kỳ:", "Here's your recorded spending for this period:", "这是你本期已记录的支出："), figures, analysis: `${labels.period}: ${range}`, limits: wallets.length > 1 ? labels.assumptions : undefined };
   }
 
   if (action === "upcoming_obligations") {
@@ -283,7 +307,7 @@ function answerFinancialQuerySection(
     return { conclusion: localized(lang, "Có " + findings.length + " khoản chi cao ít nhất 3 lần trung vị cùng danh mục trong 90 ngày trước kỳ.", findings.length + " expenses are at least 3× the prior 90-day median for the same category and wallet.", "有" + findings.length + "笔支出至少为过去90天同类别、同钱包中位数的3倍。"), figures: lines.join("\n"), limits: localized(lang, "Đây là điểm cần người dùng xem lại, không khẳng định giao dịch sai hoặc gian lận.", "These are review flags, not claims of error or fraud.", "这些仅供用户复核，不代表交易错误或欺诈。") };
   }
 
-  if (action === "explain" || action === "top_category") {
+  if (action === "explain" || action === "top_category" || action === "category_breakdown") {
     const type = action === "explain" ? "expense" : query.transactionType || "expense";
     const relevant = records.filter((item) => item.type === type && (!query.category || normalizeVietnameseMessage(item.category).includes(normalizeVietnameseMessage(query.category))));
     if (!relevant.length) return { conclusion: query.category ? localized(lang, `Chưa tìm thấy giao dịch phù hợp với danh mục “${query.category}”.`, `No matching transactions were found for category “${query.category}”.`, `没有找到类别“${query.category}”的匹配交易。`) : labels.noTransactions, figures: `• ${labels.period}: ${range}\n• ${labels.wallet}: ${walletLabel}`, limits: labels.assumptions };
@@ -301,15 +325,60 @@ function answerFinancialQuerySection(
       const ranked = [...groups.values()].filter((item) => item.walletId === wallet.id).sort((a, b) => b.amount - a.amount);
       return ranked.length ? [{ wallet, ranked, sum: total(relevant.filter((item) => item.wallet === wallet.id), wallet.currency) }] : [];
     });
+    if (action === "category_breakdown") {
+      const figures = byWallet.map(({ wallet, ranked, sum }) => [
+        `${walletName(wallet.name, lang)} · ${wallet.currency}`,
+        ...ranked.map(item => `• ${item.category}: **${money(item.amount, wallet.currency)}** · ${sum ? Math.round(item.amount / sum * 100) : 0}% · ${item.count} ${localized(lang, "giao dịch", "transactions", "笔交易")}`),
+        `${localized(lang, "Tổng đã chi", "Total spent", "支出合计")}: **${money(sum, wallet.currency)}**`,
+      ].join("\n")).join("\n\n");
+      return { conclusion: localized(lang, "Bạn đã chi cho các danh mục sau:", "Here's where your spending went:", "你的支出分布如下："), figures, analysis: `${labels.period}: ${range}`, limits: wallets.length > 1 ? labels.assumptions : undefined };
+    }
     const figures = byWallet.flatMap(({ wallet, ranked, sum }) => ranked.slice(0, action === "explain" ? 1 : 5).map((item, index) =>
       `• ${walletName(wallet.name, lang)} · ${item.category}: ${money(item.amount, wallet.currency)}${action === "top_category" ? ` (${item.count})` : ` (${sum ? Math.round(item.amount / sum * 100) : 0}%)`}${action === "top_category" ? ` · #${index + 1}` : ""}`)).join("\n");
     const topItem = byWallet[0]?.ranked[0];
     const topWallet = byWallet[0]?.wallet;
     const topSum = byWallet[0]?.sum || 0;
-    const topConclusion = topItem && topWallet
+    let topConclusion = topItem && topWallet
       ? localized(lang, `Trong ${range}, danh mục ${type === "expense" ? "chi" : "thu"} nhiều nhất là “${topItem.category}” với ${money(topItem.amount, topWallet.currency)}${topSum ? ` (chiếm ${Math.round(topItem.amount / topSum * 100)}% tổng ${type === "expense" ? "chi" : "thu"})` : ""}.`, `For ${range}, the highest ${type === "expense" ? "spending" : "income"} category is “${topItem.category}” with ${money(topItem.amount, topWallet.currency)}${topSum ? ` (${Math.round(topItem.amount / topSum * 100)}% of total)` : ""}.`, `${range}期间，${type === "expense" ? "支出" : "收入"}最高的类别是“${topItem.category}”，共计 ${money(topItem.amount, topWallet.currency)}${topSum ? `（占总额的 ${Math.round(topItem.amount / topSum * 100)}%）` : ""}。`)
       : localized(lang, `Danh mục ${type === "expense" ? "chi" : "thu"} được xếp riêng theo từng ví trong ${range}.`, `${type === "expense" ? "Spending" : "Income"} categories are ranked separately per wallet for ${range}.`, `${range}的${type === "expense" ? "支出" : "收入"}类别按钱包分别排序。`);
+    if (query.scope === "all" && byWallet.length > 1) {
+      const perWallet = byWallet.map(({ wallet, ranked, sum }) => {
+        const item = ranked[0];
+        if (!item) return "";
+        return `• ${walletName(wallet.name, lang)} · ${item.category}: ${money(item.amount, wallet.currency)}${sum ? ` (${Math.round(item.amount / sum * 100)}%)` : ""}`;
+      }).filter(Boolean).join("\n");
+      topConclusion = `${localized(lang, `Danh mục ${type === "expense" ? "chi" : "thu"} cao nhất theo từng ví trong ${range}:`, `Top ${type === "expense" ? "spending" : "income"} category per wallet for ${range}:`, `${range}各钱包${type === "expense" ? "支出" : "收入"}最高的类别：`)}\n${perWallet}`;
+    }
     return { conclusion: action === "explain" ? localized(lang, "Danh mục có tổng chi cao nhất trong số giao dịch đã lưu.", "This category has the highest recorded spending.", "此类别的已记录支出最高。") : topConclusion, figures, limits: labels.assumptions };
+  }
+
+  if (action === "category_savings") {
+    const percentage = query.percentage;
+    if (!query.category || percentage === null || percentage === undefined || !Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+      return { conclusion: localized(lang, "Bạn muốn giảm chi tiêu ở danh mục nào và bao nhiêu phần trăm?", "Which category and reduction percentage should I use?", "请说明要减少哪个类别以及减少百分之几。") };
+    }
+    const matching = records.filter((item) => item.type === "expense" && normalizeVietnameseMessage(item.category).includes(normalizeVietnameseMessage(query.category || "")));
+    if (!matching.length) return { conclusion: localized(lang, `Chưa có khoản chi đã ghi nhận cho danh mục “${query.category}” trong ${range}.`, `No recorded spending for “${query.category}” was found in ${range}.`, `${range}没有找到类别“${query.category}”的已记录支出。`) };
+    const grouped = new Map<string, { amount: number; count: number }>();
+    for (const item of matching) {
+      const currency = state.wallets.find((wallet) => wallet.id === item.wallet)?.currency;
+      if (!currency) continue;
+      const previous = grouped.get(currency) || { amount: 0, count: 0 };
+      const scale = currencyScale(currency);
+      previous.amount = Math.round((previous.amount + item.amount) * scale) / scale;
+      previous.count++;
+      grouped.set(currency, previous);
+    }
+    const results = [...grouped.entries()].map(([currency, baseline]) => {
+      const scale = currencyScale(currency);
+      const savings = Math.round(baseline.amount * percentage / 100 * scale) / scale;
+      const reducedSpend = Math.round((baseline.amount - savings) * scale) / scale;
+      return localized(lang,
+        `• ${currency}: ${percentage}% của ${money(baseline.amount, currency)} (${baseline.count} giao dịch) = tiết kiệm ${money(savings, currency)}; chi còn ${money(reducedSpend, currency)}.`,
+        `• ${currency}: ${percentage}% of ${money(baseline.amount, currency)} (${baseline.count} transactions) = ${money(savings, currency)} saved; spending becomes ${money(reducedSpend, currency)}.`,
+        `• ${currency}：${baseline.amount}的${percentage}%（${baseline.count}笔交易）= 节省 ${money(savings, currency)}；支出降至 ${money(reducedSpend, currency)}。`);
+    });
+    return { conclusion: localized(lang, `Nếu giảm ${query.category} ${percentage}% theo dữ liệu đã ghi nhận trong ${range}:`, `At a ${percentage}% reduction in “${query.category}” based on recorded spending for ${range}:`, `按${range}已记录数据，将“${query.category}”支出减少${percentage}%：`), figures: results.join("\n"), limits: labels.assumptions };
   }
 
   if (action === "transactions") {
@@ -380,6 +449,9 @@ export function answerFinancialQuery(query: FinancialQuery, state: FinancialStat
   const actions = query.actions && query.actions.length > 0 ? query.actions : [query.action];
   if (actions.length === 1) {
     const section = answerFinancialQuerySection(actions[0], query, wallets, state, today, lang);
+    if (actions[0] === "spending_summary" || actions[0] === "category_breakdown") {
+      return [section.conclusion, section.figures, section.analysis, section.limits !== labels.assumptions ? section.limits : null].filter(Boolean).join("\n\n");
+    }
     return render(lang, section);
   }
 

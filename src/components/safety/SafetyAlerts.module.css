@@ -1,8 +1,5 @@
-:root,
 .page,
-.detailsModalContent,
-:global(.r-dialog),
-:global(.r-wide-dialog) {
+.detailsModalContent {
   --s-card: #fff;
   --s-ink: #203343;
   --s-muted: #64748b;
@@ -25,11 +22,8 @@
   padding-bottom: 110px !important;
 }
 
-:global(.r-dark),
 :global(.r-dark) .page,
-:global(.r-dark) .detailsModalContent,
-:global(.r-dark) :global(.r-dialog),
-:global(.r-dark) :global(.r-wide-dialog) {
+:global(.r-dark) .detailsModalContent {
   --s-card: #1e293b;
   --s-ink: #f8fafc;
   --s-muted: #94a3b8;

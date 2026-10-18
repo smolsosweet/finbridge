@@ -1,11 +1,16 @@
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { z } from "zod";
 import { getSession } from "@/lib/auth-session";
+import { database } from "@/lib/database";
+import { workspaceRepository } from "@/lib/workspace-repository";
+import type { AppState } from "@/components/sites/rolly/replica/store";
 import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 import {
   cleanJsonText,
   normalizePlannerResponse,
   parseVietnameseFinancialExpressions,
+  calculateScenario,
+  scenarioContext,
 } from "@/lib/scenario-planner";
 
 const requestSchema = z.object({
@@ -33,7 +38,11 @@ function localDemo(request: Request) {
 }
 
 export async function POST(request: Request) {
-  if (!localDemo(request) && !(await getSession())) {
+  const demo = localDemo(request);
+  const expectedOrigin = process.env.BETTER_AUTH_URL ? new URL(process.env.BETTER_AUTH_URL).origin : new URL(request.url).origin;
+  if (!demo && request.headers.get("origin") !== expectedOrigin) return Response.json({ error: "INVALID_ORIGIN", message: "Please reload the page and try again." }, { status: 403 });
+  const session = demo ? null : await getSession();
+  if (!demo && !session) {
     return Response.json({ error: "UNAUTHENTICATED", message: "Please sign in to use Financial Scenario Planner." }, { status: 401 });
   }
 
@@ -47,6 +56,20 @@ export async function POST(request: Request) {
     return Response.json({ error: "INVALID_REQUEST", message: "Scenario context did not pass validation." }, { status: 400 });
   }
   const input = parsed.data;
+  let workspace: AppState | null = null;
+  if (session) {
+    const ownerHeader = request.headers.get("x-finbridge-workspace-owner");
+    if (ownerHeader && ownerHeader !== session.user.id) return Response.json({ error: "ACCOUNT_CHANGED", message: "Please reload the page after changing accounts." }, { status: 409 });
+    try {
+      workspace = (await workspaceRepository(database()).read(session.user.id)).data;
+      if (!workspace) throw new Error("WORKSPACE_UNAVAILABLE");
+      input.context = scenarioContext(workspace);
+    } catch { return Response.json({ error: "FINANCIAL_DATA_UNAVAILABLE", message: "Chưa đọc được dữ liệu tài chính. Hãy tải lại trang rồi thử lại." }, { status: 503 }); }
+  }
+  const respondPlan = (plan: ReturnType<typeof normalizePlannerResponse>) => Response.json({
+    ...plan,
+    ...(workspace ? { calculations: plan.scenarios.map(scenario => calculateScenario(workspace!, scenario, input.today)) } : {}),
+  });
 
   const preParsed = parseVietnameseFinancialExpressions(input.message, input.today, input.context);
   const walletIds = new Set(input.context.wallets.map((wallet) => wallet.id));
@@ -59,9 +82,9 @@ export async function POST(request: Request) {
     // If Gemini is not configured, fall back to deterministic parsing when possible
     const fallback = normalizePlannerResponse(null, input);
     if (fallback.scenarios.length || fallback.query || fallback.intent === "clarification") {
-      return Response.json(fallback);
+      return respondPlan(fallback);
     }
-    return Response.json({ error: "AI_NOT_CONFIGURED", message: "Gemini is not configured on this server." }, { status: 503 });
+    return Response.json({ error: "AI_NOT_CONFIGURED", message: "The assistant is not available yet. Please try again later." }, { status: 503 });
   }
 
   const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite";
@@ -145,7 +168,7 @@ export async function POST(request: Request) {
     }
 
     const normalized = normalizePlannerResponse(decoded, input);
-    return Response.json(normalized);
+    return respondPlan(normalized);
   } catch (error) {
     const status = providerStatus(error);
     const timeout = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
@@ -155,23 +178,23 @@ export async function POST(request: Request) {
     // Resilient fallback: If Gemini fails, check if request can be deterministically calculated
     const fallback = normalizePlannerResponse(null, input);
     if (fallback.scenarios.length || fallback.query || fallback.intent === "clarification") {
-      return Response.json(fallback);
+      return respondPlan(fallback);
     }
 
     if (status === 429) {
       return Response.json({
         error: "AI_RATE_LIMIT",
         message: input.preferredLanguage === "vi"
-          ? "Gemini đang tạm thời bị giới hạn tần suất. Vui lòng thử lại sau giây lát."
-          : "Gemini is rate limited. Check AI Studio quota and try again shortly.",
+          ? "Hiện có quá nhiều yêu cầu. Vui lòng thử lại sau giây lát."
+          : "There are too many requests right now. Please try again shortly.",
       }, { status: 429 });
     }
     if (status === 401 || status === 403) {
       return Response.json({
         error: "AI_AUTHENTICATION_ERROR",
         message: input.preferredLanguage === "vi"
-          ? "Lỗi xác thực Gemini API key trên máy chủ."
-          : "Gemini rejected server authentication. Check server API key in AI Studio.",
+          ? "Phân tích tạm thời không khả dụng. Vui lòng thử lại sau hoặc liên hệ hỗ trợ."
+          : "Analysis is temporarily unavailable. Please try again later or contact support.",
       }, { status: 502 });
     }
     if (timeout) {
@@ -186,8 +209,8 @@ export async function POST(request: Request) {
       return Response.json({
         error: "AI_NETWORK_ERROR",
         message: input.preferredLanguage === "vi"
-          ? "Không thể kết nối đến Gemini. Kiểm tra kết nối mạng máy chủ và thử lại."
-          : "FinBridge could not reach Gemini. Check outbound internet connection and retry.",
+          ? "Không thể kết nối dịch vụ phân tích. Vui lòng thử lại sau giây lát."
+          : "FinBridge could not connect to the analysis service. Please try again shortly.",
       }, { status: 502 });
     }
 

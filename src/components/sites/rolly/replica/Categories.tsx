@@ -4,6 +4,9 @@ import { useState } from "react";
 import { ChevronRight, MoreVertical, Plus, Pencil, Trash2, Check } from "lucide-react";
 import { EmptyState, Modal, PageHeader } from "./Ui";
 import { updateState, useAppState } from "./store";
+import { applyCategoryOperation, prepareCategoryOperation } from "@/lib/category-operations";
+import { categoryOperationCopy, categoryOperationError } from "@/lib/category-operation-copy";
+import { resolveLanguage } from "@/lib/i18n";
 
 export const iconGroups: [string, string[]][] = [
   ["Nhà & Hóa đơn", ["🧊", "🧾", "🧴", "💡", "🛋️", "🏠", "🔌", "🧹", "🚿", "🧺", "🔑"]],
@@ -30,20 +33,22 @@ export function Categories({ detail = false, name = "", wallet = "default", navi
   const [child, setChild] = useState("");
   const [error, setError] = useState("");
   const children = state.categoryMeta[name]?.children || [];
-  const items = type === "expense" ? state.categories.filter((item) => state.categoryMeta[item]?.type !== "income") : state.categories.filter((item) => state.categoryMeta[item]?.type === "income");
+  const items = state.categories.filter(item => !state.categoryMeta[item]?.archived && (state.categoryMeta[item]?.type || "expense") === type);
   const open = (edit = false) => { setTitle(edit ? name : ""); setIcon(edit ? categoryIcon(name, state.categoryMeta) : "❓"); setModal(edit ? "edit" : "add"); setError(""); };
   function save() {
     const value = title.trim();
     if (!value) return;
     if (state.categories.includes(value) && value !== name) { setError("Tên danh mục đã tồn tại."); return; }
-    updateState((s) => {
-      const metadata = { ...s.categoryMeta };
-      if (modal === "edit") delete metadata[name];
-      metadata[value] = { type: modal === "edit" ? s.categoryMeta[name]?.type || "expense" : type, icon, children: modal === "edit" ? children : [] };
-      const rename = <T extends { category: string }>(row: T) => modal === "edit" && row.category === name ? { ...row, category: value } : row;
-      const walletCategories = Object.fromEntries(s.wallets.map(w => [w.id, modal === "edit" ? (s.walletCategories?.[w.id] || s.categories).map(n => n === name ? value : n) : [...new Set([...(s.walletCategories?.[w.id] || s.categories), ...(w.id === wallet ? [value] : [])])]]));
-      return { ...s, walletCategories, goals: s.goals.map(rename), fixedExpenses: s.fixedExpenses?.map(rename), recurring: s.recurring.map(rename), categories: modal === "edit" ? s.categories.map((item) => item === name ? value : item) : [...s.categories, value], categoryMeta: metadata, transactions: s.transactions.map(rename) };
-    });
+    try {
+      updateState(s => {
+        const next = modal === "edit" && value === name ? s : applyCategoryOperation(s, prepareCategoryOperation(s, {
+          operation: modal === "edit" ? "rename_category" : "create_category", sources: modal === "edit" ? [name] : [], target: value, type: type === "income" ? "income" : "expense",
+        }, crypto.randomUUID()));
+        return { ...next,
+          ...(modal !== "edit" ? { walletCategories: Object.fromEntries(s.wallets.map(w => [w.id, [...new Set([...(s.walletCategories?.[w.id] || s.categories), ...(w.id === wallet ? [value] : [])])]])) } : {}),
+          categoryMeta: { ...next.categoryMeta, [value]: { ...next.categoryMeta[value], icon } } };
+      });
+    } catch (error) { setError(categoryOperationError(error, resolveLanguage(state.settings.language))); return; }
     setModal("");
     if (detail) navigate("categoryDetail?name=" + encodeURIComponent(value) + "&wallet=" + wallet);
   }
@@ -53,6 +58,17 @@ export function Categories({ detail = false, name = "", wallet = "default", navi
     {modal === "menu" && <Modal onClose={() => setModal("")}><div className="r-menu-options"><button onClick={() => open(true)}><Pencil size={18} />Chỉnh sửa danh mục</button><button className="r-expense" onClick={() => setModal("delete")}><Trash2 size={18} />Xóa danh mục</button></div></Modal>}
     {["add", "edit"].includes(modal) && <Modal title={modal === "edit" ? "Chỉnh sửa tên danh mục và biểu tượng của bạn" : "Tạo tên danh mục và biểu tượng của bạn"} sheet onClose={() => setModal("")}><form className="r-form" onSubmit={(event) => { event.preventDefault(); save(); }}><div className="r-category-name-input"><button type="button" aria-label="Chọn biểu tượng" onClick={() => setPicking(true)}>{icon}</button><input placeholder="Tiêu đề" aria-label="Tiêu đề danh mục" required value={title} onChange={(event) => setTitle(event.target.value)} /></div>{error && <p role="alert">{error}</p>}<button className="r-primary">{modal === "edit" ? "Lưu" : "Tạo danh mục"}</button></form></Modal>}
     {picking && <Modal sheet onClose={() => setPicking(false)}><div className="r-icon-picker">{iconGroups.map(([group, symbols]) => <section key={group}><h3>{group}</h3><div>{symbols.map((symbol, index) => <button key={symbol + index} aria-label={"Biểu tượng " + symbol} onClick={() => { setIcon(symbol); setPicking(false); }}>{symbol}</button>)}</div></section>)}</div></Modal>}
-    {["delete", "deleteChild"].includes(modal) && <Modal title="Xóa danh mục?" onClose={() => setModal("")}><p>Thao tác chỉ áp dụng cho dữ liệu trong trình duyệt này.</p><button className="r-danger" onClick={() => { updateState((s) => modal === "deleteChild" ? { ...s, categoryMeta: { ...s.categoryMeta, [name]: { ...s.categoryMeta[name], children: children.filter((item) => item !== child) } } } : { ...s, categories: s.categories.filter((item) => item !== name), transactions: s.transactions.map((t) => t.category === name ? { ...t, category: "Chưa được phân loại" } : t) }); setModal(""); if (modal === "delete") navigate("category?wallet=" + wallet); }}>Xóa</button></Modal>}
+    {["delete", "deleteChild"].includes(modal) && <Modal title="Xóa danh mục?" onClose={() => setModal("")}>
+      <p>{categoryOperationCopy[resolveLanguage(state.settings.language)].history}</p>
+      {error && <p role="alert">{error}</p>}
+      <button className="r-danger" onClick={() => {
+        try {
+          updateState(s => modal === "deleteChild"
+            ? { ...s, categoryMeta: { ...s.categoryMeta, [name]: { ...s.categoryMeta[name], children: children.filter(item => item !== child) } } }
+            : applyCategoryOperation(s, prepareCategoryOperation(s, { operation: "delete_category", sources: [name], target: null, type: null }, crypto.randomUUID())));
+          setModal(""); if (modal === "delete") navigate("category?wallet=" + wallet);
+        } catch (error) { setError(categoryOperationError(error, resolveLanguage(state.settings.language))); }
+      }}>Xóa</button>
+    </Modal>}
   </div>;
 }
