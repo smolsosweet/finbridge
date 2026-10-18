@@ -71,6 +71,65 @@ test("reports budget spending, scheduled expenses and due dates without mixing i
   assert.match(answer, /Hạn mức ngân sách không phải số dư ví/);
 });
 
+test("lists upcoming unpaid fixed expense occurrences and excludes user-confirmed payments", () => {
+  const withBills = {
+    ...state,
+    goals: [{ id: "b1", kind: "budget", title: "Ăn uống", amount: 200_000, saved: 0, currency: "VND", date: "2026-10-01", cycle: "monthly", category: "Ăn uống", wallet: "cash", direction: "", person: "" }],
+    fixedExpenses: [
+      { id: "rent", budgetId: "b1", walletId: "cash", title: "Tiền nhà", amount: 300_000, category: "Nhà", dueDate: "2026-10-20", recurrence: "once", active: true },
+      { id: "paid", budgetId: "b1", walletId: "cash", title: "Đã trả", amount: 40_000, category: "Ăn uống", dueDate: "2026-10-22", recurrence: "once", active: true },
+    ],
+    transactions: [...state.transactions, { id: "paid-tx", title: "Đã trả", amount: 40_000, type: "expense", category: "Ăn uống", date: "2026-10-20", wallet: "cash", fixedExpenseId: "paid", fixedExpenseDueDate: "2026-10-22", paymentConfirmation: "user" }],
+  };
+  const answer = answerFinancialQuery(query("upcoming_obligations", { periodStart: "2026-10-13", periodEnd: "2026-10-31" }), withBills, "cash", "2026-10-13");
+  assert.match(answer, /2026-10-20 · Tiền nhà · ₫300,000/);
+  assert.doesNotMatch(answer, /2026-10-22 · Đã trả/);
+  assert.match(answer, /lịch dự kiến/);
+});
+
+test("reports saved goal progress and weekly spending separately per currency", () => {
+  const withGoal = { ...state, goals: [{ id: "g1", kind: "savings", title: "Du lịch", amount: 500_000, saved: 125_000, currency: "VND", date: "2026-12-01", cycle: "", category: "", wallet: "cash", direction: "", person: "" }] };
+  assert.match(answerFinancialQuery(query("goals"), withGoal, "cash", "2026-10-13"), /25%/);
+  const trend = answerFinancialQuery(query("spending_trend", { scope: "all" }), state, "cash", "2026-10-13");
+  assert.match(trend, /Ví tiền mặt · VND/);
+  assert.match(trend, /USD/);
+});
+
+test("computes a budget daily allowance after recorded and unpaid fixed expenses", () => {
+  const withBudget = {
+    ...state,
+    goals: [{ id: "b1", kind: "budget", title: "Ăn uống", amount: 200_000, saved: 0, currency: "VND", date: "2026-10-01", cycle: "monthly", category: "Ăn uống", wallet: "cash", direction: "", person: "" }],
+    fixedExpenses: [{ id: "bill", budgetId: "b1", walletId: "cash", title: "Ăn uống đã lên lịch", amount: 20_000, category: "Ăn uống", dueDate: "2026-10-20", recurrence: "once", active: true }],
+  };
+  const answer = answerFinancialQuery(query("safe_daily_allowance", { category: "Ăn uống" }), withBudget, "cash", "2026-10-13");
+  assert.match(answer, /Hạn mức chi mỗi ngày: ₫6,842/);
+  assert.match(answer, /không đồng nghĩa với số dư ví/);
+});
+
+test("anomaly flags require sufficient same-wallet, same-category history", () => {
+  const tx = [];
+  for (let index = 1; index <= 5; index++) tx.push({ id: "prior-" + index, title: "Bữa ăn", amount: 10_000, type: "expense", category: "Ăn uống", date: `2026-09-${String(index + 1).padStart(2, "0")}`, wallet: "cash" });
+  tx.push({ id: "large", title: "Bữa ăn lớn", amount: 40_000, type: "expense", category: "Ăn uống", date: "2026-10-05", wallet: "cash" });
+  const answer = answerFinancialQuery(query("anomalies"), { ...state, transactions: tx }, "cash", "2026-10-13");
+  assert.match(answer, /40,000/);
+  assert.match(answer, /không khẳng định giao dịch sai/);
+  const insufficient = answerFinancialQuery(query("anomalies"), state, "cash", "2026-10-13");
+  assert.match(insufficient, /Không phát hiện khoản chi lớn bất thường/);
+});
+
+test("retains three-decimal currency precision in recorded totals", () => {
+  const precise = {
+    wallets: [{ id: "kwd", name: "KWD", currency: "KWD", initial: 1 }],
+    transactions: [
+      { id: "a", title: "A", amount: 0.001, type: "expense", category: "Other", date: "2026-10-02", wallet: "kwd" },
+      { id: "b", title: "B", amount: 0.002, type: "expense", category: "Other", date: "2026-10-03", wallet: "kwd" },
+    ],
+    goals: [], fixedExpenses: [], settings: { language: "English" },
+  };
+  const answer = answerFinancialQuery(query("spending_summary", { walletId: "kwd", periodStart: "2026-10-01", periodEnd: "2026-10-13" }), precise, "kwd", "2026-10-13");
+  assert.match(answer, /KWD 0\.003/);
+});
+
 test("ignores malformed amounts and uses the selected UI language", () => {
   const inconsistent = { ...state, transactions: [...state.transactions, { id: "bad", title: "Broken", amount: Number.NaN, type: "expense", category: "Ăn uống", date: "2026-10-12", wallet: "cash" }] };
   const vi = answerFinancialQuery(query("balance"), inconsistent, "cash", "2026-10-13");

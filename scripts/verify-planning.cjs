@@ -22,6 +22,7 @@ const header = compile("FinBridgeHeader.tsx", name => name === "@/components/saf
 const setupCopy = compile("../../../../lib/setup-copy.ts");
 const paymentsModel = compile("../../../../lib/fixed-expense-payments.ts", (name) => name === "../components/sites/rolly/replica/planningModel" ? model : requireLocal(name));
 const outlookModel = compile("../../../../lib/financial-outlook.ts", (name) => name === "../components/sites/rolly/replica/planningModel" ? model : name === "./fixed-expense-payments" ? paymentsModel : requireLocal(name));
+const financialChat = compile("../../../../lib/financial-chat.ts", (name) => name === "../components/sites/rolly/replica/planningModel" ? model : name === "./financial-outlook" ? outlookModel : requireLocal(name));
 const safetyCopy = compile("../../../safety/safety-copy.ts");
 const budgetCategories = compile("../../../../lib/budget-categories.ts");
 const scenarioModel = compile("../../../../lib/scenario-planner.ts", name => name === "../components/sites/rolly/replica/planningModel" ? model : name === "./fixed-expense-payments" ? paymentsModel : requireLocal(name));
@@ -71,6 +72,7 @@ const component = compile("Planning.tsx", (name) => {
   if (name === "./FinancialOutlook") return outlookUI;
   if (name === "@/lib/fixed-expense-payments") return paymentsModel;
   if (name === "@/lib/setup-copy") return setupCopy;
+  if (name === "@/lib/financial-chat") return financialChat;
   if (name === "@/lib/scenario-planner") return scenarioModel;
   if (name === "@/lib/budget-categories") return budgetCategories;
   if (name === "@/components/safety/safety-copy") return safetyCopy;

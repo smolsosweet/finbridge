@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { calculateScenario, scenarioContext } from "../src/lib/scenario-planner.ts";
+import { answerFinancialQuery } from "../src/lib/financial-chat.ts";
 import { weeklyPeriodStatus, weeklySpendingRows } from "../src/components/sites/rolly/replica/planningModel.ts";
 
 const state = () => ({
@@ -20,6 +21,7 @@ const state = () => ({
     { id: "rent", budgetId: "budget", title: "Rent", amount: 200_000, category: "Food", dueDate: "2026-10-15", recurrence: "once", active: true },
   ],
   categories: ["Food", "Education", "Transport"],
+  settings: { language: "English" },
 });
 
 const scenario = (overrides = {}) => ({
@@ -36,6 +38,21 @@ test("projects balances and budget deterministically without mutating source dat
   assert.equal(result.budgets[0].actualRemaining, 500_000);
   assert.equal(result.budgets[0].afterScenario, 450_000);
   assert.equal(result.plannedBills.length, 1);
+  assert.deepEqual(app, before);
+});
+
+test("applies multiple hypothetical income and expense actions from the same unchanged baseline", () => {
+  const app = state();
+  const before = structuredClone(app);
+  const result = calculateScenario(app, scenario({
+    name: "Tuition and income",
+    changes: [
+      { title: "Tuition", amount: 100_000, direction: "expense", walletId: "vnd", currency: "VND", date: "2026-10-15", category: "Education" },
+      { title: "Allowance", amount: 250_000, direction: "income", walletId: "vnd", currency: "VND", date: "2026-10-16", category: "Salary" },
+    ],
+    horizonEnd: "2026-10-16",
+  }), "2026-10-14");
+  assert.equal(result.wallets.find((wallet) => wallet.walletId === "vnd").projectedBalance, 1_849_975);
   assert.deepEqual(app, before);
 });
 
@@ -80,13 +97,14 @@ test("keeps currencies separate and includes transfer-in in the destination wall
   assert.deepEqual(result.wallets.map(({ walletId, currency, projectedBalance }) => ({ walletId, currency, projectedBalance })), [{ walletId: "usd", currency: "USD", projectedBalance: 615 }]);
 });
 
-test("limits planner context to the wallet selected by the user", () => {
-  const context = scenarioContext(state(), "2026-10-14", "usd");
-  assert.equal(context.defaultWalletId, "usd");
-  assert.deepEqual(context.wallets.map((wallet) => wallet.id), ["usd"]);
-  assert.equal(context.budgets.length, 0);
-  assert.deepEqual(context.fixedExpenses, []);
-  assert.ok(context.recentTransactions.every((transaction) => transaction.wallet === "usd" || transaction.targetWallet === "usd"));
+test("sends wallet and category labels without financial amounts while retaining wallet choices", () => {
+  const context = scenarioContext(state());
+  assert.deepEqual(context.wallets.map((wallet) => wallet.id), ["vnd", "usd"]);
+  assert.deepEqual(Object.keys(context.wallets[0]).sort(), ["currency", "id", "name"]);
+  assert.equal(context.budgets[0].amount, undefined);
+  assert.equal(context.fixedExpenses[0].amount, undefined);
+  assert.equal(context.goals.length, 0);
+  assert.equal("recentTransactions" in context, false);
 });
 
 test("refuses to project a change whose stated currency does not match its wallet", () => {
@@ -172,4 +190,41 @@ test("does not claim percentage savings when category history is sparse", () => 
   const result = calculateScenario(app, scenario({ changes: [], spendingReductions: [{ category: "Dining", percent: 20, walletId: "vnd", currency: "VND", startDate: "2026-10-14", endDate: "2026-10-31" }] }), "2026-10-14");
   assert.equal(result.savings.length, 0);
   assert.equal(result.unavailableEstimates.length, 1);
+});
+
+test("answers wallet-wide spending queries with deterministic per-currency totals", () => {
+  const app = state();
+  app.settings = { language: "Tiếng Việt" };
+  const answer = answerFinancialQuery({ action: "spending_summary", walletId: null, scope: "all", periodStart: "2026-10-01", periodEnd: "2026-10-14", category: null, searchTerm: null, transactionType: null }, app, "vnd", "2026-10-14");
+  assert.match(answer, /VND/);
+  assert.match(answer, /USD/);
+  assert.match(answer, /100,000/);
+  assert.doesNotMatch(answer, /500\.100/);
+});
+
+test("answers transaction follow-ups using the requested date and category filters", () => {
+  const app = state();
+  app.settings = { language: "English" };
+  const answer = answerFinancialQuery({ action: "transactions", walletId: "vnd", scope: "selected", periodStart: "2026-10-10", periodEnd: "2026-10-10", category: "Education", searchTerm: null, transactionType: "expense" }, app, "vnd", "2026-10-14");
+  assert.match(answer, /2026-10-10/);
+  assert.match(answer, /Tuition/);
+  assert.doesNotMatch(answer, /Salary/);
+});
+
+test("budget questions keep limits separate from actual balance and scheduled bills", () => {
+  const app = state();
+  app.settings = { language: "English" };
+  const answer = answerFinancialQuery({ action: "budget_status", walletId: "vnd", scope: "selected", periodStart: null, periodEnd: null, category: null, searchTerm: null, transactionType: null }, app, "vnd", "2026-10-14");
+  assert.match(answer, /500,000/);
+  assert.match(answer, /Spent ₫0/);
+  assert.match(answer, /200,000/);
+  assert.match(answer, /budget limit is not a wallet balance/i);
+});
+
+test("reports empty periods without inventing financial data", () => {
+  const app = state();
+  app.settings = { language: "English" };
+  const answer = answerFinancialQuery({ action: "spending_summary", walletId: "vnd", scope: "selected", periodStart: "2026-09-01", periodEnd: "2026-09-30", category: null, searchTerm: null, transactionType: null }, app, "vnd", "2026-10-14");
+  assert.match(answer, /no matching transactions/i);
+  assert.match(answer, /2026-09-01/);
 });
