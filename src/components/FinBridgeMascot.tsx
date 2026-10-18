@@ -28,7 +28,7 @@ const SQUASH: Keyframe[] = [
 
 /** Local adaptation of the MIT-licensed page-mascot interaction; see LICENSE. */
 export function FinBridgeMascot({ directions = '/mascots/finbridge-penguin-directions.webp', reactions = '/mascots/finbridge-penguin-reactions.webp', size = 140,
-  label = 'Chim cánh cụt FinBridge', className, reaction = null }: Props) {
+  label = 'Chim cánh cụt FinBridge (Finn)', className, reaction = null }: Props) {
   const button = useRef<HTMLButtonElement>(null)
   const sprite = useRef<HTMLSpanElement>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)

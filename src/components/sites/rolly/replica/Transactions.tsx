@@ -1018,7 +1018,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   const editingDraft = drafts.find((draft) => draft.id === editingDraftId);
   return <div className="r-chat-page"><PageHeader onBack={() => navigate("?tab=transactions")}><button type="button" className="r-icon-button" aria-label="Xóa hội thoại" title="Xóa hội thoại" onClick={() => setModal("resetChat")}><Trash2 size={18} /></button><button type="button" className="r-icon-button" aria-label="Cài đặt chat" onClick={() => navigate("accountSettings")}><Settings size={20} /></button></PageHeader><Mascot greeting="Hôm nay bạn đã chi tiêu gì?" className="r-chat-mascot" /><div className="r-chat-messages" ref={messagesRef} role="log" aria-label="Lịch sử hội thoại" tabIndex={0}>
       <div className={planStyles.chatIntroduction}>
-        <p>{String(state.settings.name || "")}, { /中文|zh/.test(String(state.settings.language)) ? "你好！我是 Jake。" : /Việt|vi/.test(String(state.settings.language)) ? "xin chào! Mình là Jake." : "hello! I'm Jake." }</p>
+        <p>{String(state.settings.name || "")}, { /中文|zh/.test(String(state.settings.language)) ? "你好！我是 Finn。" : /Việt|vi/.test(String(state.settings.language)) ? "xin chào! Mình là Finn." : "hello! I'm Finn." }</p>
         <button type="button" disabled={busy} onClick={() => setMessages(previous => [...previous, { role: "assistant", text: localPlanReply(state, today()), localOnly: true }])}>{/中文|zh/.test(String(state.settings.language)) ? "查看支出计划" : /Việt|vi/.test(String(state.settings.language)) ? "Xem kế hoạch chi tiêu" : "View spending plan"}</button>
       </div>
       <span className="r-chat-date">Hôm nay</span>

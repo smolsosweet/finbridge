@@ -711,6 +711,7 @@ html:has(.r-chat-page){scrollbar-gutter:auto}
 .fb-brand-mark{display:grid;place-items:center;background:var(--fb-gradient)!important;color:#fff!important;width:44px;height:44px;border-radius:14px;box-shadow:0 4px 14px rgba(123,64,242,.28);transition:transform .2s,box-shadow .2s}
 .fb-brand-mark:hover{transform:scale(1.05);box-shadow:0 6px 18px rgba(123,64,242,.4)}
 .fb-brand-mark svg{width:26px;height:26px;stroke:#fff}
+.fb-brand-mark img, .fb-brand-logo-img{width:32px;height:32px;object-fit:contain;display:block}
 .fb-milestones{border:1px solid var(--r-line);color:var(--r-muted);background:var(--r-surface);border-radius:12px;display:flex;align-items:center;gap:9px;padding:10px 14px;font-size:12px!important;min-height:42px}
 .fb-milestones svg:first-child{color:#9c773d}
 .fb-home-intro{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:30px 0 28px;min-height:120px}

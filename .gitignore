@@ -51,3 +51,6 @@ temp/
 
 # Local UI verification logs
 docs/finbridge-ui/*.log
+
+# Mascot source folder
+finbridge-page-mascot-*/

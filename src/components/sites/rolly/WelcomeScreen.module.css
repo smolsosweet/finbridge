@@ -45,8 +45,10 @@
   background: var(--welcome-gradient);
   color: white;
   box-shadow: 0 4px 14px #7b40f22e;
+  overflow: hidden;
 }
 .brandMark svg { width: 26px; height: 26px; }
+.brandMark img { width: 30px; height: 30px; object-fit: contain; display: block; }
 .fin { color: var(--welcome-pink); }
 .bridge { color: var(--welcome-blue); }
 

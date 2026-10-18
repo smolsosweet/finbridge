@@ -16,7 +16,7 @@ const outlook = compile("src/lib/financial-outlook.ts", { "../components/sites/r
 const chat = compile("src/lib/chat-local-plan.ts", { "./financial-outlook": outlook });
 const repository = compile("src/lib/onboarding-repository.ts", { "./onboarding": onboarding });
 const handler = compile("src/lib/onboarding-handler.ts", { "./onboarding": onboarding });
-const payload = { version: 1, displayName: "Synthetic Jake user", occupation: "student", language: "en",
+const payload = { version: 1, displayName: "Synthetic Finn user", occupation: "student", language: "en",
   wallets: [{ id: "bank", name: "Techcombank", currency: "VND", initial: 50000000 }, { id: "ali", name: "Alipay", currency: "CNY", initial: 2000 }],
   expenseCategories: ["Education", "Dining"], incomeCategories: ["Salary"],
   commitments: [{ id: "tuition", walletId: "bank", title: "Tuition", amount: 30000000, category: "Education", dueDate: "2026-10-31", intervalMonths: 3, monthPosition: "end", reminderDays: 7 }],

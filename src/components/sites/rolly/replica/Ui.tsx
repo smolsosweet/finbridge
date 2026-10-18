@@ -24,7 +24,7 @@ export function Mascot({ greeting, className = "" }: { greeting?: string; classN
       <div className="r-mascot-lac-wrap r-mascot-3d">
         <FinBridgeMascot
           size={120}
-          label="Jake, FinBridge Mascot"
+          label="Finn, FinBridge Mascot"
         />
       </div>
     </div>

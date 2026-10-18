@@ -256,7 +256,7 @@ export function MainDashboard({ onLogout }: MainDashboardProps) {
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative w-9 h-9 rounded-xl overflow-hidden bg-teal-50 flex items-center justify-center p-0.5">
-              <FinBridgeMascot size={36} label="Jake, FinBridge" />
+              <FinBridgeMascot size={36} label="Finn, FinBridge" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">

@@ -957,11 +957,11 @@ test("Tier 1 & 2: Transaction Form Localization & Zero Leaks (F5, F8)", async (t
 test("Tier 1 & 2: AI Assistant & Chat Drafts Localization (F10)", async (t) => {
   const navigate = () => {};
 
-  await t.test("T10.1: Jake greeting banner translates across EN, VI, ZH", () => {
+  await t.test("T10.1: Finn greeting banner translates across EN, VI, ZH", () => {
     const greetings = {
-      "Tiếng Việt": "xin chào! Mình là Jake.",
-      English: "hello! I'm Jake.",
-      "中文": "你好！我是 Jake。",
+      "Tiếng Việt": "xin chào! Mình là Finn.",
+      English: "hello! I'm Finn.",
+      "中文": "你好！我是 Finn。",
     };
 
     for (const [lang, expectedGreeting] of Object.entries(greetings)) {

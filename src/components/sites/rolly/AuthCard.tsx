@@ -106,7 +106,13 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
       <div className={styles.headerCenter}>
         <button type="button" onClick={() => router.push("/?lang=" + language)} className={styles.brandButton} title="FinBridge" aria-label="FinBridge">
           <span className={welcome.brandMark} aria-hidden="true">
-            <svg viewBox="0 0 32 32" fill="none"><path d="M5 24V13M27 24V13M5 17C11 5 21 5 27 17M5 20H27M11 20V24M16 20V24M21 20V24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
+            <img
+              src="/mascots/finbridge-penguin-logo.webp"
+              alt="FinBridge"
+              width={32}
+              height={32}
+              className="fb-brand-logo-img"
+            />
           </span>
           <span className={styles.brandText}><span className={welcome.fin}>Fin</span><span className={welcome.bridge}>Bridge</span></span>
         </button>

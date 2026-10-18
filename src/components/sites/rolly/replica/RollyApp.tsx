@@ -83,9 +83,13 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
           <div>
             <div className="fb-sidebar-brand" onClick={() => navigate("")} role="button" tabIndex={0}>
               <span className="fb-brand-mark" aria-hidden="true">
-                <svg viewBox="0 0 32 32" fill="none">
-                  <path d="M5 24V13M27 24V13M5 17C11 5 21 5 27 17M5 20H27M11 20V24M16 20V24M21 20V24" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                </svg>
+                <img
+                  src="/mascots/finbridge-penguin-logo.webp"
+                  alt="FinBridge"
+                  width={32}
+                  height={32}
+                  className="fb-brand-logo-img"
+                />
               </span>
               <div className="fb-sidebar-brand-text">
                 <span className="fb-sidebar-title">
@@ -166,7 +170,7 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
           <div className="fb-mascot-fab-inner">
             <FinBridgeMascot
               size={44}
-              label="Jake"
+              label="Finn"
             />
             <span className="fb-mascot-fab-ai-badge">AI</span>
           </div>
