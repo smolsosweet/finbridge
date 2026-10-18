@@ -10,7 +10,6 @@ import { calendarWeek, localDateKey, shiftCalendarWeek } from "./chartWeek";
 import { WalletSettingsDirectory } from "./SettingsOverview";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
 import { FinBridgeHeader } from "./FinBridgeHeader";
-import { FinancialOutlook } from "./FinancialOutlook";
 import { resolveLanguage, resolveWalletDisplayName, isSentinelWalletName, resolveCategoryDisplayName } from "@/lib/i18n";
 
 type DashboardSample = {
@@ -1162,6 +1161,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
 
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState("");
+  const openedWalletFromUrl = useRef<string | null>(null);
   const [calendarLedgerOpen, setCalendarLedgerOpen] = useState(false);
 
   // Add wallet modal state
@@ -1233,6 +1233,13 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
     setEditingCatName(null);
     setModal("manageWallet");
   };
+
+  useEffect(() => {
+    if (!walletSettingsMode || !queryWallet || openedWalletFromUrl.current === queryWallet) return;
+    if (!state.wallets.some((item) => item.id === queryWallet)) return;
+    openedWalletFromUrl.current = queryWallet;
+    openManageWalletModal(queryWallet);
+  }, [walletSettingsMode, queryWallet, state.wallets]);
 
   const openWalletHistory = (targetWalletId: string) => {
     const current = new Date();
@@ -1822,7 +1829,6 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
         onSelectLanguage={(val) => updateState((s) => ({ ...s, settings: { ...s.settings, language: val } }))}
         primaryAction={<button type="button" className="fb-add-button fb-header-primary-action" onClick={addTransaction}><Plus size={18} /><span>{t.addTransaction}</span></button>}
       />
-      <FinancialOutlook compact navigate={navigate} />
       <section className="fb-wallet-section" aria-label={t.yourWallets}>
         <div className="fb-section-heading">
           <div>

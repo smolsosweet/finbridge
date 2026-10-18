@@ -35,7 +35,7 @@ export type TransferPlan = {
 };
 export type TransferAccount = { id: "ALIPAY" | "BANK_A"; opening: number; spent: number; balance: number };
 export type TransferAudit = { id: string; event: string; targetId: string; createdAt: string };
-export type TransferDocument = { mode: "sandbox"; paused: boolean; reserve: number; accounts: TransferAccount[]; bills: TransferBill[]; quotes: TransferQuote[]; plans: TransferPlan[]; receipts: TransferPlan[]; audit: TransferAudit[]; serverTime: string; hasMore: boolean };
+export type TransferDocument = { mode: "sandbox"; sandboxEnabled?: boolean; paused: boolean; reserve: number; accounts: TransferAccount[]; bills: TransferBill[]; quotes: TransferQuote[]; plans: TransferPlan[]; receipts: TransferPlan[]; audit: TransferAudit[]; serverTime: string; hasMore: boolean };
 const key = z.string().uuid(), id = z.string().uuid();
 export const transferCommandSchema = z.discriminatedUnion("action", [
   z.object({ action: z.literal("saveBill"), mutationId: key, id: id.optional(), version: z.number().int().positive().optional(), bill: transferBillSchema }).strict(),

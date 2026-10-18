@@ -61,6 +61,7 @@ Database tests require `AUTH_TEST_DATABASE_URL` targeting local `finbridge_auth_
 
 ## Documentation and provenance
 
+- [Deploy web and PostgreSQL on Render (Vietnamese)](docs/DEPLOY_RENDER_VI.md)
 - [Google login and PostgreSQL](docs/auth/GOOGLE_LOGIN_SETUP.md)
 - [Email recovery and Render](docs/auth/EMAIL_PASSWORD_SETUP.md)
 - [First-account setup](docs/FIRST_ACCOUNT_SETUP.md)

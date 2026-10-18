@@ -1,4 +1,71 @@
-# International education-payment sandbox
+# International transfer estimates and payment sandbox
+
+## Reference estimates with actual exchange-rate data
+
+The top section uses Frankfurter v2 over HTTPS for CNY/VND, USD/VND and
+AUD/VND. The server sends only public currency pairs, never user, bill or bank
+details. These are daily reference observations, not executable bank quotes.
+The displayed converted amount excludes transfer fees and provider FX margins.
+It neither reserves money nor marks an education bill paid.
+
+`GET /api/international-transfers/reference` uses the existing authenticated
+session and workspace-owner guard. Valid observations are cached in PostgreSQL
+for six hours. If refresh fails, the last observation is labelled cached; new
+estimates are refused after 24 hours without a successful fetch or if the rate
+date is over seven calendar days old. Future dates, unexpected pairs, malformed
+rates, redirects and oversized responses are rejected. Requests time out after
+five seconds; concurrent upstream requests coalesce per process, with a 30-second
+failure cooldown. There is no fallback to the fixed sandbox rates.
+
+`POST` saves an owner-scoped estimate using a server-owned reference ID and
+validated decimal amount. Integer arithmetic rounds the final conversion once.
+The client cannot supply the rate, converted amount, owner or payment status.
+Retries use an idempotency key and content hash; writes serialize per account,
+with ten accepted estimates per minute. History displays the latest 20 records
+in batches of five; all saved estimates remain in the database.
+
+Additional tables:
+
+| Table | Purpose |
+| --- | --- |
+| `finbridge_fx_observations` | Shared public reference observations, source, rate date and retrieval time; application only appends |
+| `finbridge_transfer_estimates` | Owner-scoped amount, original observation reference and calculated VND amount |
+| `finbridge_transfer_estimate_limits` | Per-account write serialization and rate limit |
+
+Run `npm run transfers:migrate` for the additive transactional migration, or
+use `npm run auth:migrate` during complete setup. Neither resets existing data.
+Application database privileges must prevent alteration of retained financial
+evidence; this code does not make the activity trail tamper-proof.
+
+The original test workflow remains separate below the reference estimator.
+Its school directory, channels, fees, delivery times and opening funds are
+synthetic. Market estimates never replace its historical quote snapshots.
+
+## Production deployment boundary
+
+Production blocks sandbox quote, draft, approval and execution operations by
+default, including direct API calls. `FINBRIDGE_ENABLE_TRANSFER_SANDBOX=true`
+explicitly enables the labelled sandbox for a competition demonstration.
+`false` disables it locally too. Invalid flag values keep it disabled.
+This flag NEVER enables real-money transfers.
+
+Real execution requires an approved payment partner and supported corridor,
+server-side executable quotes and verified recipient requirements, step-up
+authorization bound to the transaction, signed/replay-protected callbacks,
+asynchronous processing/failure/refund states, funding/ledger reconciliation,
+and operational monitoring. Do not mark a provider transaction complete from a
+browser click, an AI answer, or a reference-rate estimate. Partner credentials
+remain server-side and must not be entered in chat or committed to Git.
+
+Deployment gates: TLS; least-privilege application DB role; migration role kept
+separate; secret management; encrypted backups with a restore exercise; request
+rate limits at the edge; redacted errors; account isolation and closure tests.
+Passing local tests is not a payment-security certification.
+
+Checks: `npm run test:transfer-reference`,
+`npm run test:transfer-reference:postgres`, and `npm run test:transfers:ui`.
+The UI test seeds public FX fixtures in the isolated local test database and
+tests saved estimates, snapshot reload, lost-response retry and EN/VI/ZH.
 
 Open **International transfers** in the sidebar, or `/app?tab=transfers`.
 This ports the guided education-payment workflow from the original Java
@@ -17,11 +84,16 @@ the old public/shared Java service or send account data to it.
    remaining balance, reserve and due-date risk. Tick the acknowledgement,
    then approve the draft.
 4. Separately complete the **test** transfer. A receipt remains accessible
-   from its bill and transfer history, including after signing out/reloading.
+   under **Transferred**, including after signing out/reloading.
 
 The interface supports EN/VI/ZH. Custom bill titles/references and fictional
-institution names are preserved verbatim. Lists use search and pagination;
-details open in a dialog. Controls and the activity log are collapsed initially.
+institution names are preserved verbatim. **Not transferred** contains bills
+without a completed receipt; **Transferred** contains completed receipts only;
+**Activity history** records actions, including drafts and cancellations, without
+implying a successful payment. Each list starts with five rows and supports
+search, Show more (five at a time) and Show less. Details open in a dialog.
+Payment controls are collapsed initially. The activity list displays up to 200
+recent actions; completed receipts remain available independently of that limit.
 
 ## Explicit simulation boundary
 

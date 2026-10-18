@@ -1,4 +1,4 @@
-// Real browser + isolated PostgreSQL. No provider calls or real financial data.
+// Real browser + isolated PostgreSQL. Seeded FX observations; no provider or bank calls.
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
@@ -11,6 +11,8 @@ import { buildAuthOptions } from "../src/lib/auth-options.ts";
 import { testPool, cleanupFinance, workspaceFixture } from "./workspace-fixtures.mjs";
 import { workspaceRepository } from "../src/lib/workspace-repository.ts";
 import { internationalTransferRepository, INTERNATIONAL_TRANSFER_SQL } from "../src/lib/international-transfer-repository.ts";
+import { TRANSFER_VIEW_COPY } from "../src/components/transfers/transfer-copy.ts";
+import { REFERENCE_COPY } from "../src/components/transfers/reference-copy.ts";
 nextEnv.loadEnvConfig(process.cwd());
 const db = new URL(process.env.AUTH_TEST_DATABASE_URL || "https://invalid.invalid");
 if (!["localhost", "127.0.0.1"].includes(db.hostname) || db.pathname !== "/finbridge_auth_test") throw new Error("Isolated test database required");
@@ -21,6 +23,11 @@ for (const name of ["src", "public", "package.json", "package-lock.json", "tscon
 writeFileSync(path.join(directory, "next.config.ts"), `export default { devIndicators:false, turbopack:{root:${JSON.stringify(root)}} };`);
 const port = 40000 + Math.floor(Math.random() * 1000), origin = `http://localhost:${port}`, secret = "synthetic-transfer-ui-secret-".repeat(3);
 const pool = await testPool(); await pool.query(INTERNATIONAL_TRANSFER_SQL);
+const referenceIds = [];
+for (const currency of ["CNY", "USD", "AUD"]) {
+  const id = randomUUID(); referenceIds.push(id);
+  await pool.query("INSERT INTO finbridge_fx_observations(id,base,quote,rate,rate_date,fetched_at,source) VALUES($1,$2,'VND',3864.07,CURRENT_DATE,CURRENT_TIMESTAMP,'Frankfurter')", [id, currency]);
+}
 const auth = betterAuth(buildAuthOptions({ baseURL: origin, secret, databaseURL: db.href, clientId: "synthetic", clientSecret: "synthetic" }, pool, async () => {}));
 const email = "transfer-ui-" + randomUUID() + "@example.invalid", password = "Synthetic-transfer-ui-password-2026";
 const signup = await auth.api.signUpEmail({ body: { email, password, name: "Synthetic UI" } }), owner = signup.user.id;
@@ -44,6 +51,29 @@ try {
   await context.route("**/api/ai/**", route => route.fulfill({ status: 503, json: { error: "AI_NOT_CONFIGURED" } }));
   page = await context.newPage(); page.setDefaultTimeout(30000); const errors = []; page.on("pageerror", e => errors.push(e.message));
   await page.goto(origin + "/app?tab=transfers", { timeout: 120000 });
+  const referencePanel = page.getByRole("region", { name: REFERENCE_COPY.en.title, exact: true });
+  await referencePanel.getByRole("button", { name: REFERENCE_COPY.en.calculate, exact: true }).waitFor({ state: "visible" });
+  let droppedEstimate = false;
+  await context.route("**/api/international-transfers/reference", async route => {
+    if (route.request().method() === "POST" && !droppedEstimate) {
+      droppedEstimate = true; const accepted = await route.fetch(); assert.equal(accepted.status(), 200);
+      await route.fulfill({ status: 503, json: { error: "UNAVAILABLE" } });
+    } else await route.continue();
+  });
+  await referencePanel.getByRole("button", { name: REFERENCE_COPY.en.calculate, exact: true }).click();
+  await referencePanel.getByRole("button", { name: REFERENCE_COPY.en.retry, exact: true }).click();
+  let estimateModal = page.getByRole("dialog", { name: REFERENCE_COPY.en.details, exact: true });
+  await estimateModal.waitFor();
+  assert.ok((await estimateModal.innerText()).includes("3,864,070"));
+  assert.equal((await pool.query("SELECT count(*)::int AS n FROM finbridge_transfer_estimates WHERE user_id=$1", [owner])).rows[0].n, 1);
+  await page.screenshot({ path: path.join(directory, "reference-estimate-desktop.png") });
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await referencePanel.locator("summary").click();
+  await referencePanel.getByRole("button").filter({ hasText: "3,864,070" }).click();
+  estimateModal = page.getByRole("dialog", { name: REFERENCE_COPY.en.details, exact: true }); await estimateModal.waitFor();
+  await page.keyboard.press("Escape");
+  await page.getByText(REFERENCE_COPY.en.test, { exact: true }).click();
   await page.getByRole("button", { name: "Add education bill", exact: true }).first().click();
   let dialog = page.getByRole("dialog", { name: "Add education bill", exact: true });
   await dialog.getByLabel("Bill name", { exact: true }).fill("Synthetic October tuition");
@@ -81,29 +111,81 @@ try {
   assert.deepEqual(unchanged.transactions, baseline.transactions); assert.deepEqual(unchanged.wallets, baseline.wallets);
   await page.screenshot({ path: path.join(directory, "receipt-desktop.png") });
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
-  await page.reload(); await page.getByRole("button", { name: "Test transfer receipt", exact: true }).click();
+  await page.reload(); await page.getByText(REFERENCE_COPY.en.test, { exact: true }).click(); await page.getByRole("tab", { name: /^Transferred/ }).click(); await page.getByRole("button", { name: "Test transfer receipt", exact: true }).click();
   await page.getByRole("dialog", { name: "Test transfer receipt", exact: true }).waitFor(); await page.keyboard.press("Escape");
   await page.getByText("Payment controls", { exact: true }).click();
   await page.getByRole("button", { name: "Pause new transfers", exact: true }).click();
   await page.getByText(/Transfers paused\. Existing receipts are kept/).waitFor();
   await page.getByRole("button", { name: "Resume transfers", exact: true }).click();
+  await page.getByRole("button", { name: "Pause new transfers", exact: true }).waitFor();
+  const repo = internationalTransferRepository(pool);
+  const mutate = command => repo.mutate(owner, { ...command, mutationId: randomUUID() });
+  for (let i = 0; i < 12; i++) {
+    // Fixture-only quota reset for this disposable user in finbridge_auth_test.
+    await pool.query("UPDATE finbridge_transfer_controls SET requests=0 WHERE user_id=$1", [owner]);
+    let result = await mutate({ action: "saveBill", bill: { schoolId: "shenzhen", title: `List fixture ${i}`, reference: `LIST-${i}`, amount: "1.00", dueDate: completed[0].bill.dueDate } });
+    const b = result.bills.find(b => b.reference === `LIST-${i}`);
+    if (i < 5) {
+      result = await mutate({ action: "quote", id: b.id, version: b.version });
+      const q = result.quotes.find(q => q.billId === b.id && q.provider === "ALIPAY");
+      result = await mutate({ action: "draft", quoteId: q.id });
+      const id = result.resultId;
+      await mutate({ action: "approve", id, acknowledge: true });
+      await mutate({ action: "execute", id });
+    }
+  }
+  await pool.query("UPDATE finbridge_transfer_controls SET requests=0 WHERE user_id=$1", [owner]);
+  await page.reload();
+  await page.getByText(REFERENCE_COPY.en.test, { exact: true }).click();
+  const rows = page.getByTestId("transfer-list").locator(":scope > article");
+  for (const tab of [/^Not transferred/, /^Transferred/, /^Activity history/]) {
+    await page.getByRole("tab", { name: tab }).click();
+    assert.equal(await rows.count(), 5, "Every category starts at five rows");
+    await page.getByRole("button", { name: /^Show more/ }).click();
+    assert.ok(await rows.count() > 5 && await rows.count() <= 10);
+    await page.getByRole("button", { name: "Show less", exact: true }).click();
+    assert.equal(await rows.count(), 5);
+    await page.screenshot({ path: path.join(directory, `list-${await page.getByTestId("transfer-list").getAttribute("data-view")}-desktop.png`) });
+  }
+  await page.getByRole("tab", { name: /^Transferred/ }).click();
+  assert.equal(await rows.getByRole("button", { name: "Test transfer receipt", exact: true }).count(), 5);
+  assert.ok(!(await page.getByTestId("transfer-list").innerText()).includes("Needs a new quote"));
+  assert.ok(!(await page.getByTestId("transfer-list").innerText()).includes("Awaiting review"));
+  await page.getByRole("tab", { name: /^Not transferred/ }).click();
+  await page.getByRole("textbox", { name: "Search this list" }).fill("LIST-11");
+  assert.equal(await rows.count(), 1);
+  assert.ok((await rows.innerText()).includes("List fixture 11"));
   for (const language of [{ code: "vi", title: "Chuyển tiền quốc tế", receipt: "Biên nhận chuyển tiền thử" }, { code: "zh", title: "国际汇款", receipt: "测试汇款回执" }, { code: "en", title: "International transfers", receipt: "Test transfer receipt" }]) {
     await page.evaluate(code => localStorage.setItem("finbridge-preferred-language-v1", code), language.code);
     await page.setViewportSize({ width: 390, height: 844 }); await page.goto(origin + "/app?tab=transfers");
-    await page.getByRole("button", { name: language.receipt, exact: true }).waitFor();
+    const copy = TRANSFER_VIEW_COPY[language.code];
+    await page.getByRole("heading", { name: REFERENCE_COPY[language.code].title, exact: true }).waitFor();
+    await page.getByText(REFERENCE_COPY[language.code].test, { exact: true }).click();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: path.join(directory, `reference-${language.code}-mobile.png`) });
+    for (const key of ["pending", "history", "completed"]) {
+      await page.getByRole("tab", { name: new RegExp("^" + copy[key]) }).click();
+      assert.equal(await rows.count(), 5);
+      assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "Mobile list must not overflow");
+      await page.screenshot({ path: path.join(directory, `${key}-${language.code}-mobile.png`) });
+    }
+    await page.getByRole("button", { name: language.receipt, exact: true }).first().waitFor();
     assert.ok((await page.locator("main").innerText()).includes(language.title));
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "Mobile layout must not overflow");
     await page.screenshot({ path: path.join(directory, "transfers-" + language.code + "-mobile.png") });
-    await page.getByRole("button", { name: language.receipt, exact: true }).click();
+    await page.getByRole("button", { name: language.receipt, exact: true }).first().click();
     const modal = page.getByRole("dialog"); assert.ok(await modal.isVisible());
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1));
     await page.screenshot({ path: path.join(directory, "receipt-" + language.code + "-mobile.png") }); await page.keyboard.press("Escape");
   }
-  assert.deepEqual(errors, []); console.log("PASS: full transfer workflow; reference-only route; approval; dropped response retry; single receipt; database reload; pause/resume; tracked wallets unchanged; EN/VI/ZH; 390px bounds."); console.log("Screenshots:", directory);
+  assert.deepEqual(errors, []); console.log("PASS: persisted FX estimate and snapshot; lost-response estimate retry; sandbox workflow; approval; single receipt; database reload; pause/resume; tracked wallets unchanged; three distinct lists; five-row batches; Show more/less; search; EN/VI/ZH; 390px bounds."); console.log("Screenshots:", directory);
 } catch (e) { if (page) { await page.screenshot({ path: path.join(directory, "failure.png"), fullPage: true }); console.error((await page.locator("body").innerText()).slice(-3500)); } console.error("Evidence:", directory); console.error(logs.slice(-1800)); throw e; }
 finally {
   if (browser) await browser.close();
   if (server.pid && process.platform === "win32") { try { execFileSync("taskkill", ["/pid", String(server.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" }); } catch {} } else server.kill();
+  await pool.query("DELETE FROM finbridge_transfer_estimates WHERE user_id=$1", [owner]);
+  await pool.query("DELETE FROM finbridge_transfer_estimate_limits WHERE user_id=$1", [owner]);
+  await pool.query("DELETE FROM finbridge_fx_observations WHERE id=ANY($1::uuid[])", [referenceIds]);
   for (const table of ["finbridge_transfer_mutations", "finbridge_transfer_audit", "finbridge_transfer_plans", "finbridge_transfer_quotes", "finbridge_transfer_bills", "finbridge_transfer_accounts", "finbridge_transfer_controls", "finbridge_onboarding"]) await pool.query(`DELETE FROM ${table} WHERE user_id=$1`, [owner]);
   await cleanupFinance(pool, [owner]); await pool.end();
 }

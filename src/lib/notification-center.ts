@@ -4,6 +4,18 @@ import type { SafetyEvent } from "./safety-model";
 export interface NotificationItem extends FinancialAlert { read: boolean; handled: boolean; }
 export interface NotificationFeed { items: NotificationItem[]; unreadCount: number; }
 
+export const NOTIFICATION_CENTER_OPEN_EVENT = "finbridge:open-notifications";
+
+/** Home is an action shortlist; reading an item does not resolve the problem. */
+export function homeAttentionAlerts(alerts: readonly FinancialAlert[], handledSetting: unknown): FinancialAlert[] {
+  const handled = new Set(readDismissedAlertIds(handledSetting));
+  const unique = new Map<string, FinancialAlert>();
+  for (const alert of alerts) {
+    if (alert.priority === "high" && !handled.has(alert.id) && !unique.has(alert.id)) unique.set(alert.id, alert);
+  }
+  return [...unique.values()].slice(0, 3);
+}
+
 function idsFromSetting(value: unknown) {
   try {
     const parsed: unknown = JSON.parse(String(value || "[]"));

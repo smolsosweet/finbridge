@@ -58,6 +58,38 @@ const zh: Copy = {
   errors: { QUOTE_EXPIRED: "报价已过期，请刷新并重新创建草稿。", BILL_CHANGED: "账单或报价已更改，请重新加载并核对。", BILL_OVERDUE: "账单已逾期，请更新截止日期。", ALREADY_COMPLETED: "此账单的测试汇款已完成，请查看回执。", PAUSED: "汇款已暂停，请先恢复。", INSUFFICIENT_RESERVE: "汇款后的测试余额将低于最低储备金。", APPROVAL_REQUIRED: "请重新核对并批准草稿后再完成。", CHANNEL_UNAVAILABLE: "模拟环境中无法选择此渠道。", DUPLICATE_REFERENCE: "该学校的账单编号已存在。", MUTATION_MISMATCH: "重试时请求内容已更改，请刷新页面。", NOT_FOUND: "您的账户中找不到此记录。", UNAUTHENTICATED: "请重新登录。", WORKSPACE_OWNER_CHANGED: "登录账户已更改，请重新加载。", RATE_LIMITED: "操作过于频繁，请等待一分钟后重试。", INVALID_COMMAND: "请检查金额、日期和必填字段。", BILL_LIMIT: "每个测试账户最多支持 100 张账单。", UNAVAILABLE: "服务不可用，请检查数据库迁移后重试。" },
 };
 export const TRANSFER_COPY: Record<AppLanguage, Copy> = { en, vi, zh };
+export const TRANSFER_VIEW_COPY = {
+  en: {
+    pending: "Not transferred", completed: "Transferred", history: "Activity history",
+    pendingHelp: "Bills without a completed test transfer. Review and approve a transfer before completing it.",
+    completedHelp: "Only completed test transfers with a receipt appear here. Amounts shown are the total test debit, including fees.",
+    historyHelp: "A record of actions such as creating a draft, approving, cancelling or completing it. An action here does not mean money was transferred.",
+    search: "Search this list", more: "Show more", collapse: "Show less", showing: "Showing", of: "of",
+    emptyPending: "No bills waiting for transfer", emptyCompleted: "No completed transfers yet", emptyHistory: "No activity yet", noMatches: "No matching results",
+    related: "View related item", historyLimit: "Up to 200 recent actions are shown. Completed receipts remain available under Transferred.",
+    continueReview: "Continue review", expired: "Quote expired", approvalExpired: "Approval expired", recorded: "Action recorded", transferred: "Test transfer completed",
+  },
+  vi: {
+    pending: "Chưa chuyển", completed: "Đã chuyển", history: "Lịch sử thao tác",
+    pendingHelp: "Các hóa đơn chưa có giao dịch chuyển thử hoàn tất. Bạn cần kiểm tra và phê duyệt trước khi hoàn tất chuyển tiền.",
+    completedHelp: "Chỉ hiển thị giao dịch chuyển thử đã hoàn tất và có biên nhận. Số tiền hiển thị là tổng tiền thử nghiệm bị trừ, đã gồm phí.",
+    historyHelp: "Ghi lại các thao tác như tạo bản nháp, phê duyệt, hủy hoặc hoàn tất. Có thao tác ở đây chưa có nghĩa là đã chuyển tiền.",
+    search: "Tìm trong danh sách này", more: "Xem thêm", collapse: "Thu gọn", showing: "Đang hiển thị", of: "/",
+    emptyPending: "Không có hóa đơn chờ chuyển", emptyCompleted: "Chưa có giao dịch chuyển hoàn tất", emptyHistory: "Chưa có thao tác nào", noMatches: "Không có kết quả phù hợp",
+    related: "Xem mục liên quan", historyLimit: "Hiển thị tối đa 200 thao tác gần nhất. Biên nhận hoàn tất vẫn được lưu trong mục Đã chuyển.",
+    continueReview: "Tiếp tục kiểm tra", expired: "Báo giá đã hết hạn", approvalExpired: "Phê duyệt đã hết hạn", recorded: "Đã ghi nhận thao tác", transferred: "Đã chuyển thử thành công",
+  },
+  zh: {
+    pending: "待汇款", completed: "已汇款", history: "操作记录",
+    pendingHelp: "尚未完成测试汇款的账单。请先核对并批准，再完成汇款。",
+    completedHelp: "仅显示已完成且有回执的测试汇款。所示金额为含手续费的测试扣款总额。",
+    historyHelp: "记录创建草稿、批准、取消及完成等操作。出现操作记录并不代表已汇款。",
+    search: "搜索当前列表", more: "查看更多", collapse: "收起", showing: "显示", of: "/",
+    emptyPending: "暂无待汇款账单", emptyCompleted: "暂无已完成汇款", emptyHistory: "暂无操作记录", noMatches: "没有匹配结果",
+    related: "查看相关项目", historyLimit: "最多显示最近 200 次操作，已完成回执仍可在已汇款中查看。",
+    continueReview: "继续核对", expired: "报价已过期", approvalExpired: "批准已过期", recorded: "已记录操作", transferred: "测试汇款成功",
+  },
+};
 export function transferProviderName(id: string, lang: AppLanguage) {
   if (id === "ALIPAY") return lang === "vi" ? "Alipay giáo dục · giả lập" : lang === "zh" ? "Alipay 教育 · 模拟" : "Alipay Education · simulated";
   if (id === "BANK_A") return lang === "vi" ? "Ngân hàng A · giả lập" : lang === "zh" ? "银行 A · 模拟" : "Bank A · simulated";

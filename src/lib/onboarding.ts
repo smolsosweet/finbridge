@@ -21,6 +21,7 @@ export const onboardingSchema = z.object({
   reserves: z.array(z.object({ walletId: identifier, amount }).strict()).min(1).max(30),
 }).strict().superRefine((data, ctx) => {
   const ids = new Set(data.wallets.map(w => w.id));
+  const wallets = new Map(data.wallets.map(wallet => [wallet.id, wallet]));
   const normalize = (s: string) => s.normalize("NFKC").toLocaleLowerCase();
   const categories = [...data.expenseCategories, ...data.incomeCategories].map(normalize);
   if (ids.size !== data.wallets.length || new Set(data.commitments.map(c => c.id)).size !== data.commitments.length
@@ -28,11 +29,19 @@ export const onboardingSchema = z.object({
     ctx.addIssue({ code: "custom", message: "Duplicate wallet, category or commitment." });
   if (data.reserves.length !== ids.size || new Set(data.reserves.map(r => r.walletId)).size !== ids.size || data.reserves.some(r => !ids.has(r.walletId)))
     ctx.addIssue({ code: "custom", message: "One reserve per wallet is required." });
+  const commitmentCents = new Map<string, number>();
   for (const c of data.commitments) {
     if (!ids.has(c.walletId) || !data.expenseCategories.includes(c.category)) ctx.addIssue({ code: "custom", message: "Commitment references a missing wallet/category." });
     const date = new Date(c.dueDate + "T12:00:00Z");
     if ((c.monthPosition === "start" && date.getUTCDate() !== 1) || (c.monthPosition === "end" && date.getUTCDate() !== new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate()))
       ctx.addIssue({ code: "custom", message: "Payment date does not match month position." });
+    commitmentCents.set(c.walletId, (commitmentCents.get(c.walletId) || 0) + Math.round(c.amount * 100));
+  }
+  for (const [walletId, total] of commitmentCents) {
+    const wallet = wallets.get(walletId);
+    if (wallet && total > Math.round(wallet.initial * 100)) {
+      ctx.addIssue({ code: "custom", message: "Fixed expenses exceed the wallet opening balance.", path: ["commitments"] });
+    }
   }
 });
 export type OnboardingData = z.infer<typeof onboardingSchema>;

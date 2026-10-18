@@ -66,6 +66,50 @@ test("invalid wallet/category steps cannot advance or call the server", async ()
   reset(); await submit(); await submit(); await submit();
   assert.ok(find(tree(), n => n.props.role === "alert")); assert.equal(requests.length, 0); assert.equal(completed.length, 0);
 });
+test("fixed expenses cannot exceed the selected wallet opening balance", async () => {
+  reset(); fill("What should Jake call you?", "Synthetic"); await submit(); await submit(); fill("Wallet name", "Cash"); fill("Opening balance", "200000"); await submit(); click("Dining"); await submit(); click("Salary"); await submit();
+  click("Yes"); fill("Expense name", "Rent"); fill("Amount", "200001"); fill("Expense category", "Dining"); fill("First due date", "2026-10-15"); click("Add expense");
+  assert.ok(find(tree(), n => n.props.role === "alert" && text(n).includes("cannot exceed its opening balance")));
+  assert.equal(find(tree(), n => n.type === "button" && text(n) === "Add expense").props.disabled, true);
+  fill("Amount", "200000"); click("Add expense"); await submit(); await submit();
+  assert.equal(requests.length, 1); assert.equal(requests[0].body.commitments[0].amount, 200000);
+});
+test("Continue automatically saves the current expense exactly once", async () => {
+  reset(); fill("What should Jake call you?", "Synthetic"); await submit(); await submit(); fill("Wallet name", "Cash"); fill("Opening balance", "200000"); await submit(); click("Dining"); await submit(); click("Salary"); await submit();
+  click("Yes"); fill("Expense name", "Rent"); fill("Amount", "50000"); fill("Expense category", "Dining"); fill("First due date", "2026-10-15");
+  const next = find(tree(), n => n.type === "button" && text(n) === "Continue");
+  assert.equal(next.props.disabled, false);
+  await submit(); await submit();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.commitments.length, 1);
+  assert.equal(requests[0].body.commitments[0].title, "Rent");
+});
+test("missing fixed-expense fields show specific errors without saving or advancing", async () => {
+  reset(); fill("What should Jake call you?", "Synthetic"); await submit(); await submit(); fill("Wallet name", "Cash"); fill("Opening balance", "200000"); await submit(); click("Dining"); await submit(); click("Salary"); await submit();
+  click("Yes"); fill("Expense name", "Rent"); click("Add expense");
+  assert.ok(find(tree(), n => n.props.role === "alert" && text(n).includes("Enter an amount greater than 0")));
+  fill("Amount", "200000"); await submit();
+  assert.ok(find(tree(), n => n.props.role === "alert" && text(n).includes("Choose an expense category")));
+  fill("Expense category", "Dining"); await submit();
+  assert.ok(find(tree(), n => n.props.role === "alert" && text(n).includes("Choose a valid first due date")));
+  assert.equal(requests.length, 0);
+  fill("First due date", "2026-10-24"); await submit(); await submit();
+  assert.equal(requests[0].body.commitments.length, 1);
+});
+test("custom categories reuse the existing name regardless of capitalization", async () => {
+  reset(); fill("What should Jake call you?", "Synthetic"); await submit(); await submit(); fill("Wallet name", "Cash"); fill("Opening balance", "200000"); await submit();
+  fill("New category name", "Di chuyển"); click("Add category");
+  fill("New category name", "di chuyển"); click("Add category"); await submit(); click("Salary"); await submit();
+  click("Yes"); fill("Expense name", "Di chuyển"); fill("Amount", "200000"); fill("Expense category", "__finbridge_other_expense_category__"); fill("Other expense category", "  di chuyển  "); fill("First due date", "2026-10-24"); await submit(); await submit();
+  assert.deepEqual(requests[0].body.expenseCategories, ["Di chuyển"]);
+  assert.equal(requests[0].body.commitments[0].category, "Di chuyển");
+});
+test("a custom fixed-expense category is added to the onboarding profile", async () => {
+  reset(); fill("What should Jake call you?", "Synthetic"); await submit(); await submit(); fill("Wallet name", "Cash"); fill("Opening balance", "200000"); await submit(); click("Dining"); await submit(); click("Salary"); await submit();
+  click("Yes"); fill("Expense name", "Club fee"); fill("Amount", "50000"); fill("Expense category", "__finbridge_other_expense_category__"); fill("Other expense category", "Professional membership"); fill("First due date", "2026-10-15"); click("Add expense"); await submit(); await submit();
+  assert.deepEqual(requests[0].body.expenseCategories, ["Dining", "Professional membership"]);
+  assert.equal(requests[0].body.commitments[0].category, "Professional membership");
+});
 test("a server failure keeps the draft for a retry and does not complete setup", async () => {
   reset(); fill("What should Jake call you?", "Synthetic"); await submit(); await submit(); fill("Wallet name", "Cash"); await submit(); click("Dining"); await submit(); click("Salary"); await submit(); await submit(); status = 503; await submit();
   assert.equal(completed.length, 0); assert.ok(find(tree(), n => n.props.role === "alert")); assert.ok(storage.get("finbridge-setup-draft:synthetic-user"));

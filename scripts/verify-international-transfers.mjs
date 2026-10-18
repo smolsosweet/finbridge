@@ -3,10 +3,32 @@ import test from "node:test";
 import { randomUUID } from "node:crypto";
 import { assertTransferReady, quoteTransfer, TRANSFER_APPROVAL_MS, TRANSFER_QUOTE_MS, TRANSFER_RESERVE, transferBillSchema, transferCommandSchema } from "../src/lib/international-transfer.ts";
 import { handleInternationalTransfer } from "../src/lib/international-transfer-handler.ts";
+import { completedTransfers, pendingTransferBills, transferHistoryTarget } from "../src/lib/transfer-views.ts";
 const now = new Date("2026-10-17T06:00:00Z");
 const bill = { id: randomUUID(), schoolId: "shenzhen", title: "Synthetic tuition", reference: "OCT-2026", amount: "20000.00", dueDate: "2026-10-31", version: 1, archived: false, createdAt: now.toISOString() };
 const quote = () => quoteTransfer(bill, "BANK_A", now, randomUUID());
 const plan = () => ({ id: randomUUID(), bill, quote: quote(), status: "review", createdAt: now.toISOString() });
+test("completed view requires a receipt and retains older receipts beyond the recent-plan window", () => {
+  const older = { ...plan(), status: "completed", receiptId: "older", completedAt: "2026-10-15T06:00:00Z" };
+  const latest = { ...plan(), status: "completed", receiptId: "latest", completedAt: now.toISOString() };
+  const others = ["review", "approved", "cancelled", "invalidated"].map(status => ({ ...plan(), status }));
+  const document = { plans: [...others, latest, { ...plan(), status: "completed" }], receipts: [older, latest] };
+  assert.deepEqual(completedTransfers(document).map(p => p.receiptId), ["latest", "older"]);
+});
+test("paid bill cannot reappear in pending because an earlier draft needs another quote", () => {
+  const paid = { ...plan(), status: "completed", receiptId: "receipt" };
+  const pending = { ...bill, id: randomUUID() }, archived = { ...bill, id: randomUUID(), archived: true };
+  assert.deepEqual(pendingTransferBills([bill, pending, archived], [paid]).map(b => b.id), [pending.id]);
+  assert.deepEqual(pendingTransferBills([bill, pending, archived], [paid], true).map(b => b.id), [pending.id, archived.id]);
+});
+test("history targets resolve the actual bill or plan without treating draft activity as completion", () => {
+  const draft = plan(), receipt = { ...plan(), status: "completed", receiptId: "receipt" };
+  const document = { bills: [bill], plans: [draft], receipts: [receipt] };
+  assert.equal(transferHistoryTarget({ targetId: draft.id }, document).plan.status, "review");
+  assert.equal(transferHistoryTarget({ targetId: receipt.id }, document).plan.receiptId, "receipt");
+  assert.equal(transferHistoryTarget({ targetId: bill.id }, document).bill.id, bill.id);
+  assert.deepEqual(transferHistoryTarget({ targetId: "missing" }, document), { plan: undefined, bill: undefined });
+});
 test("ported example preserves exact total and receiver amount without double charging fees", () => {
   const q = quote(); assert.equal(q.conversion, 70400000); assert.equal(q.fxMarkup, 140800); assert.equal(q.transferFee, 220000); assert.equal(q.total, 70760800); assert.equal(q.receiveAmount, "20000.00");
   assert.equal(q.total, q.conversion + q.fxMarkup + q.transferFee);

@@ -50,6 +50,8 @@
 .compactCopy p { margin-top: 2px; overflow: hidden; color: var(--r-muted,#64748b); text-overflow: ellipsis; white-space: nowrap; line-height: 1.45; }
 .compactCopy small { margin-top: 2px; font-size: 10px; }
 .compactDetails { min-height: 34px!important; padding: 6px 10px!important; margin: 0!important; }
+.compactFooter { display: flex; justify-content: flex-end; margin-top: 10px; }
+.compactFooter button { background: transparent; color: var(--r-teal,#5930b5); padding: 8px 0; }
 .modalDetail { display: grid; gap: 14px; }
 .modalDetail section { padding: 12px; border: 1px solid var(--r-line,#e2e8f0); border-radius: 11px; background: var(--r-bg,#f8fafc); }
 .modalDetail section p { margin: 5px 0 0; color: var(--r-muted,#64748b); font-size: 12px; line-height: 1.6; }

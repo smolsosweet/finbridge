@@ -307,10 +307,10 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
   const menuItems = [
     {
       id: "notifications",
-      title: SAFETY_COPY[lang].preferences,
-      subtitle: SAFETY_COPY[lang].emailPrefs,
-      icon: <Mail size={22} />,
-      onClick: () => navigate("safetyAlerts?view=preferences"),
+      title: SAFETY_COPY[lang].title,
+      subtitle: SAFETY_COPY[lang].subtitle,
+      icon: <ShieldCheck size={22} />,
+      onClick: () => navigate("safetyAlerts"),
     },
     {
       id: "account",

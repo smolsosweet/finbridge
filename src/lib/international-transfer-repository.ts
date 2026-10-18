@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
+import { TRANSFER_REFERENCE_SQL } from "./transfer-reference-repository";
+import { transferSandboxEnabled } from "./transfer-runtime";
 import { assertTransferReady, quoteTransfer, transferDate, TransferError, TRANSFER_OPENING, TRANSFER_PROVIDERS, TRANSFER_RESERVE, type TransferBill, type TransferCommand, type TransferDocument, type TransferPlan, type TransferQuote } from "./international-transfer";
 
-export const INTERNATIONAL_TRANSFER_SQL = `
+export const INTERNATIONAL_TRANSFER_SQL = TRANSFER_REFERENCE_SQL + `
 CREATE TABLE IF NOT EXISTS finbridge_transfer_controls (
  user_id TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE RESTRICT,
  paused BOOLEAN NOT NULL DEFAULT false, window_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -48,14 +50,15 @@ CREATE INDEX IF NOT EXISTS finbridge_transfer_plan_time ON finbridge_transfer_pl
 CREATE INDEX IF NOT EXISTS finbridge_transfer_audit_time ON finbridge_transfer_audit(user_id,created_at DESC);
 `;
 export type TransferRepository = { read(owner: string): Promise<TransferDocument>; mutate(owner: string, command: TransferCommand): Promise<TransferDocument & { resultId?: string }> };
-export function internationalTransferRepository(pool: Pool, clock: () => Date = () => new Date()): TransferRepository {
+export function internationalTransferRepository(pool: Pool, clock: () => Date = () => new Date(), options: { sandboxEnabled?: boolean } = {}): TransferRepository {
+  const sandboxEnabled = options.sandboxEnabled ?? transferSandboxEnabled();
   async function active(c: PoolClient, owner: string) {
     const user = await c.query('SELECT id FROM "user" WHERE id=$1 AND "emailVerified"=true FOR SHARE', [owner]);
     if (!user.rowCount || (await c.query("SELECT 1 FROM finbridge_account_lifecycle WHERE user_id=$1", [owner])).rowCount) throw new TransferError("UNAUTHENTICATED", 401);
   }
   async function initialize(c: PoolClient, owner: string) {
     await c.query("INSERT INTO finbridge_transfer_controls(user_id) VALUES($1) ON CONFLICT DO NOTHING", [owner]);
-    for (const id of ["ALIPAY", "BANK_A"]) await c.query("INSERT INTO finbridge_transfer_accounts(user_id,id,opening,balance) VALUES($1,$2,$3,$3) ON CONFLICT DO NOTHING", [owner, id, TRANSFER_OPENING]);
+    if (sandboxEnabled) for (const id of ["ALIPAY", "BANK_A"]) await c.query("INSERT INTO finbridge_transfer_accounts(user_id,id,opening,balance) VALUES($1,$2,$3,$3) ON CONFLICT DO NOTHING", [owner, id, TRANSFER_OPENING]);
   }
   async function document(c: PoolClient, owner: string): Promise<TransferDocument> {
     const controls = await c.query("SELECT paused FROM finbridge_transfer_controls WHERE user_id=$1", [owner]);
@@ -65,7 +68,7 @@ export function internationalTransferRepository(pool: Pool, clock: () => Date = 
     const receipts = await c.query("SELECT data FROM finbridge_transfer_plans WHERE user_id=$1 AND status='completed' ORDER BY created_at DESC,id", [owner]);
     const quotes = await c.query("SELECT data FROM finbridge_transfer_quotes WHERE user_id=$1 AND expires_at>$2 ORDER BY created_at DESC,id LIMIT 300", [owner, clock()]);
     const audit = await c.query('SELECT id,event,target_id AS "targetId",created_at AS "createdAt" FROM finbridge_transfer_audit WHERE user_id=$1 ORDER BY created_at DESC,id LIMIT 200', [owner]);
-    return { mode: "sandbox", paused: controls.rows[0]?.paused ?? false, reserve: TRANSFER_RESERVE, accounts: accounts.rows, bills: bills.rows.map(r => r.data), quotes: quotes.rows.map(r => r.data), plans: plans.rows.slice(0, 200).map(r => r.data), receipts: receipts.rows.map(r => r.data), audit: audit.rows.map(r => ({ ...r, createdAt: r.createdAt.toISOString() })), serverTime: clock().toISOString(), hasMore: plans.rows.length > 200 };
+    return { mode: "sandbox", sandboxEnabled, paused: controls.rows[0]?.paused ?? false, reserve: TRANSFER_RESERVE, accounts: accounts.rows, bills: bills.rows.map(r => r.data), quotes: quotes.rows.map(r => r.data), plans: plans.rows.slice(0, 200).map(r => r.data), receipts: receipts.rows.map(r => r.data), audit: audit.rows.map(r => ({ ...r, createdAt: r.createdAt.toISOString() })), serverTime: clock().toISOString(), hasMore: plans.rows.length > 200 };
   }
   async function audit(c: PoolClient, owner: string, event: string, id: string) { await c.query("INSERT INTO finbridge_transfer_audit(user_id,id,event,target_id) VALUES($1,$2,$3,$4)", [owner, randomUUID(), event, id]); }
   async function bill(c: PoolClient, owner: string, id: string) {
@@ -87,7 +90,9 @@ export function internationalTransferRepository(pool: Pool, clock: () => Date = 
       const c = await pool.connect(), now = clock();
       const hash = createHash("sha256").update(JSON.stringify(command)).digest("hex");
       try {
-        await c.query("BEGIN"); await active(c, owner); await initialize(c, owner);
+        await c.query("BEGIN"); await active(c, owner);
+        if (!sandboxEnabled && ["quote", "draft", "approve", "execute"].includes(command.action)) throw new TransferError("SANDBOX_DISABLED", 403);
+        await initialize(c, owner);
         const control = (await c.query("SELECT * FROM finbridge_transfer_controls WHERE user_id=$1 FOR UPDATE", [owner])).rows[0];
         const replay = (await c.query("SELECT * FROM finbridge_transfer_mutations WHERE user_id=$1 AND id=$2", [owner, command.mutationId])).rows[0];
         if (replay) {

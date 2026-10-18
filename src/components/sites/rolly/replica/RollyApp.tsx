@@ -47,8 +47,11 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
   }[lang] as Array<[string, string, string]>;
 
   navLabels.splice(3, 0, ["transfers", lang === "vi" ? "Chuyển tiền quốc tế" : lang === "zh" ? "国际汇款" : "International transfers", "f0ac"]);
+  navLabels.splice(3, 0, ["safetyAlerts", lang === "vi" ? "Ngưỡng an toàn" : lang === "zh" ? "安全阈值" : "Safety thresholds", "f3ed"]);
+  const mobileNavLabels = navLabels.filter(([id]) => id !== "safetyAlerts");
+  const navigateToSection = (id: string) => navigate(id === "home" ? "" : id === "safetyAlerts" ? "safetyAlerts" : "?tab=" + id);
   let content;
-  if (!screen) content = tab === "transfers" ? <InternationalTransfers navigate={navigate} /> : tab === "tools" ? <Planning navigate={navigate} initialTab={params.get("plan") === "fixed" ? "fixed" : "budget"} /> : tab === "settings" ? <SettingsOverview navigate={navigate} /> : tab === "transactions" ? <TransactionHistory navigate={navigate} /> : <Dashboard key={tab} navigate={navigate} />;
+  if (!screen) content = tab === "transfers" ? <InternationalTransfers navigate={navigate} /> : tab === "tools" ? <Planning key={params.get("plan") === "fixed" ? "planning-fixed" : "planning-budget"} navigate={navigate} initialTab={params.get("plan") === "fixed" ? "fixed" : "budget"} /> : tab === "settings" ? <SettingsOverview navigate={navigate} /> : tab === "transactions" ? <TransactionHistory navigate={navigate} /> : <Dashboard key={tab} navigate={navigate} />;
   else if (["budget", "savings", "fixedExpenses", "createBudget", "createFixedExpense", "createSavingsGoal", "debt", "loanList", "challenge", "createDebtClerance", "createLoan", "createChallenge"].includes(screen)) content = <Planning key={screen} navigate={navigate} initialTab={["savings", "fixedExpenses", "createFixedExpense", "createSavingsGoal"].includes(screen) ? "fixed" : "budget"} initialForm={screen === "createBudget" ? "budget" : ["createFixedExpense", "createSavingsGoal"].includes(screen) ? "fixed" : ""} />;
   else if (tools.some((t) => t.path === screen)) content = <ToolPage key={screen} screen={screen} navigate={navigate} />;
   else if (tools.some((t) => t.create === screen)) content = <GoalForm key={screen} screen={screen} navigate={navigate} initialType={params.get("initialType") || undefined} />;
@@ -99,14 +102,15 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
                 const isActive =
                   (!screen && tab === id) ||
                   (id === "settings" && ["accountSettings", "featureRequest", "featureRequestCompleted"].includes(screen)) ||
-                  (id === "tools" && ["budget", "savings", "fixedExpenses", "createBudget", "createFixedExpense", "safetyAlerts"].includes(screen));
+                  (id === "tools" && ["budget", "savings", "fixedExpenses", "createBudget", "createFixedExpense"].includes(screen)) ||
+                  (id === "safetyAlerts" && screen === "safetyAlerts");
                 return (
                   <button
                     key={id}
                     type="button"
                     className={"fb-sidebar-nav-item" + (isActive ? " active" : "")}
                     aria-current={isActive ? "page" : undefined}
-                    onClick={() => navigate(id === "home" ? "" : "?tab=" + id)}
+                    onClick={() => navigateToSection(id)}
                   >
                     <Icon code={code} />
                     <span>{label}</span>
@@ -174,13 +178,13 @@ export function RollyApp({ screen = "" }: { screen?: string }) {
 
       {!screen && (
         <nav className="r-bottom-nav" aria-label="Điều hướng chính">
-          {navLabels.map(([id, name, code]) => (
+          {mobileNavLabels.map(([id, name, code]) => (
             <button
               key={id}
               type="button"
               className={tab === id ? "active" : ""}
               aria-current={tab === id ? "page" : undefined}
-              onClick={() => navigate(id === "home" ? "" : "?tab=" + id)}
+              onClick={() => navigateToSection(id)}
             >
               <Icon code={code} />
               <span>{name}</span>
