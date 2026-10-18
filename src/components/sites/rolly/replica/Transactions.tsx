@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
+import { ledgerDateKey } from "./calendarLedger";
 import { Camera, Mic, Send, Settings, Plus, ArrowRightLeft, X, Trash2 } from "lucide-react";
 import { EmptyState, Field, Mascot, Modal, PageHeader, Toggle } from "./Ui";
 import { currencySymbol, money, today, updateState, useAppState, workspaceOwner, workspacePersistence, type AppState, type ChatMessage, type Transaction } from "./store";
@@ -202,12 +204,15 @@ export function TransactionForm({
   const t = TRANSACTION_FORM_I18N[lang];
 
   const existing = state.transactions.find((item) => item.id === id);
+  const calendarParams = useSearchParams();
+  const requestedDate = ledgerDateKey(calendarParams.get("date") || "");
+  const requestedWallet = state.wallets.find(w => !w.archived && w.currency === calendarParams.get("currency"));
   const [type, setType] = useState<"expense" | "income">(existing?.type === "income" ? "income" : "expense");
   const [title, setTitle] = useState(existing?.title || "");
   const [amount, setAmount] = useState(existing ? String(existing.amount) : "");
-  const [date, setDate] = useState(existing?.date || "2026-10-12");
+  const [date, setDate] = useState((existing && ledgerDateKey(existing.date)) || requestedDate || today());
   const [category, setCategory] = useState(existing?.category || state.categories[0]);
-  const [wallet, setWallet] = useState(existing?.wallet || state.wallets[0].id);
+  const [wallet, setWallet] = useState(existing?.wallet || requestedWallet?.id || state.wallets.find(w => !w.archived)?.id || "");
   const [note, setNote] = useState(existing?.note || "");
   const [image, setImage] = useState(existing?.image || "");
   const [subcategory, setSubcategory] = useState(existing?.subcategory || "");
@@ -332,6 +337,7 @@ export function TransactionForm({
       <Field label={recurring ? t.nextScheduledDate : t.date}>
         <input
           type="date"
+          required
           value={date}
           onChange={(e) => setDate(e.target.value)}
         />

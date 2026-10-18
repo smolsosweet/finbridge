@@ -3,7 +3,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, RotateCcw } from "lucide-react";
 import { Modal } from "./Ui";
-import { DASHBOARD_SAMPLE, formatHomeMoney } from "./Dashboard";
+import { formatHomeMoney } from "./Dashboard";
+import { ledgerDateKey } from "./calendarLedger";
 import { categoryIcon } from "./Categories";
 import { useAppState } from "./store";
 import { resolveLanguage, resolveWalletDisplayName } from "@/lib/i18n";
@@ -16,6 +17,9 @@ interface CalendarLedgerModalProps {
 
 const COPY = {
   vi: {
+    recordedOnly: "Chỉ gồm giao dịch đã ghi nhận. Khoản chi cố định chưa thanh toán không cộng vào tổng chi; chuyển giữa ví không tính là thu hoặc chi.",
+    transfer: "Chuyển giữa ví",
+    transaction: "Giao dịch",
     title: "Lịch thu chi",
     subtitle: "Theo dõi dòng tiền thu & chi theo từng ngày",
     today: "Hôm nay",
@@ -35,6 +39,9 @@ const COPY = {
     close: "Đóng",
   },
   en: {
+    recordedOnly: "Recorded transactions only. Unpaid fixed expenses are excluded; transfers between wallets are not income or expenses.",
+    transfer: "Wallet transfer",
+    transaction: "Transaction",
     title: "Calendar Ledger",
     subtitle: "Daily income and expense tracking",
     today: "Today",
@@ -54,6 +61,9 @@ const COPY = {
     close: "Close",
   },
   zh: {
+    recordedOnly: "仅包含已记录的交易。未支付的固定支出不计入总支出；钱包间转账不计为收入或支出。",
+    transfer: "钱包转账",
+    transaction: "交易",
     title: "收支日历",
     subtitle: "按日追踪收入与支出流水",
     today: "今天",
@@ -87,7 +97,7 @@ function formatCompactValue(amount: number, currency: string): string {
   // USD, CNY, EUR, etc.
   if (abs >= 1_000_000) return (abs / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
   if (abs >= 1_000) return (abs / 1e3).toFixed(1).replace(/\.0$/, "") + "k";
-  return String(Math.round(abs));
+  return String(Number(abs.toFixed(4)));
 }
 
 function toLocalDateString(d: Date): string {
@@ -101,9 +111,9 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
   const locale = lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US";
 
   const todayStr = useMemo(() => toLocalDateString(new Date()), []);
-  const initial = initialDate || todayStr;
-  const initialYear = Number(initial.slice(0, 4)) || 2026;
-  const initialMonth = (Number(initial.slice(5, 7)) || 10) - 1;
+  const initial = (initialDate && ledgerDateKey(initialDate)) || todayStr;
+  const initialYear = Number(initial.slice(0, 4));
+  const initialMonth = Number(initial.slice(5, 7)) - 1;
 
   const [year, setYear] = useState(initialYear);
   const [month, setMonth] = useState(initialMonth); // 0-indexed
@@ -127,22 +137,27 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
     currency?: string;
   };
 
-  const allRecords = useMemo((): AnyRecord[] => {
-    if (state.transactions && state.transactions.length > 0) {
-      return state.transactions;
+  // The workspace is hydrated from the authenticated account's database.
+  // An empty ledger must remain empty, including after the last record is deleted.
+  const allRecords: AnyRecord[] = state.transactions;
+  const recordsByDate = useMemo(() => {
+    const days = new Map<string, AnyRecord[]>();
+    for (const record of allRecords) {
+      const date = ledgerDateKey(record.date);
+      if (!date) continue;
+      const records = days.get(date) || [];
+      records.push(record);
+      days.set(date, records);
     }
-    return DASHBOARD_SAMPLE.map((s) => ({
-      ...s,
-      wallet: s.wallet || state.wallets.find((w) => w.currency === s.currency)?.id || "default",
-    }));
-  }, [state.transactions, state.wallets]);
+    return days;
+  }, [allRecords]);
 
   // Detected unique currencies
   const availableCurrencies = useMemo(() => {
     const set = new Set<string>();
     state.wallets.forEach((w) => { if (w.currency) set.add(w.currency.toUpperCase()); });
     allRecords.forEach((r) => {
-      const c = r.currency || (r.wallet ? walletMap.get(r.wallet)?.currency : undefined);
+      const c = (r.wallet ? walletMap.get(r.wallet)?.currency : undefined) || r.currency;
       if (c) set.add(c.toUpperCase());
     });
     if (set.size === 0) set.add("VND");
@@ -159,7 +174,7 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
   }, [availableCurrencies, selectedCurrency, primaryCurrency]);
 
   const currencyOf = useCallback(
-    (r: AnyRecord) => (r.currency || (r.wallet ? walletMap.get(r.wallet)?.currency : undefined) || primaryCurrency).toUpperCase(),
+    (r: AnyRecord) => ((r.wallet ? walletMap.get(r.wallet)?.currency : undefined) || r.currency || primaryCurrency).toUpperCase(),
     [walletMap, primaryCurrency]
   );
 
@@ -181,13 +196,13 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
     const now = new Date();
     setYear(now.getFullYear());
     setMonth(now.getMonth());
-    setSelectedDate(todayStr);
+    setSelectedDate(toLocalDateString(now));
   };
 
   // Month stats calculation
   const monthKeyPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
   const monthRecords = useMemo(() => {
-    return allRecords.filter((r) => r.date.startsWith(monthKeyPrefix));
+    return allRecords.filter((r) => ledgerDateKey(r.date)?.startsWith(monthKeyPrefix));
   }, [allRecords, monthKeyPrefix]);
 
   const monthTotals = useMemo(() => {
@@ -215,7 +230,7 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
       const isToday = cellDateStr === todayStr;
       const isSelected = cellDateStr === selectedDate;
 
-      const dayTxs = allRecords.filter((r) => r.date === cellDateStr);
+      const dayTxs = recordsByDate.get(cellDateStr) || [];
 
       let dayIncome = 0;
       let dayExpense = 0;
@@ -244,12 +259,12 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
         displayCurrency: activeCurrency,
       };
     });
-  }, [year, month, todayStr, selectedDate, allRecords, activeCurrency, currencyOf]);
+  }, [year, month, todayStr, selectedDate, recordsByDate, activeCurrency, currencyOf]);
 
   // Selected Day records
   const selectedDayAllRecords = useMemo(() => {
-    return allRecords.filter((r) => r.date === selectedDate);
-  }, [allRecords, selectedDate]);
+    return recordsByDate.get(selectedDate) || [];
+  }, [recordsByDate, selectedDate]);
 
   const selectedDayRecords = useMemo(() => {
     return selectedDayAllRecords.filter((r) => currencyOf(r) === activeCurrency);
@@ -295,8 +310,9 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
   }, [year, month, locale]);
 
   return (
-    <Modal title={t.title} wide onClose={onClose}>
+    <Modal title={t.title} wide onClose={onClose} closeLabel={t.close}>
       <div className="fb-calendar-ledger-modal">
+        <p className="fb-cal-selected-meta">{t.recordedOnly}</p>
         {/* Month Stepper & Currency Selector */}
         <div className="fb-cal-controls-row">
           <div className="fb-cal-month-stepper">
@@ -415,7 +431,7 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
                     )}
                   </div>
                   {cell.hasOtherCurrency && (
-                    <span className="fb-cal-multi-dot" title="Có giao dịch ngoại tệ khác">•</span>
+                    <span className="fb-cal-multi-dot" title={t.otherCurrencyNotice}>•</span>
                   )}
                 </button>
               );
@@ -487,12 +503,13 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
                       {categoryIcon(record.category, state.categoryMeta)}
                     </span>
                     <div className="fb-cal-tx-info">
-                      <b>{record.title || record.category || "Giao dịch"}</b>
+                      <b>{record.title || record.category || t.transaction}</b>
                       <small>
-                        {record.category}
+                        {record.type === "transfer" ? t.transfer : record.category}
                         {record.subcategory ? ` / ${record.subcategory}` : ""}
                         {" · "}
                         {wName}
+                        {record.type === "transfer" && record.targetWallet ? ` → ${resolveWalletDisplayName(walletMap.get(record.targetWallet)?.name || record.targetWallet, lang)}` : ""}
                         {record.note ? ` · ${record.note}` : ""}
                       </small>
                     </div>
@@ -510,7 +527,7 @@ export function CalendarLedgerModal({ onClose, navigate, initialDate }: Calendar
             className="fb-cal-add-tx-btn"
             onClick={() => {
               onClose();
-              navigate("addTransactionChatMode");
+              navigate(`addTransaction?date=${selectedDate}&currency=${activeCurrency}`);
             }}
           >
             <Plus size={16} />

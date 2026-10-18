@@ -882,6 +882,7 @@ test("Tier 1 & 2: Transaction Form Localization & Zero Leaks (F5, F8)", async (t
       const state = createFixtureState(lang);
       const mockStore = {
         useAppState: () => state,
+        today: () => "2026-10-18",
         updateState: () => {},
       };
 
@@ -917,6 +918,7 @@ test("Tier 1 & 2: Transaction Form Localization & Zero Leaks (F5, F8)", async (t
       const state = createFixtureState(lang);
       const mockStore = {
         useAppState: () => state,
+        today: () => "2026-10-18",
         updateState: () => {},
       };
 

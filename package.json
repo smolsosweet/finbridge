@@ -36,6 +36,8 @@
     "auth:migrate": "node --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/migrate-auth.mjs",
     "test:auth": "node --test scripts/verify-auth-unit.cjs",
     "test:workspace": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-workspace.mjs",
+    "test:calendar": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-calendar-ledger.mjs",
+    "test:calendar:ui": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/verify-calendar-ledger-ui.mjs",
     "test:transfers": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-international-transfers.mjs",
     "transfers:migrate": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/migrate-transfers.mjs",
     "test:transfer-reference": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-transfer-reference.mjs",
