@@ -36,8 +36,16 @@ export interface FinancialHighlight { label: string; amount: number; currency: s
  * action. Other financial intents remain the structured model's responsibility. */
 export function resolveFinancialFollowup(message: string, query: FinancialQuery, history: Array<{ role: string; text: string }> = []): FinancialQuery {
   const text = normalizeVietnameseMessage(message);
+  const latestContext = [...history].reverse().find(item => item.role === "assistant" && item.text.startsWith("Previous financial result context"));
+  const priorWallet = latestContext?.text.match(/; walletId=("(?:[^"\\]|\\.)*"); scope=selected/);
+  if (!query.walletId && !asksForAllWalletBalances(message) && priorWallet) {
+    try {
+      const walletId: unknown = JSON.parse(priorWallet[1]);
+      if (typeof walletId === "string") query = { ...query, walletId, scope: "selected" };
+    } catch { /* Older/incomplete history: retain the model's explicit scope. */ }
+  }
   // Conditional payments must not return an unchanged actual balance.
-  const afterPayment = /(?:sau khi|neu|after|if|支付后|付完|如果).*(?:dong|tra|thanh toan|pay|paid|payment|支付|付)/.test(text);
+  const afterPayment = /(?:sau khi|neu|after|if|付完|如果).*(?:dong|tra|thanh toan|pay|paid|payment|支付|付)|(?:支付|付).*(?:后|以后)/.test(text);
   if (afterPayment && query.action === "balance" && (!query.actions?.length || query.actions.every(action => action === "balance"))) {
     return { ...query, action: "balance_after_obligation", actions: ["balance_after_obligation"] };
   }

@@ -3,10 +3,10 @@ import { calculateSpendingPlan } from "./financial-outlook";
 export function modelHistory(messages: ChatMessage[]) {
   // Never send locally computed amounts to Gemini. Preserve only non-sensitive
   // entity/date metadata so follow-ups such as "that category" can be resolved.
-  return messages.filter(m => !m.localOnly || m.financialContext || m.scenarios || m.spendingPlan).slice(-8).map(({ role, text, localOnly, financialContext, scenarios, spendingPlan }) => ({
+  return messages.filter(m => !m.localOnly || m.financialContext || m.scenarios || m.spendingPlan).slice(-12).map(({ role, text, localOnly, financialContext, scenarios, spendingPlan }) => ({
     role,
     text: spendingPlan ? `Previous spending plan assumptions only (recalculate from current data; month-end, unpaid bills including overdue, flexible spending pace, protected reserves): ${JSON.stringify(spendingPlan)}`.slice(0, 1000) : scenarios?.length ? `Previous hypothetical assumptions only (recalculate from current data): ${JSON.stringify(scenarios)}`.slice(0, 1000) : localOnly && financialContext
-      ? `Previous financial result context (recalculate from current data; do not reuse prior amounts): action=${financialContext.action}; category=${financialContext.category || "unspecified"}; period=${financialContext.periodStart || "default"}..${financialContext.periodEnd || "default"}; percentage=${financialContext.percentage ?? "unspecified"}.`
+      ? `Previous financial result context (recalculate from current data; do not reuse prior amounts): action=${financialContext.action}; category=${financialContext.category || "unspecified"}; period=${financialContext.periodStart || "default"}..${financialContext.periodEnd || "default"}; percentage=${financialContext.percentage ?? "unspecified"}; walletId=${JSON.stringify(financialContext.walletId || null)}; scope=${financialContext.scope || "unspecified"}; bill=${JSON.stringify(financialContext.searchTerm || null)}.`.slice(0, 1000)
       : text.slice(0, 600),
   }));
 }

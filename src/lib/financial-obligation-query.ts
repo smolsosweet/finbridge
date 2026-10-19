@@ -5,9 +5,10 @@ import { trackedBalance, validOutlookDate } from "./financial-outlook";
 const normalize = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/đ/g, "d").trim();
 
 /** References, not prior computed balances. Revalidated against the current workspace on every query. */
-export function financialConversationEntities(state: FinancialState) {
+export function financialConversationEntities(state: FinancialState, asOf?: string) {
   return (state.fixedExpenses || []).filter(expense => expense.active).slice(0, 30).map(expense => ({
     id: expense.id, title: expense.title, dueDate: expense.dueDate,
+    ...(asOf && validOutlookDate(asOf) ? { nextDueDate: plannedOccurrences(expense, asOf, `${Number(asOf.slice(0, 4)) + 1}-12-31`).find(date => !occurrencePayment(state, expense.id, date)) || null } : {}),
     walletId: state.goals.find(goal => goal.kind === "budget" && goal.id === expense.budgetId)?.wallet || expense.walletId || null,
   }));
 }
@@ -44,13 +45,17 @@ export function balanceAfterObligation(query: FinancialQuery, state: FinancialSt
   const { expense, wallet, budget } = matches[0];
   const balance = trackedBalance(state, wallet.id, today);
   if (!balance.complete || !validPlanningMoney(expense.amount, wallet.currency) || (budget && budget.currency !== wallet.currency)) return t("Dữ liệu số dư hoặc tiền tệ chưa nhất quán; Finn chưa thể tính chính xác khoản này.", "The balance or currency data is inconsistent; Finn can't calculate this reliably yet.", "余额或币种数据不一致，Finn 暂时无法准确计算。");
-  const start = query.periodStart || today;
+  const start = query.periodStart || (expense.recurrence === "once" && expense.dueDate < today ? expense.dueDate : today);
   const endDate = new Date(start + "T12:00:00Z");
   endDate.setUTCFullYear(endDate.getUTCFullYear() + 1);
   const end = query.periodEnd || (Number.isFinite(endDate.getTime()) ? endDate.toISOString().slice(0, 10) : "");
   if (!validOutlookDate(start) || !validOutlookDate(end) || start > end) return t("Khoảng ngày chưa hợp lệ. Bạn muốn tính đến ngày nào?", "The date range is invalid. Which date do you mean?", "日期范围无效，你想计算到哪一天？");
-  const due = plannedOccurrences(expense, start, end).find(date => !occurrencePayment(state, expense.id, date));
+  const due = plannedOccurrences(expense, start, end)[0];
   if (!due) return t("Không có lần đến hạn chưa trả của khoản này trong kỳ đã chọn. Finn không trừ lại khoản đã xác nhận thanh toán.", "There is no unpaid occurrence in this period. Finn won't deduct a confirmed payment again.", "所选期间没有该费用的未付账单，Finn 不会重复扣除已确认付款。");
+  if (occurrencePayment(state, expense.id, due)) return t(
+    `**${expense.title}** đến hạn ${due} đã được xác nhận thanh toán. Số dư hiện tại của **${wallet.name}** là **${money(balance.amount, wallet.currency)}**; Finn không trừ lần nữa.`,
+    `**${expense.title}** due ${due} has a confirmed payment. **${wallet.name}** currently has **${money(balance.amount, wallet.currency)}**; Finn won't deduct it again.`,
+    `到期日为 ${due} 的 **${expense.title}** 已确认支付。**${wallet.name}** 当前余额为 **${money(balance.amount, wallet.currency)}**，Finn 不会再次扣除。`);
   const scale = currencyScale(wallet.currency);
   const after = (Math.round(balance.amount * scale) - Math.round(expense.amount * scale)) / scale;
   return [

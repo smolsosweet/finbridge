@@ -126,14 +126,40 @@ test("category follow-up repairs a repeated summary action and computes fresh se
   assert.equal(http.status, 200); assert.equal(result.action, "category_breakdown");
   assert.deepEqual(result.actions, ["category_breakdown"]); assert.equal(result.category, null);
   assert.equal(result.periodStart, "2026-10-01");
-  assert.match(result.financialAnswer, /Mua sắm: \*\*200\.000 VND/);
-  assert.match(result.financialAnswer, /Thức ăn & Đồ uống: \*\*25\.000 VND/);
-  assert.match(result.financialAnswer, /225\.000 VND/); assert.doesNotMatch(result.financialAnswer, /1\.225\.000/);
+  assert.match(result.financialAnswer, /Mua sắm: \*\*200,000 VND/);
+  assert.match(result.financialAnswer, /Thức ăn & Đồ uống: \*\*25,000 VND/);
+  assert.match(result.financialAnswer, /225,000 VND/); assert.doesNotMatch(result.financialAnswer, /1,225,000/);
   fixture.data.transactions[0].amount = 30_000;
   const refreshed = await (await POST(request(input))).json();
-  assert.match(refreshed.financialAnswer, /230\.000 VND/);
+  assert.match(refreshed.financialAnswer, /230,000 VND/);
   fixture.data.transactions[0].amount = 25_000;
   assert.deepEqual(fixture.data, before);
+});
+
+test("scheduled-payment follow-up repairs a balance tool, resolves the authorized bill and leaves actual data unchanged", async () => {
+  fixture.data.fixedExpenses = [{ id: "parking", title: "Tiền gửi xe", amount: 147000, walletId: "vnd", budgetId: "", category: "Mua sắm", dueDate: "2026-10-20", recurrence: "monthly", active: true }];
+  const before = structuredClone(fixture.data);
+  fixture.output = response({ intent: "query_financial_data", action: "balance", actions: ["balance"] });
+  const http = await POST(request(body("sau khi đóng tiền gửi xe thì tôi còn bao nhiêu tiền"))), result = await http.json();
+  assert.equal(http.status, 200);
+  assert.equal(result.action, "balance_after_obligation");
+  assert.equal(result.walletId, "vnd");
+  assert.equal(result.searchTerm, "Tiền gửi xe");
+  assert.match(result.financialAnswer, /853,000 VND/);
+  assert.deepEqual(result.drafts, []);
+  assert.deepEqual(fixture.data, before);
+  assert.match(fixture.calls[0].contents, /nextDueDate/);
+  assert.doesNotMatch(fixture.calls[0].contents, /853000|853,000/);
+});
+
+test("current balance after a hypothetical question inherits the wallet but never subtracts the bill", async () => {
+  fixture.output = response({ intent: "query_financial_data", action: "balance", actions: ["balance"] });
+  const history = [{ role: "assistant", text: 'Previous financial result context (recalculate from current data; do not reuse prior amounts): action=balance_after_obligation; category=unspecified; period=default..default; percentage=unspecified; walletId="vnd"; scope=selected; bill="Tiền gửi xe".' }];
+  const http = await POST(request(body("hiện tại tôi còn bao nhiêu", { history }))), result = await http.json();
+  assert.equal(http.status, 200);
+  assert.equal(result.action, "balance");
+  assert.equal(result.walletId, "vnd");
+  assert.match(result.financialAnswer, /1,000,000 VND/);
 });
 
 test("a wrongly interpreted correction cannot overwrite an existing draft when the message is a new purchase", async () => {

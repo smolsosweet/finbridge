@@ -11,7 +11,7 @@ import { categoryOperationCopy, categoryOperationDescription, categoryOperationE
 import { isCategoryManagementMessage, isClearlyNewTransaction, isDraftCorrection, localCategoryCommand, resolvePendingDraft, type ConversationIntent } from "@/lib/conversation-intent";
 import { applyDraftAmountCorrection, categoryResolutionDraftIds, createTimeoutTransactionDraft, editDraftById, formatTransactionMoney, inferDraftCategory, isNewTransactionMessage, isValidDraftCategoryName, matchDraftCategoryAnswer, normalizeVietnameseMessage, readyDrafts, removeDraftById, requestedDraftCategory, similarDraftCategories, validateAndCommitDrafts, validateDraftForState, type TransactionDraft } from "@/lib/transaction-drafts";
 import { resolveExplicitWallet, resolveUniqueCurrencyWallet } from "@/lib/transaction-currency";
-import { answerFinancialQuery, type FinancialAction } from "@/lib/financial-chat";
+import { answerFinancialQuery, resolveFinancialFollowup, type FinancialAction } from "@/lib/financial-chat";
 import { modelHistory } from "@/lib/chat-local-plan";
 import { resolveSpendingPlanAdjustment, spendingPlanAdjustmentSchema, spendingPlanOptionsSchema, type SpendingPlanOptions } from "@/lib/financial-outlook";
 import { ChatSpendingPlan } from "./ChatSpendingPlan";
@@ -203,14 +203,13 @@ function getBalanceAnswer(message: string, state: AppState, selectedWalletId: st
   const selectedWallet = state.wallets.find((wallet) => wallet.id === selectedWalletId && !wallet.archived);
   const wallets = mentionedWallet ? [mentionedWallet] : selectedWallet ? [selectedWallet] : state.wallets.filter((wallet) => !wallet.archived);
   if (!wallets.length) return "Mình chưa thấy ví đang hoạt động để tính số dư.";
-  return wallets.map((wallet) => {
-    const income = state.transactions.filter((transaction) => transaction.wallet === wallet.id && transaction.type === "income").reduce((sum, transaction) => sum + transaction.amount, 0);
-    const expense = state.transactions.filter((transaction) => transaction.wallet === wallet.id && transaction.type === "expense").reduce((sum, transaction) => sum + transaction.amount, 0);
-    const transferOut = state.transactions.filter((transaction) => transaction.wallet === wallet.id && transaction.type === "transfer").reduce((sum, transaction) => sum + transaction.amount, 0);
-    const transferIn = state.transactions.filter((transaction) => transaction.targetWallet === wallet.id && transaction.type === "transfer").reduce((sum, transaction) => sum + transaction.amount, 0);
-    const balance = wallet.initial + income - expense - transferOut + transferIn;
-    return `${wallet.name === "." ? "Ví đang chọn" : `Ví ${wallet.name}`} hiện có ${money(balance, wallet.currency)}. Số dư đầu kỳ ${money(wallet.initial, wallet.currency)}, thu ${money(income, wallet.currency)}, chi ${money(expense, wallet.currency)}, chuyển vào ${money(transferIn, wallet.currency)} và chuyển ra ${money(transferOut, wallet.currency)}.`;
-  }).join("\n");
+  const query = resolveFinancialFollowup(message, {
+    action: "balance", walletId: wallets.length === 1 ? wallets[0].id : null, scope: wallets.length === 1 ? "selected" : "all",
+    periodStart: null, periodEnd: null, category: null, searchTerm: null, transactionType: null,
+  });
+  // Legacy error recovery has no validated scenario context. Do not turn a
+  // conditional payment into an answer about the unchanged actual balance.
+  return query.action === "balance" ? answerFinancialQuery(query, state, selectedWalletId, today()) : null;
 }
 
 export function TransactionForm({
