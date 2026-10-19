@@ -60,8 +60,10 @@ budget or wait for the provider reset; the short pause does not replenish provid
    Weighted points are an application allowance, **not an exact token/cost meter**.
    They do not prove compliance with TPM. The shared 429 pause handles provider rejection;
    strict token ceilings require separate token accounting and are outside this phase.
-5. Apply the additive migration once against the intended application DB:
-   `npm run ai:quota:migrate` (uses the configured DATABASE_URL).
+5. Inspect the intended target with `npm run ai:quota:migrate` (dry run).
+   Apply only with `npm run ai:quota:migrate -- --apply --confirm-target=HOST:PORT/DATABASE`,
+   using the exact host/database displayed (configured DATABASE_URL).
+   Validate on an isolated Neon branch first, then the production target.
    `npm run auth:migrate` also includes the new tables.
 6. Redeploy only after both the schema and production variables are ready.
    Missing variables, schema, or database availability cause AI to return 503 with
@@ -139,8 +141,8 @@ rejected before connecting. Never put Neon Production into test environment vari
 PostgreSQL acceptance includes 50 simultaneous callers with one place left, owner isolation,
 rollback of global counters on account denial, weighted points, minute/day resets,
 idempotent owner-scoped refunds, provider cooldown across accounts and missing schema.
-These suites are included in the CI business checks. Phase 2 (streamed body limits,
-client image sizing and output caps) and security headers remain separate work.
+These suites are included in the CI business checks. Streamed body limits,
+client image sizing, output caps and security headers are described in AI_INPUT_SECURITY.md.
 
 ## Local verification — 2026-10-19
 
@@ -154,6 +156,7 @@ client image sizing and output caps) and security headers remain separate work.
 | Production build | Passed |
 
 These are local results with synthetic provider data, not a production Gemini smoke test.
-No production schema migration, Vercel configuration edit, commit, push, or deployment
-was performed for this phase. The selected budget profile is documented above;
-it still needs to be applied to Vercel together with the schema migration before deploying.
+This table records the initial quota-only local acceptance. Subsequent local commits
+and full-suite results are tracked in LOCAL_RELEASE_RESULTS.md. No production schema
+migration, Vercel configuration edit, push or deployment was performed. The budget
+still needs to be applied to Vercel together with the schema migration before deploying.

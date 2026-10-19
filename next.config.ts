@@ -1,7 +1,21 @@
 import type { NextConfig } from "next";
+import { execFileSync } from "node:child_process";
+
+function buildCommit() {
+  const supplied = process.env.VERCEL_GIT_COMMIT_SHA;
+  if (supplied && /^[a-f0-9]{40}$/i.test(supplied)) return supplied;
+  try { return execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); }
+  catch { return ""; }
+}
+function buildDirty() {
+  if (process.env.VERCEL_GIT_COMMIT_SHA) return "false";
+  try { return String(!!execFileSync("git", ["status", "--porcelain", "--untracked-files=normal"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()); }
+  catch { return "unknown"; }
+}
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  env: { FINBRIDGE_BUILD_COMMIT: buildCommit(), FINBRIDGE_BUILD_DIRTY: buildDirty() },
   devIndicators: false,
   allowedDevOrigins: ["127.0.0.1"],
   async headers() {
