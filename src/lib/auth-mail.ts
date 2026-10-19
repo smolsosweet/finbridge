@@ -142,12 +142,23 @@ export function createMailSender(env: NodeJS.ProcessEnv = process.env): SendAuth
   };
   if (config.mode === "brevo") return async ({ to, kind, url }) => {
     const message = renderAuthEmail({ kind, url });
-    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST", signal: AbortSignal.timeout(15000), redirect: "error",
-      headers: { "api-key": config.key, "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ sender: { name: "FinBridge", email: config.from }, to: [{ email: to }], subject: message.subject, textContent: message.text, htmlContent: message.html }),
-    });
-    if (!response.ok) throw new Error("AUTH_EMAIL_DELIVERY_FAILED");
+    let response: Response;
+    try {
+      response = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST", signal: AbortSignal.timeout(15000), redirect: "error",
+        headers: { "api-key": config.key, "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({ sender: { name: "FinBridge", email: config.from }, to: [{ email: to }], subject: message.subject, textContent: message.text, htmlContent: message.html }),
+      });
+    } catch (error) {
+      // Do not log recipients, API keys, verification links, or provider response bodies.
+      console.error("AUTH_MAIL_BREVO_NETWORK_FAILED", { provider: "brevo", errorName: error instanceof Error ? error.name : "UnknownError" });
+      throw new Error("AUTH_EMAIL_DELIVERY_FAILED");
+    }
+    if (!response.ok) {
+      // The HTTP status distinguishes a rejected key/sender from a network failure without exposing secrets.
+      console.error("AUTH_MAIL_BREVO_DELIVERY_FAILED", { provider: "brevo", status: response.status, retryAfter: response.headers.get("retry-after") || null });
+      throw new Error("AUTH_EMAIL_DELIVERY_FAILED");
+    }
   };
   const transport = nodemailer.createTransport({
     host: config.host, port: config.port, secure: config.port === 465,
