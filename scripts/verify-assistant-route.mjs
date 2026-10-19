@@ -9,7 +9,7 @@ import path from "node:path";
 import test from "node:test";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src");
-const fixture = globalThis.__finbridgeAssistantTest = { session: { user: { id: "owner" } }, calls: [], reads: [], output: null, error: null, data: null };
+const fixture = globalThis.__finbridgeAssistantTest = { session: { user: { id: "owner", emailVerified: true } }, calls: [], reads: [], output: null, error: null, data: null };
 const stubs = {
   "@google/genai": `export const Type = { OBJECT:'OBJECT', STRING:'STRING', NUMBER:'NUMBER', ARRAY:'ARRAY' }; export const ThinkingLevel = { MINIMAL:'MINIMAL', LOW:'LOW' }; export class GoogleGenAI { models = { generateContent: async args => { const f=globalThis.__finbridgeAssistantTest; f.calls.push(args); if(f.error) throw f.error; return {text:typeof f.output==='string'?f.output:JSON.stringify(f.output)}; } }; }`,
   "@/lib/transfer-chat-runtime": `export async function readTransferChat(input){globalThis.__finbridgeAssistantTest.transfer=input;return {id:input.id,request:input.request,status:"answer",title:"Transfers",text:"verified repository result",sandbox:false,rows:[],choices:[]};}`,
@@ -168,7 +168,7 @@ test("plan assumptions reject impossible percentages and negative reserves befor
   }
   assert.equal(fixture.calls.length, 0);
 });
-test.beforeEach(() => { fixture.data = state(); fixture.calls = []; fixture.reads = []; fixture.output = response(); fixture.error = null; fixture.session = { user: { id: "owner" } }; });
+test.beforeEach(() => { fixture.data = state(); fixture.calls = []; fixture.reads = []; fixture.output = response(); fixture.error = null; fixture.session = { user: { id: "owner", emailVerified: true } }; });
 
 test("real handler grounds education category and VND amount despite wrong model shopping category", async () => {
   fixture.output = response({ drafts: [modelDraft("học thêm", 100)] });
