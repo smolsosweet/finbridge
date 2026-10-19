@@ -36,15 +36,6 @@ export function isWorkspaceCreationRequest(message: string) {
     && /\b(vi|ngan sach|chi phi co dinh|khoan chi co dinh|wallet|budget|fixed expense|recurring bill)\b|钱包|预算|固定支出/.test(text)
     && !/\b(neu|gia su|gia dinh|what if|simulate)\b|如果|假设/.test(text);
 }
-
-export function detectWorkspaceCreationKind(message: string): WorkspaceAction["kind"] | null {
-  const text = normalized(message);
-  if (/\b(?:chi phi co dinh|khoan chi co dinh|fixed expenses?|recurring bills?)\b|固定支出/.test(text)) return "fixed_expense";
-  if (/\b(?:ngan sach|budgets?)\b|预算/.test(text)) return "budget";
-  if (/\b(?:vi|wallets?)\b|钱包/.test(text)) return "wallet";
-  return null;
-}
-
 export function emptyWorkspaceAction(kind: WorkspaceAction["kind"], id: string): WorkspaceAction {
   return { id, kind, name: null, currency: null, walletType: null, initialBalance: null, creditLimit: null, amount: null, walletId: null, budgetId: null, category: null, date: null, cycle: null, recurrence: null, intervalMonths: null, monthPosition: null, reminderDays: null };
 }

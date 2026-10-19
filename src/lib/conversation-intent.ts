@@ -11,7 +11,7 @@ export const conversationIntents = [
   "delete_budget", "delete_fixed_expense", "update_pending_transaction", "answer_clarification",
   "query_financial_data", "analyze_spending", "simulate_financial_scenario", "list_categories",
   "create_category", "rename_category", "merge_categories", "delete_category", "delete_transactions",
-  "general_finance_question", "unsupported_or_ambiguous_request", "settings_action"
+  "general_finance_question", "unsupported_or_ambiguous_request"
 ] as const;
 export type ConversationIntent = typeof conversationIntents[number];
 export const draftPatchSchema = z.object({ title: z.string().trim().min(1).max(160).optional(), amount: z.number().finite().positive().max(1e12).nullable().optional(),

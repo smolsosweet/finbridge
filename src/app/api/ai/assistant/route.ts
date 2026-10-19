@@ -5,7 +5,7 @@ import { database } from "@/lib/database";
 import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 import { answerFinancialQuery, asksForAllWalletBalances, resolveFinancialFollowup, type FinancialAction } from "@/lib/financial-chat";
 import { resolveExplicitWallet, resolveUniqueCurrencyWallet } from "@/lib/transaction-currency";
-import { createTimeoutTransactionDraft, editDraftById, normalizeVietnameseMessage, parseTransactionAmounts, reconcileTransactionDraftAmounts, resolveDraftCategory, type TransactionDraft } from "@/lib/transaction-drafts";
+import { createTimeoutTransactionDraft, editDraftById, parseTransactionAmounts, reconcileTransactionDraftAmounts, resolveDraftCategory, type TransactionDraft } from "@/lib/transaction-drafts";
 import { conversationIntents, draftPatchSchema, isCategoryManagementMessage, isClearlyNewTransaction, resolvePendingDraft } from "@/lib/conversation-intent";
 import { categoryCommandSchema, prepareCategoryOperation } from "@/lib/category-operations";
 import { categoryOperationError } from "@/lib/category-operation-copy";
@@ -18,8 +18,6 @@ import { calculateScenario, scenarioContext } from "@/lib/scenario-planner";
 import { explicitPlanningDeletion, planningDeleteRequestSchema, planningDeletionCopy, planningEntities, preparePlanningDeletion } from "@/lib/planning-deletion";
 import { isFixedExpensePaymentMessage, isFixedExpenseStatusMessage, isPlanningEditMessage, prepareFixedExpensePayment, prepareFixedExpenseStatus, preparePlanningEdit, fixedExpensePaymentCopy, fixedExpenseStatusCopy, planningEditCopy } from "@/lib/planning-actions";
 import { workspaceSchema } from "@/lib/workspace-model";
-import { isSettingsThemeMessage, isSettingsLanguageMessage, isSettingsWalletArchiveMessage, prepareWalletArchive, settingsActionCopy } from "@/lib/settings-actions";
-import { detectRelativeOrder } from "@/lib/transaction-deletion";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -191,105 +189,6 @@ export async function POST(request: Request) {
   const allowedWallets = new Set(input.wallets.map((wallet) => wallet.id));
   const deletionState = authorizedWorkspace || (localDemo && input.planningContext ? { ...input.planningContext, wallets: input.wallets, transactions: [], categories: input.categories.map(c => c.name), categoryMeta: {}, settings: {}, recurring: [], rules: [] } as unknown as AppState : null);
   const allowedCategories = new Set(input.categories.filter(c => !c.archived).map((category) => `${category.type}:${category.name}`));
-
-  const themeRequested = isSettingsThemeMessage(input.message);
-  if (themeRequested) {
-    const language = /zh|中文/.test(String(authorizedWorkspace?.settings.language)) ? "zh" : /en|English/.test(String(authorizedWorkspace?.settings.language)) ? "en" : "vi";
-    const reply = themeRequested === "dark" ? settingsActionCopy[language].themeDark : settingsActionCopy[language].themeLight;
-    return Response.json({
-      intent: "settings_action",
-      operationIntent: "settings_action",
-      settingsAction: {
-        id: input.batchId,
-        action: "theme",
-        theme: themeRequested,
-        status: "confirmed",
-        applied: true,
-      },
-      drafts: [],
-      reply,
-    });
-  }
-
-  const langRequested = isSettingsLanguageMessage(input.message);
-  if (langRequested) {
-    const reply = langRequested === "en" ? settingsActionCopy.en.langEn : langRequested === "zh" ? settingsActionCopy.zh.langZh : settingsActionCopy.vi.langVi;
-    return Response.json({
-      intent: "settings_action",
-      operationIntent: "settings_action",
-      settingsAction: {
-        id: input.batchId,
-        action: "language",
-        language: langRequested,
-        status: "confirmed",
-        applied: true,
-      },
-      drafts: [],
-      reply,
-    });
-  }
-
-  const walletArchiveRequested = deletionState && isSettingsWalletArchiveMessage(input.message, deletionState);
-  if (walletArchiveRequested) {
-    const language = /zh|中文/.test(String(authorizedWorkspace?.settings.language)) ? "zh" : /en|English/.test(String(authorizedWorkspace?.settings.language)) ? "en" : "vi";
-    const { proposal, clarification } = prepareWalletArchive(deletionState, input.message, input.batchId);
-    return Response.json({
-      intent: "settings_action",
-      operationIntent: "settings_action",
-      settingsAction: proposal || null,
-      drafts: [],
-      reply: proposal ? "" : (clarification || settingsActionCopy[language].failed),
-    });
-  }
-
-  const normInput = normalizeVietnameseMessage(input.message);
-  const isGenericDeletionQuestion = /^(?:toi\s+)?(?:muon\s+)?(?:xoa|huy|bo|delete|remove)\s+(?:giao\s*d[ií]ch|giao\s*diichj|gd|transactions?)[.!?\s]*$/i.test(normInput);
-  if (isGenericDeletionQuestion) {
-    const language = /zh|中文/.test(String(authorizedWorkspace?.settings.language)) ? "zh" : /en|English/.test(String(authorizedWorkspace?.settings.language)) ? "en" : "vi";
-    const prompt = {
-      vi: "Bạn muốn xóa giao dịch nào? Hãy cho biết tên, số tiền, ngày hoặc danh mục; dữ liệu chưa bị thay đổi.",
-      en: "Which transaction would you like to delete? Please specify title, amount, date, or category; no data has been changed.",
-      zh: "你想删除哪笔交易？请说明名称、金额、日期或类别；尚未更改任何数据。",
-    }[language];
-    return Response.json({
-      intent: "delete_transactions",
-      operationIntent: "delete_transactions",
-      drafts: [],
-      reply: prompt,
-      deletion: {
-        scope: "matching",
-        amount: null,
-        walletId: null,
-        periodStart: null,
-        periodEnd: null,
-        category: null,
-        searchTerm: null,
-        type: null,
-      },
-    });
-  }
-
-  const isSimpleLatestDeletion = /^(?:xoa|huy|bo|delete|remove)\s+(?:giao\s*d[ií]ch\s+)?(?:moi\s*nhat|gan\s*nhat|vua\s*tao|vua\s*roi|latest|most\s*recent)[.!?\s]*$/i.test(normInput);
-  if (isSimpleLatestDeletion) {
-    return Response.json({
-      intent: "delete_transactions",
-      operationIntent: "delete_transactions",
-      drafts: [],
-      reply: "",
-      deletion: {
-        scope: "matching",
-        amount: null,
-        walletId: null,
-        periodStart: null,
-        periodEnd: null,
-        category: null,
-        searchTerm: null,
-        type: null,
-        relativeOrder: "latest",
-      },
-    });
-  }
-
   const outputSchemaShape = modelSchema;
   const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite";
   const timeoutMs = getGeminiTimeoutMs("GEMINI_CHAT_TIMEOUT_MS", 20_000, 25_000);
@@ -545,8 +444,7 @@ export async function POST(request: Request) {
       category, searchTerm: value.searchTerm, transactionType: value.transactionType, reply: categoryReply, drafts,
       deletion: { scope: deletionScope, amount: value.deletionAmount,
         walletId: deletionWalletId, periodStart: deletionPeriodStart, periodEnd: deletionPeriodEnd, category: deletionCategory,
-        searchTerm: value.deletionSearchTerm, type: value.deletionType,
-        relativeOrder: detectRelativeOrder(input.message) || (value.deletionSearchTerm ? detectRelativeOrder(value.deletionSearchTerm) : null) },
+        searchTerm: value.deletionSearchTerm, type: value.deletionType },
     });
   } catch (error) {
     const status = error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : null;

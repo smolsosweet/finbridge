@@ -63,10 +63,7 @@ export function recordFixedExpensePayment(state: AppState, expenseId: string, in
   if (fixedExpensePayment(state,expenseId,input.dueDate)) return state;
   if(existing)return {...state,transactions:state.transactions.map(t=>t.id===existing.id?{...t,fixedExpenseId:expenseId,fixedExpenseDueDate:input.dueDate,paymentConfirmation:"user"}:t)};
   if (!input.transactionId || input.transactionId.length>100 || state.transactions.some(t=>t.id===input.transactionId)) throw new Error("INVALID_BILL_PAYMENT");
-  const now = new Date();
-  const timeString = [String(now.getHours()).padStart(2, "0"), String(now.getMinutes()).padStart(2, "0"), String(now.getSeconds()).padStart(2, "0")].join(":");
-  const transactionDate = input.paidOn.length === 10 ? `${input.paidOn}T${timeString}` : input.paidOn;
-  const transaction: Transaction = {id:input.transactionId,title:expense.title,amount:input.amount,type:"expense",category:expense.category,wallet:source.id,date:transactionDate,note:input.note,fixedExpenseId:expense.id,fixedExpenseDueDate:input.dueDate,paymentConfirmation:"user"};
+  const transaction: Transaction = {id:input.transactionId,title:expense.title,amount:input.amount,type:"expense",category:expense.category,wallet:source.id,date:input.paidOn,note:input.note,fixedExpenseId:expense.id,fixedExpenseDueDate:input.dueDate,paymentConfirmation:"user"};
   return {...state,transactions:[...state.transactions,transaction]};
 }
 // Validate new/edited links on the server too. Historical payments survive removal

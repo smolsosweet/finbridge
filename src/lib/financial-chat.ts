@@ -411,8 +411,7 @@ function answerFinancialQuerySection(
     if (!matches.length) return { conclusion: labels.noTransactions, figures: `• ${labels.period}: ${range}${term ? `\n• ${query.searchTerm || query.category}` : ""}`, limits: labels.assumptions };
     const lines = matches.slice(0, 10).map((item) => {
       const currency = state.wallets.find((wallet) => wallet.id === item.wallet)?.currency || "";
-      const timePart = item.date.length > 10 ? ` ${item.date.slice(11, 16)}` : "";
-      return `• ${item.date.slice(0, 10)}${timePart} · ${item.title}\n  ${item.category || localized(lang, "Chưa phân loại", "Uncategorized", "未分类")} · ${money(item.amount, currency)}`;
+      return `• ${item.date.slice(0, 10)} · ${item.title}\n  ${item.category || localized(lang, "Chưa phân loại", "Uncategorized", "未分类")} · ${money(item.amount, currency)}`;
     });
     return { conclusion: localized(lang, `Tìm thấy ${matches.length} giao dịch trong ${range}.`, `Found ${matches.length} transactions for ${range}.`, `在${range}找到${matches.length}笔交易。`), figures: lines.join("\n") + (matches.length > 10 ? `\n• ${localized(lang, "Chỉ hiển thị 10 giao dịch đầu.", "Showing the first 10.", "仅显示前10笔。")}` : ""), limits: labels.assumptions };
   }

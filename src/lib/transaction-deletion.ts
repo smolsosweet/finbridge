@@ -1,4 +1,4 @@
-import { normalizeVietnameseMessage } from "./transaction-drafts";
+import { normalizeVietnameseMessage } from "@/lib/transaction-drafts";
 
 export interface TransactionDeletionCriteria {
   scope: "none" | "matching" | "all";
@@ -9,7 +9,6 @@ export interface TransactionDeletionCriteria {
   category: string | null;
   searchTerm: string | null;
   type: "expense" | "income" | "transfer" | null;
-  relativeOrder?: "latest" | "oldest" | null;
 }
 
 export interface DeletableTransaction {
@@ -21,42 +20,10 @@ export interface DeletableTransaction {
   date: string;
   wallet: string;
   note?: string;
-  occurredAt?: string;
-}
-
-export function detectRelativeOrder(text: string): "latest" | "oldest" | null {
-  const norm = normalizeVietnameseMessage(text);
-  if (/\b(?:moi nhat|gan nhat|vua tao|vua roi|vua nhap|gan day nhat|latest|most recent|newest|last)\b|最新|刚创建|最近/.test(norm)) {
-    return "latest";
-  }
-  if (/\b(?:cu nhat|dau tien|oldest|first)\b|最早|第一笔/.test(norm)) {
-    return "oldest";
-  }
-  return null;
-}
-
-export function cleanDeletionSearchTerm(term: string | null): string | null {
-  if (!term) return null;
-  const cleaned = normalizeVietnameseMessage(term)
-    .replace(/\b(?:giao\s*d[ií]ch|giao\s*diichj|khoan|cai|muc|gd|transaction|the|this|nay|do)\b/giu, "")
-    .replace(/\b(?:moi nhat|gan nhat|vua tao|vua roi|vua nhap|gan day nhat|latest|most recent|newest|last)\b/giu, "")
-    .replace(/\b(?:cu nhat|dau tien|oldest|first)\b/giu, "")
-    .replace(/最新|刚创建|最近|最早|第一笔/gu, "")
-    .trim();
-  return cleaned.length >= 2 ? cleaned : null;
 }
 
 export function hasTransactionDeletionFilter(criteria: TransactionDeletionCriteria) {
-  return Boolean(
-    criteria.amount !== null ||
-    criteria.walletId ||
-    criteria.periodStart ||
-    criteria.periodEnd ||
-    criteria.category ||
-    criteria.searchTerm ||
-    criteria.type ||
-    criteria.relativeOrder
-  );
+  return Boolean(criteria.amount !== null || criteria.walletId || criteria.periodStart || criteria.periodEnd || criteria.category || criteria.searchTerm || criteria.type);
 }
 
 function normalizedDeletionTokens(value: string) {
@@ -66,23 +33,13 @@ function normalizedDeletionTokens(value: string) {
 
 export function findTransactionsForDeletion<T extends DeletableTransaction>(transactions: T[], criteria: TransactionDeletionCriteria): T[] {
   if (criteria.scope === "none") return [];
-
-  const relativeOrder = criteria.relativeOrder || (criteria.searchTerm ? detectRelativeOrder(criteria.searchTerm) : null);
-  const rawTerm = criteria.searchTerm ? cleanDeletionSearchTerm(criteria.searchTerm) : null;
-  const effectiveCriteria: TransactionDeletionCriteria = {
-    ...criteria,
-    searchTerm: rawTerm,
-    relativeOrder,
-  };
-
-  const hasFilter = hasTransactionDeletionFilter(effectiveCriteria);
+  const hasFilter = hasTransactionDeletionFilter(criteria);
   if (criteria.scope === "matching" && !hasFilter) return [];
 
-  const term = rawTerm ? normalizeVietnameseMessage(rawTerm) : "";
-  const tokens = rawTerm ? normalizedDeletionTokens(rawTerm) : [];
+  const term = criteria.searchTerm ? normalizeVietnameseMessage(criteria.searchTerm) : "";
+  const tokens = criteria.searchTerm ? normalizedDeletionTokens(criteria.searchTerm) : [];
   const expectedCents = criteria.amount === null ? null : Math.round(criteria.amount * 100);
-
-  const matched = transactions.filter((transaction) => {
+  return transactions.filter((transaction) => {
     const date = transaction.date.slice(0, 10);
     if (expectedCents !== null && Math.round(transaction.amount * 100) !== expectedCents) return false;
     if (criteria.walletId && transaction.wallet !== criteria.walletId) return false;
@@ -94,24 +51,4 @@ export function findTransactionsForDeletion<T extends DeletableTransaction>(tran
     if (term && !searchText.includes(term) && (!tokens.length || !tokens.every((token) => searchText.includes(token)))) return false;
     return true;
   });
-
-  if (relativeOrder === "latest" && matched.length > 0) {
-    const sorted = [...matched].sort((a, b) => {
-      const aKey = a.occurredAt || a.date || "";
-      const bKey = b.occurredAt || b.date || "";
-      return bKey.localeCompare(aKey);
-    });
-    return [sorted[0]];
-  }
-
-  if (relativeOrder === "oldest" && matched.length > 0) {
-    const sorted = [...matched].sort((a, b) => {
-      const aKey = a.occurredAt || a.date || "";
-      const bKey = b.occurredAt || b.date || "";
-      return aKey.localeCompare(bKey);
-    });
-    return [sorted[0]];
-  }
-
-  return matched;
 }

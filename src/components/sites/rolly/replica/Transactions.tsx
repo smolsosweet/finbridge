@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { ledgerDateKey } from "./calendarLedger";
 import { Camera, Mic, Square, Send, Settings, Plus, X, Trash2 } from "lucide-react";
 import { EmptyState, Field, Mascot, Modal, PageHeader, Toggle } from "./Ui";
-import { currencySymbol, flushWorkspace, flushWorkspaceForAnalysis, getWorkspaceState, money, setSetting, today, updateState, useAppState, workspaceOwner, workspacePersistence, type AppState, type ChatMessage, type Transaction } from "./store";
+import { currencySymbol, flushWorkspace, flushWorkspaceForAnalysis, getWorkspaceState, money, today, updateState, useAppState, workspaceOwner, workspacePersistence, type AppState, type ChatMessage, type Transaction } from "./store";
 import { applyCategoryOperation, prepareCategoryOperation, renameCategoryMessageReferences, type CategoryCommand, type CategoryConfirmation } from "@/lib/category-operations";
 import { categoryOperationCopy, categoryOperationDescription, categoryOperationError } from "@/lib/category-operation-copy";
 import { isCategoryManagementMessage, isClearlyNewTransaction, isDraftCorrection, localCategoryCommand, resolvePendingDraft, type ConversationIntent } from "@/lib/conversation-intent";
@@ -54,22 +54,11 @@ import { applyWorkspaceProposal, inspectWorkspaceProposal, isWorkspaceCreationRe
 import { calculateScenario, normalizePlannerResponse, scenarioContext, type NormalizedPlannerResponse, type ScenarioResult } from "@/lib/scenario-planner";
 import planStyles from "./FinancialOutlook.module.css";
 import { tools } from "./Tools";
-import { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName, type AppLanguage, LANGUAGE_LABELS } from "@/lib/i18n";
-import { findTransactionsForDeletion, detectRelativeOrder, cleanDeletionSearchTerm, type TransactionDeletionCriteria } from "@/lib/transaction-deletion";
+import { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName, type AppLanguage } from "@/lib/i18n";
+import { findTransactionsForDeletion, type TransactionDeletionCriteria } from "@/lib/transaction-deletion";
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 import { draftAmountWarnings } from "@/lib/draft-amount-warnings";
 import { DraftAmountWarnings } from "./DraftAmountWarnings";
-import { SettingsActionCard } from "./SettingsActionCard";
-import {
-  settingsActionProposalSchema,
-  type SettingsActionProposal,
-  settingsActionCopy,
-  isSettingsThemeMessage,
-  isSettingsLanguageMessage,
-  isSettingsWalletArchiveMessage,
-  prepareWalletArchive,
-  applyWalletArchive,
-} from "@/lib/settings-actions";
 
 const lockedDeletionConfirmations = new Set<string>();
 const CATEGORY_FLOW_COPY = {
@@ -288,11 +277,7 @@ export function TransactionForm({
       type,
       title,
       amount: parsedAmount,
-      date: (existing?.date && existing.date.slice(0, 10) === date && existing.date.length > 10)
-        ? existing.date
-        : date.length === 10
-          ? `${date}T${[String(new Date().getHours()).padStart(2, "0"), String(new Date().getMinutes()).padStart(2, "0"), String(new Date().getSeconds()).padStart(2, "0")].join(":")}`
-          : date,
+      date,
       category,
       subcategory,
       wallet,
@@ -928,44 +913,6 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (workspaceOwner() === owner && conversationGeneration.current === generation) markPlanningEdit(id, { status: "failed", applied, error: t.failed });
     } finally { workspaceCreationLock.current = false; setCommitting(false); }
   }
-
-  function markSettingsAction(id: string, patch: Partial<SettingsActionProposal>) {
-    setMessages(previous => previous.map(item => item.settingsAction?.id === id ? { ...item, settingsAction: { ...item.settingsAction, ...patch } } : item));
-  }
-  function cancelSettingsAction(id: string) {
-    if (busy || committing) return;
-    const proposal = [...messages].reverse().find(m => m.settingsAction?.id === id)?.settingsAction;
-    if (!proposal || proposal.applied || !["pending", "failed"].includes(proposal.status)) return;
-    markSettingsAction(id, { status: "cancelled", error: undefined });
-  }
-  async function confirmSettingsAction(id: string) {
-    if (workspaceCreationLock.current || busy || committing || categoryBusy || deletingId) return;
-    const proposal = [...messages].reverse().find(m => m.settingsAction?.id === id)?.settingsAction;
-    if (!proposal || !["pending", "failed"].includes(proposal.status)) return;
-    const owner = workspaceOwner(), generation = conversationGeneration.current;
-    const t = settingsActionCopy[resolveLanguage(state.settings.language)];
-    let applied = !!proposal.applied;
-    workspaceCreationLock.current = true; setCommitting(true); markSettingsAction(id, { status: "saving", error: undefined });
-    try {
-      if (!applied) {
-        await flushWorkspace(true);
-        if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
-        updateState(current => {
-          if (workspaceOwner() !== owner) throw new Error("ACCOUNT_CHANGED");
-          const next = applyWalletArchive(current, proposal);
-          const chat = next.transactionChat || { messages, drafts, clarifyingDraftId };
-          return { ...next, transactionChat: { ...chat, messages: chat.messages.map(item => item.settingsAction?.id === id ? { ...item, settingsAction: { ...item.settingsAction, status: "saving", applied: true } } : item) } };
-        });
-        applied = true; markSettingsAction(id, { applied: true, status: "saving" });
-      }
-      await flushWorkspace(true);
-      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
-      markSettingsAction(id, { status: "confirmed", applied: true, error: undefined });
-      setMessages(previous => [...previous, { role: "assistant", text: t.savedArchive }]);
-    } catch {
-      if (workspaceOwner() === owner && conversationGeneration.current === generation) markSettingsAction(id, { status: "failed", applied, error: t.failed });
-    } finally { workspaceCreationLock.current = false; setCommitting(false); }
-  }
   function cancelWorkspaceProposal(id: string) {
     if (busy || committing) return;
     const proposal = [...messages].reverse().find(item => item.workspaceProposal?.id === id)?.workspaceProposal;
@@ -1131,16 +1078,6 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); cancelPlanningEdit(pendingPlanningEdit.id); return;
       }
     }
-    const pendingSettingsAction = recentAssistant?.settingsAction;
-    if (pendingSettingsAction && ["pending", "failed"].includes(pendingSettingsAction.status)) {
-      const reply = planningActionConfirmationReply(message);
-      if (reply === "confirm") {
-        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); await confirmSettingsAction(pendingSettingsAction.id); return;
-      }
-      if (reply === "cancel") {
-        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); cancelSettingsAction(pendingSettingsAction.id); return;
-      }
-    }
     const currentLang = resolveLanguage(state.settings.language);
     if (!requestedDraftId && isFixedExpensePaymentMessage(message, state)) {
       setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
@@ -1171,80 +1108,6 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         setMessages(previous => [...previous, { role: "assistant", text: clarification || planningEditCopy[currentLang].failed, localOnly: true }]);
       }
       return;
-    }
-    if (!requestedDraftId) {
-      const targetTheme = isSettingsThemeMessage(message);
-      if (targetTheme) {
-        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
-        setSetting("theme", targetTheme);
-        const reply = targetTheme === "dark" ? settingsActionCopy[currentLang].themeDark : settingsActionCopy[currentLang].themeLight;
-        setMessages(previous => [...previous, { role: "assistant", text: reply, localOnly: true }]);
-        return;
-      }
-      const targetLang = isSettingsLanguageMessage(message);
-      if (targetLang) {
-        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
-        setSetting("language", LANGUAGE_LABELS[targetLang]);
-        const reply = targetLang === "en" ? settingsActionCopy.en.langEn : targetLang === "zh" ? settingsActionCopy.zh.langZh : settingsActionCopy.vi.langVi;
-        setMessages(previous => [...previous, { role: "assistant", text: reply, localOnly: true }]);
-        return;
-      }
-      if (isSettingsWalletArchiveMessage(message, state)) {
-        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
-        const { proposal, clarification } = prepareWalletArchive(state, message, crypto.randomUUID());
-        if (proposal) {
-          setMessages(previous => [...previous, { role: "assistant", text: "", settingsAction: proposal, localOnly: true }]);
-        } else {
-          setMessages(previous => [...previous, { role: "assistant", text: clarification || settingsActionCopy[currentLang].failed, localOnly: true }]);
-        }
-        return;
-      }
-      const normMsg = normalizeVietnameseMessage(message);
-      const isGenericDeletionQuestion = /^(?:toi\s+)?(?:muon\s+)?(?:xoa|huy|bo|delete|remove)\s+(?:giao\s*d[ií]ch|giao\s*diichj|gd|transactions?)[.!?\s]*$/i.test(normMsg);
-      if (isGenericDeletionQuestion) {
-        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
-        const prompt = {
-          vi: "Bạn muốn xóa giao dịch nào? Hãy cho biết tên, số tiền, ngày hoặc danh mục; dữ liệu chưa bị thay đổi.",
-          en: "Which transaction would you like to delete? Please specify title, amount, date, or category; no data has been changed.",
-          zh: "你想删除哪笔交易？请说明名称、金额、日期或类别；尚未更改任何数据。",
-        }[currentLang];
-        setMessages(previous => [...previous, { role: "assistant", text: prompt, localOnly: true }]);
-        return;
-      }
-      const relOrder = detectRelativeOrder(message);
-      if (relOrder && /\b(?:xoa|huy|bo|delete|remove)\b/i.test(normMsg)) {
-        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
-        const term = cleanDeletionSearchTerm(message);
-        const matches = findTransactionsForDeletion(state.transactions, {
-          scope: "matching",
-          amount: null,
-          walletId: null,
-          periodStart: null,
-          periodEnd: null,
-          category: null,
-          searchTerm: term,
-          type: null,
-          relativeOrder: relOrder,
-        });
-        if (!matches.length) {
-          setMessages(previous => [...previous, { role: "assistant", text: "Hiện chưa có giao dịch nào để xóa.", localOnly: true }]);
-          return;
-        }
-        const targetId = matches[0].id;
-        setMessages(previous => [...previous, {
-          role: "assistant",
-          text: `Mình tìm thấy 1 giao dịch khớp yêu cầu. Hãy chọn đúng giao dịch cần xóa rồi xác nhận; hiện chưa giao dịch nào bị xóa.`,
-          transactionDeletion: {
-            confirmationId: crypto.randomUUID(),
-            transactionIds: [targetId],
-            selectedIds: [targetId],
-            scope: "matching",
-            status: "pending",
-          },
-          localOnly: true,
-        }]);
-        return;
-      }
     }
     const outstanding = latestDrafts.current;
     if (!requestedDraftId && outstanding.length === 1 && /^(?:(?:huy|bo)(?:\s+(?:ban nhap|giao dich nay|giao dich do))?|cancel(?:\s+(?:draft|this draft))?|取消(?:草稿)?)[.!\s]*$/i.test(normalizeVietnameseMessage(message))) {
@@ -1425,25 +1288,6 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         if (parsed.success) {
           setMessages(previous => [...previous, { role: "assistant", text: ai.reply || "", planningEdit: parsed.data }]);
           return;
-        }
-      }
-      if (ai.operationIntent === "settings_action" && (result as { settingsAction?: unknown }).settingsAction) {
-        const parsed = settingsActionProposalSchema.safeParse((result as { settingsAction?: unknown }).settingsAction);
-        if (parsed.success) {
-          if (parsed.data.action === "theme" && parsed.data.theme) {
-            setSetting("theme", parsed.data.theme);
-            setMessages(previous => [...previous, { role: "assistant", text: ai.reply || "", localOnly: true }]);
-            return;
-          }
-          if (parsed.data.action === "language" && parsed.data.language) {
-            setSetting("language", LANGUAGE_LABELS[parsed.data.language]);
-            setMessages(previous => [...previous, { role: "assistant", text: ai.reply || "", localOnly: true }]);
-            return;
-          }
-          if (parsed.data.action === "archive_wallet") {
-            setMessages(previous => [...previous, { role: "assistant", text: ai.reply || "", settingsAction: parsed.data }]);
-            return;
-          }
         }
       }
       if (shouldBlockNewDraft(message, latestDrafts.current, ai.intent)) {
@@ -2080,11 +1924,6 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           return parsed.success ? <PlanningEditCard proposal={parsed.data} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
             onConfirm={() => void confirmPlanningEdit(parsed.data.id)} onCancel={() => cancelPlanningEdit(parsed.data.id)} /> : null;
         })()}
-        {message.settingsAction && !messages.slice(index + 1).some(item => item.settingsAction?.id === message.settingsAction?.id) && (() => {
-          const parsed = settingsActionProposalSchema.safeParse(message.settingsAction);
-          return parsed.success ? <SettingsActionCard proposal={parsed.data} lang={resolveLanguage(state.settings.language)}
-            onConfirm={() => void confirmSettingsAction(parsed.data.id)} onCancel={() => cancelSettingsAction(parsed.data.id)} /> : null;
-        })()}
         {message.workspaceProposal && !messages.slice(index + 1).some(item => item.workspaceProposal?.id === message.workspaceProposal?.id) && (() => {
           const parsed = workspaceProposalSchema.safeParse(message.workspaceProposal);
           return parsed.success ? <WorkspaceActionCard proposal={parsed.data} state={state} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
@@ -2134,7 +1973,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
                 const transactionWallet = state.wallets.find((item) => item.id === transaction.wallet);
                 return <label key={transaction.id}>
                   <input type="checkbox" checked={deletion.selectedIds.includes(transaction.id)} disabled={!!deletingId} onChange={(event) => selectTransactionForDeletion(deletion.confirmationId, transaction.id, event.target.checked)} />
-                  <span><b>{transaction.title}</b><small>{transaction.date.slice(0, 10)}{transaction.date.length > 10 ? ` ${transaction.date.slice(11, 16)}` : ""} · {transaction.category} · {transactionWallet?.name || "Ví"}</small></span>
+                  <span><b>{transaction.title}</b><small>{transaction.date.slice(0, 10)} · {transaction.category} · {transactionWallet?.name || "Ví"}</small></span>
                   <strong>{transactionWallet ? formatTransactionMoney(transaction.amount, transactionWallet.currency) : `${transaction.amount.toLocaleString("en-US")} · Chưa rõ tiền tệ`}</strong>
                 </label>;
               })}</div> : <p>{copy.empty}</p>}

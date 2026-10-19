@@ -395,20 +395,13 @@ export function validateAndCommitDrafts<T extends DraftState>(state: T, drafts: 
     if (!wallet || wallet.currency !== draft.currency) continue;
     known.add(draft.id);
     committed.push(draft.id);
-    const now = new Date();
-    const timeString = [
-      String(now.getHours()).padStart(2, "0"),
-      String(now.getMinutes()).padStart(2, "0"),
-      String(now.getSeconds()).padStart(2, "0"),
-    ].join(":");
-    const finalDate = draft.date.length === 10 ? `${draft.date}T${timeString}` : draft.date;
     transactions.push({
       id: draft.id,
       title: draft.title.trim(),
       amount: draft.amount,
       type: draft.type,
       category: draft.category,
-      date: finalDate,
+      date: draft.date,
       wallet: wallet.id,
       note: "",
     });

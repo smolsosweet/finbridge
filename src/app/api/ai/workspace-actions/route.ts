@@ -7,7 +7,7 @@ import { workspaceRepository } from "@/lib/workspace-repository";
 import { workspaceSchema } from "@/lib/workspace-model";
 import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 import type { AppState } from "@/components/sites/rolly/replica/store";
-import { detectWorkspaceCreationKind, emptyWorkspaceAction, inspectWorkspaceProposal, isWorkspaceCreationRequest, resolveWorkspaceDateReply, workspaceActionCopy, workspaceActionSchema, workspaceProposalSchema } from "@/lib/workspace-actions";
+import { emptyWorkspaceAction, inspectWorkspaceProposal, isWorkspaceCreationRequest, resolveWorkspaceDateReply, workspaceActionCopy, workspaceActionSchema, workspaceProposalSchema } from "@/lib/workspace-actions";
 import { resolveWorkspaceFieldReply } from "@/lib/workspace-action-replies";
 
 export const runtime = "nodejs";
@@ -119,19 +119,7 @@ export async function POST(request: Request) {
         const next = workspaceActionSchema.parse({ ...base, ...changes });
         if (index >= 0) actions[index] = next; else actions.push(next);
       }
-      if (actions.length === 0) {
-        const detectedKind = detectWorkspaceCreationKind(input.message);
-        if (detectedKind) {
-          actions.push(emptyWorkspaceAction(detectedKind, stableActionId(pending?.id || input.batchId, 0)));
-        }
-      }
       if (pending && JSON.stringify(actions) === JSON.stringify(currentInspection?.proposal.actions)) return respond({ error: "ACTION_REPLY_NOT_UNDERSTOOD", message: input.language === "vi" ? "Finn chưa ghép được câu trả lời này vào yêu cầu đang tạo. Thông tin và lời nhắn vẫn được giữ; bạn có thể nói rõ trường muốn bổ sung hoặc sửa nhé." : input.language === "zh" ? "Finn 暂时无法将此回复关联到正在创建的项目。信息和消息已保留，请说明要补充或修改的字段。" : "Finn couldn't apply this reply to the pending creation. Your details and message are kept; please specify the field to add or change." }, 422);
-    }
-    if (actions.length === 0) {
-      const detectedKind = detectWorkspaceCreationKind(input.message);
-      if (detectedKind) {
-        actions.push(emptyWorkspaceAction(detectedKind, stableActionId(pending?.id || input.batchId, 0)));
-      }
     }
     const proposal = workspaceProposalSchema.safeParse({ id: pending?.id || input.batchId, actions, status: "collecting" });
     if (!proposal.success) return respond({ error: "INVALID_AI_RESPONSE", message: t.unavailable }, 502);
