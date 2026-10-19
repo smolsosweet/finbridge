@@ -36,6 +36,8 @@ process.env.NODE_ENV = "production"; process.env.FINBRIDGE_DEMO_MODE = "false";
 process.env.BETTER_AUTH_URL = "https://finbridge.example.invalid"; process.env.GEMINI_API_KEY = "synthetic-test-key";
 const { POST } = await import("../src/app/api/ai/assistant/route.ts");
 const { POST: scenarioPOST } = await import("../src/app/api/ai/scenario-planner/route.ts");
+const { POST: workspaceActionsPOST } = await import("../src/app/api/ai/workspace-actions/route.ts");
+const { emptyWorkspaceAction, applyWorkspaceProposal } = await import("../src/lib/workspace-actions.ts");
 test.after(() => { hooks.deregister(); for (const [key, value] of Object.entries(savedEnv)) if (value === undefined) delete process.env[key]; else process.env[key] = value; });
 
 const state = () => ({ wallets: [{ id: "vnd", name: "Test wallet", currency: "VND", initial: 1_000_000, type: "cash" }], categories: ["Học phí", "Thức ăn & Đồ uống", "Mua sắm"], categoryMeta: Object.fromEntries(["Học phí", "Thức ăn & Đồ uống", "Mua sắm"].map(name => [name, { type: "expense", icon: "❓", children: [] }])), transactions: [], goals: [], fixedExpenses: [], recurring: [], settings: {}, rules: [] });
@@ -44,6 +46,107 @@ const body = (message, extra = {}) => ({ batchId: randomUUID(), message, today: 
 const draft = (id, title, amount) => ({ id, title, amount, type: "expense", category: "Thức ăn & Đồ uống", wallet: "vnd", currency: "VND", date: "2026-10-18", needsReview: [] });
 const modelDraft = (title, amount, category = "Mua sắm") => ({ title, amount, type: "expense", category, categoryConfidence: "confident", date: "2026-10-18", walletId: null, needsReview: [] });
 const request = (input, owner = "owner", origin = process.env.BETTER_AUTH_URL) => new Request(process.env.BETTER_AUTH_URL + "/api/ai/assistant", { method: "POST", headers: { "content-type": "application/json", origin, "x-finbridge-workspace-owner": owner }, body: JSON.stringify(input) });
+const creation = (kind, changes = {}) => ({ ...emptyWorkspaceAction(kind, randomUUID()), name: "Test creation", ...changes });
+const creationRequest = (pending, message, extra = {}) => ({ batchId: pending.id, message, language: "vi", today: "2026-10-19", history: [], pending, ...extra });
+
+test("a short budget amount answer advances the active question even when the provider has no patch", async () => {
+  const action = { id: randomUUID(), kind: "budget", name: "Tiền sinh hoạt tháng 10", currency: "VND", walletType: null, initialBalance: null, creditLimit: null, amount: null, walletId: "vnd", budgetId: null, category: null, date: null, cycle: null, recurrence: null, intervalMonths: null, monthPosition: null, reminderDays: null };
+  const pending = { id: randomUUID(), actions: [action], status: "collecting" };
+  const before = structuredClone(fixture.data);
+  fixture.output = { mode: "manage", actions: [] };
+  const http = await workspaceActionsPOST(request({ batchId: pending.id, message: "10 triệu", language: "vi", today: "2026-10-19", history: [], pending }));
+  const result = await http.json();
+  assert.equal(http.status, 200);
+  assert.equal(result.proposal.actions[0].amount, 10_000_000);
+  assert.equal(result.proposal.actions[0].walletId, "vnd");
+  assert.equal(result.proposal.actions[0].name, action.name);
+  assert.equal(result.question.field, "date");
+  assert.equal(fixture.calls.length, 0);
+  assert.deepEqual(fixture.data, before);
+});
+
+test("wallet choice then shorthand amount then date advance one budget without losing prior fields", async () => {
+  let pending = { id: randomUUID(), actions: [creation("budget", { name: "Tiền sinh hoạt tháng 10" })], status: "collecting" };
+  for (const [message, field] of [["Test wallet · VND", "amount"], ["số tiền là 10 triệu nhé", "date"], ["ngày mai", "cycle"], ["Hàng tháng", "category"], ["Tất cả danh mục chi", null]]) {
+    const http = await workspaceActionsPOST(request(creationRequest(pending, message))), result = await http.json();
+    assert.equal(http.status, 200, message);
+    assert.equal(result.question?.field || null, field, message);
+    assert.equal(result.proposal.id, pending.id);
+    assert.equal(result.proposal.actions[0].id, pending.actions[0].id);
+    pending = result.proposal;
+  }
+  assert.equal(pending.status, "review");
+  assert.equal(pending.actions[0].amount, 10_000_000);
+  assert.equal(pending.actions[0].date, "2026-10-20");
+  assert.equal(pending.actions[0].walletId, "vnd");
+  assert.equal(pending.actions[0].name, "Tiền sinh hoạt tháng 10");
+  assert.equal(fixture.calls.length, 0);
+  assert.equal(fixture.data.goals.length, 0);
+  const confirmed = applyWorkspaceProposal(fixture.data, pending, "vi");
+  assert.equal(confirmed.goals.length, 1);
+  assert.equal(confirmed.goals[0].amount, 10_000_000);
+  assert.equal(confirmed.goals[0].wallet, "vnd");
+  assert.equal(applyWorkspaceProposal(confirmed, pending, "vi").goals.length, 1);
+});
+
+test("short numeric replies work for wallet opening balance, credit limit and fixed expense too", async () => {
+  const cases = [
+    [creation("wallet", { currency: "VND", walletType: "cash" }), "10 triệu", "initialBalance", 10_000_000],
+    [creation("wallet", { currency: "USD", walletType: "cash" }), "0", "initialBalance", 0],
+    [creation("wallet", { currency: "USD", walletType: "credit", initialBalance: 0 }), "1,500 USD", "creditLimit", 1500],
+    [creation("fixed_expense", { budgetId: "", walletId: "vnd", currency: "VND" }), "1,5 triệu", "amount", 1_500_000],
+  ];
+  for (const [action, message, field, value] of cases) {
+    const pending = { id: randomUUID(), actions: [action], status: "collecting" };
+    const http = await workspaceActionsPOST(request(creationRequest(pending, message))), result = await http.json();
+    assert.equal(http.status, 200, message);
+    assert.equal(result.proposal.actions[0][field], value, message);
+  }
+  assert.equal(fixture.calls.length, 0);
+  assert.equal(fixture.data.wallets.length, 1);
+  assert.equal(fixture.data.fixedExpenses.length, 0);
+});
+
+test("invalid amounts and mismatched currencies preserve the pending action with actionable errors", async () => {
+  const pending = { id: randomUUID(), actions: [creation("budget", { currency: "VND", walletId: "vnd" })], status: "collecting" };
+  const before = structuredClone(pending);
+  for (const [message, error] of [["0", "INVALID_NUMBER"], ["-10 triệu", "INVALID_NUMBER"], ["1,5 VND", "INVALID_NUMBER"], ["10 USD", "CURRENCY_MISMATCH"]]) {
+    const http = await workspaceActionsPOST(request(creationRequest(pending, message))), result = await http.json();
+    assert.equal(http.status, 422, message);
+    assert.equal(result.error, error);
+  }
+  assert.deepEqual(pending, before);
+  assert.equal(fixture.calls.length, 0);
+});
+
+test("complex replies retain structured model orchestration and empty patches no longer repeat a question", async () => {
+  const action = creation("budget", { currency: "VND", walletId: "vnd" });
+  const pending = { id: randomUUID(), actions: [action], status: "collecting" };
+  fixture.output = { mode: "manage", actions: [{ kind: "budget", id: action.id, amount: 10000000, date: "2026-10-19", cycle: "monthly", category: "" }] };
+  let http = await workspaceActionsPOST(request(creationRequest(pending, "cho mình 10 triệu, từ hôm nay, hàng tháng, tất cả danh mục")));
+  let result = await http.json();
+  assert.equal(http.status, 200);
+  assert.equal(result.proposal.status, "review");
+  assert.equal(result.proposal.actions[0].name, action.name);
+  assert.equal(fixture.calls.length, 1);
+  fixture.output = { mode: "manage", actions: [] };
+  http = await workspaceActionsPOST(request(creationRequest(pending, "mình chưa biết phải ghi sao nữa")));
+  result = await http.json();
+  assert.equal(http.status, 422);
+  assert.equal(result.error, "ACTION_REPLY_NOT_UNDERSTOOD");
+  assert.equal(fixture.data.goals.length, 0);
+});
+
+test("numeric follow-up changes only the operation that owns the active question", async () => {
+  const complete = creation("budget", { walletId: "vnd", currency: "VND", amount: 100000, date: "2026-10-19", cycle: "monthly", category: "" });
+  const waiting = creation("budget", { name: "Second budget", walletId: "vnd", currency: "VND" });
+  const pending = { id: randomUUID(), actions: [complete, waiting], status: "collecting" };
+  const http = await workspaceActionsPOST(request(creationRequest(pending, "10 triệu"))), result = await http.json();
+  assert.equal(http.status, 200);
+  assert.deepEqual(result.proposal.actions[0], complete);
+  assert.equal(result.proposal.actions[1].amount, 10_000_000);
+  assert.equal(fixture.data.goals.length, 0);
+});
 
 test("plan follow-ups retain validated assumptions and never create a financial mutation", async () => {
   const before = structuredClone(fixture.data);
@@ -169,6 +272,37 @@ test("a wrongly interpreted correction cannot overwrite an existing draft when t
   assert.equal(result.operationIntent, "create_transaction"); assert.equal(result.drafts.length, 1);
   assert.notEqual(result.drafts[0].id, old.id); assert.equal(result.drafts[0].amount, 20_000);
   assert.equal(old.title, "bánh mì");
+});
+
+test("an explicit edit keeps the existing draft ID, full new title and currency suffix despite a wrong model amount", async () => {
+  fixture.data.wallets.push({ id: "cny", name: "CNY test wallet", currency: "CNY", initial: 100000, type: "cash" });
+  fixture.data.wallets.push({ id: "usd", name: "USD test wallet", currency: "USD", initial: 100000, type: "cash" });
+  const old = draft("breakfast", "ăn sang", 10000);
+  for (const [message, title, currency, wallet] of [["Sửa bản nháp này: n sáng 10k tệ", "ăn sáng", "CNY", "cny"], ["Sửa bản nháp này: ăn sáng 10 nghìn tệ", "ăn sáng", "CNY", "cny"], ["Sửa bản nháp này: ăn tối 10k đô", "ăn tối", "USD", "usd"]]) {
+    fixture.output = response({ intent: "update_pending_transaction", targetDraftId: old.id, draftPatch: { title, amount: 10, currency: "VND" } });
+    const http = await POST(request(body(message, { pendingDrafts: [old], activeDraftId: old.id }))), result = await http.json();
+    assert.equal(http.status, 200);
+    assert.equal(result.intent, "clarification");
+    assert.equal(result.drafts[0].id, old.id);
+    assert.equal(result.drafts[0].title, title);
+    assert.equal(result.drafts[0].amount, 10000);
+    assert.equal(result.drafts[0].currency, currency);
+    assert.equal(result.drafts[0].wallet, wallet);
+    assert.equal(result.drafts[0].date, old.date);
+    assert.equal(fixture.data.transactions.length, 0);
+    assert.equal(old.currency, "VND");
+  }
+});
+
+test("changing a draft to a currency without a wallet cannot retain its old VND wallet", async () => {
+  const old = draft("breakfast", "ăn sang", 10000);
+  fixture.output = response({ intent: "update_pending_transaction", targetDraftId: old.id, draftPatch: { amount: 10000, currency: "VND" } });
+  const http = await POST(request(body("Sửa bản nháp này: ăn sáng 10k tệ", { pendingDrafts: [old], activeDraftId: old.id }))), result = await http.json();
+  assert.equal(http.status, 200);
+  assert.equal(result.drafts[0].currency, "CNY");
+  assert.equal(result.drafts[0].wallet, null);
+  assert.ok(result.drafts[0].needsReview.includes("wallet"));
+  assert.equal(fixture.data.transactions.length, 0);
 });
 
 test("bread then water retain separate stable draft IDs and retries retain their identity", async () => {

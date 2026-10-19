@@ -18,7 +18,7 @@ import { ChatSpendingPlan } from "./ChatSpendingPlan";
 import { FinancialChatAnswer } from "./FinancialChatAnswer";
 import { prepareReceiptImage } from "@/lib/receipt-image";
 import { definitelyRejectedWorkspace, workspaceSaveErrorMessage } from "@/lib/workspace-payload";
-import { pendingDraftReminder, rollbackRejectedDrafts, shouldBlockNewDraft } from "@/lib/pending-draft-policy";
+import { pendingDraftInterruption, pendingDraftReminder, rollbackRejectedDrafts, shouldBlockNewDraft } from "@/lib/pending-draft-policy";
 import { asksForCalculationExplanation, scenarioCalculationExplanation } from "@/lib/scenario-explanation";
 import { hasCompatibleDraftWallet } from "@/lib/transaction-drafts";
 import { WorkspaceActionCard } from "./WorkspaceActionCard";
@@ -833,7 +833,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); await confirmDrafts([outstanding[0].id]); return;
     }
     if (!requestedDraftId && shouldBlockNewDraft(message, outstanding)) {
-      setMessages(previous => [...previous, { role: "user", text: message }, { role: "assistant", text: pendingDraftReminder(resolveLanguage(state.settings.language), outstanding.length), draftIds: outstanding.map(d => d.id) }]);
+      setMessages(previous => [...previous, { role: "user", text: message }, pendingDraftInterruption(message, outstanding, resolveLanguage(state.settings.language))]);
       setText(message); return;
     }
     const pendingWorkspace = [...messages].reverse().find(item => item.workspaceProposal && ["collecting", "review", "failed"].includes(item.workspaceProposal.status) && !item.workspaceProposal.applied)?.workspaceProposal;
@@ -921,6 +921,13 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     }
     const amountCorrection = correction && activeDraft ? applyDraftAmountCorrection(drafts, activeDraft.id, message, state) : null;
     if (amountCorrection) {
+      if (!hasCompatibleDraftWallet(amountCorrection.draft, state.wallets)) {
+        appendUser();
+        setDrafts(previous => removeDraftById(previous, amountCorrection.draft.id));
+        setClarifyingDraftId(null); setFocusedDraftId(null);
+        setMessages(previous => [...previous, { role: "assistant", text: unavailableWalletReply([amountCorrection.draft.currency], resolveLanguage(state.settings.language)) }]);
+        return;
+      }
       appendUser(); setDrafts(amountCorrection.drafts); setClarifyingDraftId(activeDraftId); setFocusedDraftId(activeDraftId);
       setMessages(previous => [...previous, { role: "assistant", text: `Đã cập nhật bản nháp “${amountCorrection.draft.title}”. Hãy kiểm tra rồi xác nhận.`, draftIds: [amountCorrection.draft.id] }]);
       return;
@@ -972,7 +979,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (!validShape || returned.length > 20) throw new Error("AI trả về dữ liệu chưa hợp lệ. Vui lòng thử lại.");
       const ai = result as { intent: string; operationIntent?: ConversationIntent; targetDraftId?: string | null; categoryOperation?: CategoryCommand | null; action?: string; actions?: FinancialAction[]; walletId?: string | null; scope?: "selected" | "all"; periodStart?: string | null; periodEnd?: string | null; category?: string | null; searchTerm?: string | null; transactionType?: "expense" | "income" | null; percentage?: number | null; financialAnswer?: string | null; reply?: string; deletion?: TransactionDeletionCriteria };
       if (shouldBlockNewDraft(message, latestDrafts.current, ai.intent)) {
-        setMessages(previous => [...previous, { role: "assistant", text: pendingDraftReminder(resolveLanguage(state.settings.language), latestDrafts.current.length), draftIds: latestDrafts.current.map(d => d.id) }]);
+        setMessages(previous => [...previous, pendingDraftInterruption(message, latestDrafts.current, resolveLanguage(state.settings.language))]);
         setText(message); return;
       }
       if (activeSpendingPlan) {
@@ -1575,7 +1582,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       </div>
       <span className="r-chat-date">Hôm nay</span>
       {messages.map((message, index) => <div key={index} className={"r-message " + message.role + (message.draftIds ? " r-ai-draft-message" : "")}>
-        {message.spendingPlan ? <>{message.text && <p>{message.text}</p>}<ChatSpendingPlan state={state} asOf={today()} options={message.spendingPlan} onScope={busy || committing ? undefined : (options: SpendingPlanOptions) => setMessages(previous => [...previous, { role: "assistant", text: "", spendingPlan: options, localOnly: true }])}/></> : message.role === "assistant" && (message.financialContext || message.scenarioExplanation) && !/gemini|AI Studio/i.test(message.text) ? <FinancialChatAnswer text={message.text} /> : <p>{message.role === "assistant" && /gemini|AI Studio/i.test(message.text)
+        {message.spendingPlan ? <>{message.text && <p>{message.text}</p>}<ChatSpendingPlan state={state} asOf={today()} options={message.spendingPlan} onScope={busy || committing ? undefined : (options: SpendingPlanOptions) => setMessages(previous => [...previous, { role: "assistant", text: "", spendingPlan: options, localOnly: true }])}/></> : message.role === "assistant" && (message.financialContext || message.scenarioExplanation || message.draftTargetChoices) && !/gemini|AI Studio/i.test(message.text) ? <FinancialChatAnswer text={message.text} /> : <p>{message.role === "assistant" && /gemini|AI Studio/i.test(message.text)
           ? message.draftIds?.length ? serviceCopy.draftReady : serviceCopy.unavailable
           : message.text}</p>}
         {message.workspaceProposal && !messages.slice(index + 1).some(item => item.workspaceProposal?.id === message.workspaceProposal?.id) && (() => {
@@ -1590,7 +1597,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         {message.draftTargetChoices && <div className="r-ai-category-options" role="group" aria-label={categoryCommandCopy.chooseDraft}>
           {message.draftTargetChoices.map(id => {
             const draft = drafts.find(d => d.id === id);
-            return draft && <button type="button" key={id} disabled={busy} onClick={() => { setClarifyingDraftId(id); setFocusedDraftId(id); if (message.pendingFollowup) void send(message.pendingFollowup, id); }}>{draft.title} · {draft.currency && draft.amount ? formatTransactionMoney(draft.amount, draft.currency) : "—"}</button>;
+            return draft && <button type="button" key={id} disabled={busy || committing || uncertainDraftIds.includes(id)} onClick={() => { setClarifyingDraftId(id); setFocusedDraftId(id); if (message.pendingFollowup) void send(message.pendingFollowup, id); }}>{{ vi: "Sửa bản nháp", en: "Edit draft", zh: "修改草稿" }[resolveLanguage(state.settings.language)]}: {draft.title} · {draft.currency && draft.amount ? formatTransactionMoney(draft.amount, draft.currency) : "—"}</button>;
           })}
         </div>}
         {message.categoryOperation && (() => {

@@ -228,6 +228,11 @@ test("normalizes explicit shorthand and currency amounts without mixing their IS
   assert.deepEqual(parseTransactionAmounts("mua đồ hết 5 tệ"), [{ amount: 5, currency: "CNY" }]);
   assert.deepEqual(parseTransactionAmounts("paid $1,250.50"), [{ amount: 1_250.5, currency: "USD" }]);
   assert.deepEqual(parseTransactionAmounts("chi 25k USD"), [{ amount: 25_000, currency: "USD" }]);
+  assert.deepEqual(parseTransactionAmounts("n sáng 10k tệ"), [{ amount: 10_000, currency: "CNY" }]);
+  assert.deepEqual(parseTransactionAmounts("ăn sáng 10 nghìn tệ"), [{ amount: 10_000, currency: "CNY" }]);
+  assert.deepEqual(parseTransactionAmounts("ăn tối 10k đô"), [{ amount: 10_000, currency: "USD" }]);
+  assert.deepEqual(parseTransactionAmounts("ăn tối 10 đô la"), [{ amount: 10, currency: "USD" }]);
+  assert.deepEqual(parseTransactionAmounts("ăn sáng 10000đ"), [{ amount: 10_000, currency: "VND" }]);
   assert.equal(formatTransactionMoney(350_000, "VND"), "350,000 VND");
   assert.equal(formatTransactionMoney(20, "USD"), "20.00 USD");
   assert.equal(formatTransactionMoney(5, "CNY"), "5.00 CNY");
@@ -287,6 +292,8 @@ test("detects an explicit amount correction without treating it as a new entry",
   assert.deepEqual(parseDraftAmountCorrection("Actually, I meant $20"), { amount: 20, currency: "USD" });
   assert.equal(parseDraftAmountCorrection("250k"), null, "a bare amount does not silently target a draft");
   assert.equal(parseDraftAmountCorrection("nhầm, là 250k hoặc 300k"), null, "multiple possible corrected values need clarification");
+  assert.equal(parseDraftAmountCorrection("nhầm, ăn tối 10k đô"), null, "a changed description must reach the full contextual patch");
+  assert.equal(parseDraftAmountCorrection("nhầm, là 250k hôm qua"), null, "a changed date must not be ignored by an amount-only edit");
   const app = state();
   const pending = draft({ id: "correction:0", amount: 350_000, currency: "VND" });
   const correction = applyDraftAmountCorrection([pending], pending.id, "Tôi nhầm, là 250k", app);

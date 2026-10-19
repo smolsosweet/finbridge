@@ -8,7 +8,7 @@ import { workspaceWireSnapshot, workspaceRequest, WorkspaceRequestError, definit
 import { handleWorkspace } from "../src/lib/workspace-handler.ts";
 import { gzipSync, gunzipSync } from "node:zlib";
 import { randomUUID } from "node:crypto";
-import { pendingDraftReminder, rollbackRejectedDrafts, shouldBlockNewDraft } from "../src/lib/pending-draft-policy.ts";
+import { pendingDraftInterruption, pendingDraftReminder, rollbackRejectedDrafts, shouldBlockNewDraft } from "../src/lib/pending-draft-policy.ts";
 import { validateAndCommitDrafts, validateDraftForState, removeDraftById } from "../src/lib/transaction-drafts.ts";
 import { receiptImageDimensions, prepareReceiptImage } from "../src/lib/receipt-image.ts";
 
@@ -94,6 +94,16 @@ test("new transactions are blocked while corrections, questions and confirmation
   assert.equal(shouldBlockNewDraft("a provider-recognized expense", [draft()], "transaction"), true);
   assert.equal(shouldBlockNewDraft("ăn sáng 25k", []), false);
   for (const lang of ["vi", "en", "zh"]) assert.match(pendingDraftReminder(lang, 2), /2/);
+});
+
+test("blocked entries retain their full meaning and offer an explicit edit instead of repeating only a warning", () => {
+  for (const [message, currency] of [["n sáng 10k tệ", "CNY"], ["ăn sáng 10 nghìn tệ", "CNY"], ["ăn tối 10k đô", "USD"]]) {
+    const reply = pendingDraftInterruption(message, [draft()], "vi");
+    assert.match(reply.text, new RegExp(`10,000\\.00 ${currency}`));
+    assert.deepEqual(reply.draftTargetChoices, [draft().id]);
+    assert.equal(reply.pendingFollowup, "Sửa bản nháp này: " + message);
+    assert.equal(shouldBlockNewDraft(reply.pendingFollowup, [draft()]), false);
+  }
 });
 
 test("confirm once/retry/cancel preserve transaction identity and rollback only a definite rejection", () => {

@@ -5,7 +5,7 @@ import { database } from "@/lib/database";
 import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 import { answerFinancialQuery, asksForAllWalletBalances, resolveFinancialFollowup, type FinancialAction } from "@/lib/financial-chat";
 import { resolveExplicitWallet, resolveUniqueCurrencyWallet } from "@/lib/transaction-currency";
-import { createTimeoutTransactionDraft, editDraftById, reconcileTransactionDraftAmounts, resolveDraftCategory, type TransactionDraft } from "@/lib/transaction-drafts";
+import { createTimeoutTransactionDraft, editDraftById, parseTransactionAmounts, reconcileTransactionDraftAmounts, resolveDraftCategory, type TransactionDraft } from "@/lib/transaction-drafts";
 import { conversationIntents, draftPatchSchema, isCategoryManagementMessage, isClearlyNewTransaction, resolvePendingDraft } from "@/lib/conversation-intent";
 import { categoryCommandSchema, prepareCategoryOperation } from "@/lib/category-operations";
 import { categoryOperationError } from "@/lib/category-operation-copy";
@@ -194,6 +194,7 @@ export async function POST(request: Request) {
         "Quản lý danh mục hoàn toàn khác xóa giao dịch. categoryOperation chỉ chứa tên nguồn/đích tồn tại, ngoại trừ tên mới khi tạo/đổi tên; type phải rõ khi tạo riêng. Nếu gộp thiếu đích, đổi tên thiếu tên mới hoặc nhiều nguồn không rõ, hỏi đúng một thông tin thiếu, để categoryOperation=null. Không nói đã thực hiện; ứng dụng sẽ hiển thị tác động và xin xác nhận. Khi chọn danh mục cho bản nháp dùng answer_clarification và draftPatch.category, không tạo danh mục riêng.",
         "Danh mục archived=true chỉ dùng để tra cứu lịch sử, không gán cho bản nháp mới hoặc sửa/gộp danh mục.",
         "Sửa bản nháp: targetDraftId phải là ID thực; draftPatch chỉ chứa các trường người dùng thay đổi, không lặp lại trường cũ. Nếu nhiều bản nháp, chỉ dùng ID khi tên/đại từ gắn rõ với ID đang thao tác. Không biết đang nói khoản nào thì hỏi lại, không tự chọn bản nháp cuối. Khoản mua mới, 'thêm một khoản nữa', dù cùng loại, luôn create_transaction, không sửa khoản trước. Nội dung 'học thêm' thường là chi phí giáo dục; mua món ăn/nước không phải mua sắm chung.",
+        "When the user explicitly chooses to edit a pending draft, including messages starting 'Sửa bản nháp này:', 'Update this draft:' or '修改这笔草稿：', use update_pending_transaction with its real targetDraftId and draftPatch. Interpret the entire new description, date, amount and currency, including typos; do not keep an old breakfast title when the user changes it to dinner. Shorthand is a multiplier, not a currency override: 10k tệ and 10 nghìn tệ both mean amount=10000,currency=CNY; 10k đô means amount=10000,currency=USD. Do not ignore the currency after k/nghìn. Do not put wallet=null in a patch just because the user didn't mention a wallet; omit wallet so the application resolves the new currency. If a message could mean an edit or another purchase, ask briefly instead of claiming it is already saved.",
         "Không bịa dữ kiện tài chính. Với câu hỏi tài chính, chỉ trả action và tham số để ứng dụng tính từ dữ liệu đã lưu; để reply rỗng. Các action: balance, spending_summary, category_breakdown, top_category, category_savings, transactions, budget_status, safe_daily_allowance, upcoming_obligations, goals, spending_trend, anomalies, explain, unknown. Dùng actions khi câu hỏi có nhiều yêu cầu độc lập. Với giảm/tăng chi tiêu theo tỷ lệ, dùng category_savings, điền percentage từ 0 đến 100 và danh mục; nếu người dùng nói 'danh mục đó' hoặc 'giảm tiếp còn X%' thì phân giải từ ngữ cảnh chat gần đây. Nếu không có danh mục trong ngữ cảnh thì hỏi lại ngắn gọn. Nếu kỳ thời gian chưa rõ, để ngày null.",
         "Nếu intent=delete_transactions, chỉ phân tích yêu cầu thành bộ lọc xóa; tuyệt đối không nói đã xóa và không tạo drafts. deletionScope=all chỉ khi người dùng nói xóa tất cả hoặc tất cả giao dịch thỏa điều kiện; dùng matching khi muốn xóa một/vài giao dịch cụ thể. Trả các tiêu chí rõ ràng nếu được nêu: deletionSearchTerm cho tên/mô tả, deletionAmount cho số tiền, deletionWalletId chỉ nếu gọi rõ một ví có trong danh sách, deletionPeriodStart/End cho ngày/khoảng ngày, deletionCategory chỉ nếu là danh mục có thật, deletionType cho thu/chi/chuyển khoản. Không có tiêu chí đủ cụ thể cho matching thì để chúng null để ứng dụng hỏi lại. Không suy đoán hoặc chọn giao dịch theo nội dung chat lịch sử; chỉ dùng tin nhắn mới.",
         "Với mọi intent khác deletionScope=none và mọi deletion* fields=null.",
@@ -277,8 +278,12 @@ export async function POST(request: Request) {
     const pendingDrafts = input.pendingDrafts || (input.pendingDraft ? [input.pendingDraft] : []);
     const target = value.intent === "clarification" ? resolvePendingDraft(input.message, pendingDrafts, value.targetDraftId, input.activeDraftId || null) : null;
     if (value.intent === "clarification") {
-      const patch = value.draftPatch;
+      let patch = value.draftPatch;
       if (target && patch && Object.keys(patch).length) {
+        const stated = parseTransactionAmounts(input.message);
+        if (stated.length === 1 && (Object.hasOwn(patch, "amount") || Object.hasOwn(patch, "currency"))) {
+          patch = { ...patch, amount: stated[0].amount, ...(stated[0].currency ? { currency: stated[0].currency } : {}) };
+        }
         const categories = input.categories.map(c => c.name);
         const draftState = { wallets: input.wallets, categories, categoryMeta: Object.fromEntries(input.categories.map(c => [c.name, { type: c.type, archived: c.archived }])), transactions: [] };
         drafts = editDraftById([target], target.id, patch, draftState);

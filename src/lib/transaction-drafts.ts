@@ -35,9 +35,9 @@ export function parseTransactionAmounts(message: string): ParsedTransactionAmoun
   const amounts: ParsedTransactionAmount[] = [];
   for (const match of message.matchAll(pattern)) {
     const raw = match[1] || match[2];
-    const unit = (match[3] || (match[1] ? "usd" : "")).toLocaleLowerCase("vi").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const unit = (match[3] || (match[1] ? "usd" : "")).toLocaleLowerCase("vi").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
     const trailingCurrency = message.slice((match.index || 0) + match[0].length).match(/^\s*(usd|dollars?|dollar|đô\s*la|đô|cny|rmb|yuan|tệ|te|vnd|đồng|dong|₫|đ)(?=\s|$|[.,!?])/iu)?.[1];
-    const currencyUnit = (trailingCurrency || unit).toLocaleLowerCase("vi").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const currencyUnit = (trailingCurrency || unit).toLocaleLowerCase("vi").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
     const normalized = raw.includes(".") && raw.includes(",")
       ? raw.replace(/[.,](?=\d{3}(?:\D|$))/g, "").replace(",", ".")
       : /^[\d]{1,3}(?:[.,]\d{3})+$/.test(raw) ? raw.replace(/[.,]/g, "") : raw.replace(",", ".");
@@ -47,7 +47,7 @@ export function parseTransactionAmounts(message: string): ParsedTransactionAmoun
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000_000) continue;
     const currency = /^(usd|dollars?|dollar|do\s*la|do|\$)$/.test(currencyUnit) ? "USD"
       : /^(cny|rmb|yuan|te)$/.test(currencyUnit) ? "CNY"
-        : /^(k|nghin|ngan|trieu|tr|vnd|dong|₫|đ)$/.test(currencyUnit) ? "VND" : null;
+        : /^(k|nghin|ngan|trieu|tr|vnd|dong|₫|d)$/.test(currencyUnit) ? "VND" : null;
     amounts.push({ amount, currency });
   }
   return amounts;
@@ -71,7 +71,14 @@ export function parseDraftAmountCorrection(message: string): ParsedTransactionAm
   const normalized = normalizeVietnameseMessage(message);
   if (!/\b(nham|sai|y toi|dinh noi|actually|i meant|correction|make that|change it to)\b/.test(normalized)) return null;
   const amounts = parseTransactionAmounts(message);
-  return amounts.length === 1 ? amounts[0] : null;
+  if (amounts.length !== 1) return null;
+  // A fast amount-only edit must not swallow a changed description or date.
+  // Leave meaningful remaining words to the contextual model and full patch.
+  const rest = normalized
+    .replace(/\$\s*\d[\d.,]*|\b\d[\d.,]*\s*(?:k|nghin|ngan|trieu|tr|million|m|usd|dollars?|do\s*la|do|cny|rmb|yuan|te|vnd|dong|₫|đ|\$)(?:\s*(?:usd|dollars?|do\s*la|do|cny|rmb|yuan|te|vnd|dong|₫|đ))?/g, " ")
+    .replace(/\b(?:i meant|y toi|dinh noi|make that|change it to|so tien|toi|minh|nham|sai|actually|correction|i|la|thanh)\b/g, " ")
+    .replace(/[\s,.:;!]+/g, "");
+  return rest ? null : amounts[0];
 }
 
 /** Draft amounts always include an unambiguous ISO currency code. */
@@ -275,9 +282,15 @@ export function validateDraftForState(draft: TransactionDraft, state: DraftState
 }
 
 export function editDraftById(drafts: TransactionDraft[], id: string, patch: Partial<Omit<TransactionDraft, "id" | "needsReview">>, state: DraftState): TransactionDraft[] {
-  return drafts.map((draft) => draft.id === id
-    ? validateDraftForState({ ...draft, ...patch, ...(Object.hasOwn(patch, "category") ? { newCategory: undefined } : {}) }, state)
-    : draft);
+  return drafts.map((draft) => {
+    if (draft.id !== id) return draft;
+    const next = { ...draft, ...patch, ...(Object.hasOwn(patch, "category") ? { newCategory: undefined } : {}) };
+    if (patch.currency && patch.currency !== draft.currency && !Object.hasOwn(patch, "wallet")) {
+      const matches = state.wallets.filter(wallet => !wallet.archived && wallet.currency.toUpperCase() === patch.currency!.toUpperCase());
+      next.wallet = matches.length === 1 ? matches[0].id : null;
+    }
+    return validateDraftForState(next, state);
+  });
 }
 
 export function applyDraftAmountCorrection(drafts: TransactionDraft[], id: string, message: string, state: DraftState): { drafts: TransactionDraft[]; draft: TransactionDraft } | null {

@@ -18,7 +18,7 @@ export function isCategoryManagementMessage(message: string) {
     && /\b(xoa|bo|doi ten|sua|chinh sua|gop|hop nhat|tao|them|liet ke|delete|remove|rename|merge|create|add|list|edit|update)\b|删除|重命名|合并|创建|列出/.test(text);
 }
 export function isDraftCorrection(message: string) {
-  return /\b(nham|sua|doi (?:lai|so tien|ngay|vi|danh muc)|khoan (?:do|nay)|giao dich (?:do|nay)|actually|i meant|correct|change|that (?:one|transaction))\b|改成|刚才那笔/.test(normalizeVietnameseMessage(message));
+  return /\b(nham|sua|cap nhat|khong phai|y (?:toi|minh)|doi (?:lai|so tien|ngay|vi|danh muc)|khoan (?:do|nay)|giao dich (?:do|nay)|actually|i meant|correct|change|update|that (?:one|transaction))\b|改成|修改|刚才那笔/.test(normalizeVietnameseMessage(message));
 }
 export function isHypotheticalMessage(message: string) {
   return /\b(neu|gia su|gia dinh|what if|if i|simulate|simulation)\b|如果|假设/.test(normalizeVietnameseMessage(message));

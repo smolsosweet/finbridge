@@ -8,6 +8,7 @@ import { workspaceSchema } from "@/lib/workspace-model";
 import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 import type { AppState } from "@/components/sites/rolly/replica/store";
 import { emptyWorkspaceAction, inspectWorkspaceProposal, isWorkspaceCreationRequest, resolveWorkspaceDateReply, workspaceActionCopy, workspaceActionSchema, workspaceProposalSchema } from "@/lib/workspace-actions";
+import { resolveWorkspaceFieldReply } from "@/lib/workspace-action-replies";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,14 +49,29 @@ export async function POST(request: Request) {
       : input.context ? { ...input.context, transactions: [], recurring: [], rules: [], settings: { language: input.language } } as AppState : null;
     if (!state) return respond({ error: "WORKSPACE_UNAVAILABLE", message: t.unavailable }, 503);
     const pending = input.pending && ["collecting", "review", "failed"].includes(input.pending.status) && !input.pending.applied ? input.pending : null;
-    let actions = pending?.actions.map(action => ({ ...action })) || [];
-    const currentQuestion = pending ? inspectWorkspaceProposal(state, pending, input.language).question : null;
+    const currentInspection = pending ? inspectWorkspaceProposal(state, pending, input.language) : null;
+    let actions = currentInspection?.proposal.actions.map(action => ({ ...action })) || [];
+    const currentQuestion = currentInspection?.question || null;
+    const currentAction = currentQuestion ? actions.find(action => action.id === currentQuestion.operationId) : null;
+    const fieldReply = !input.choice && currentQuestion && currentAction ? resolveWorkspaceFieldReply(input.message, currentQuestion, currentAction) : null;
     const dateReply = !input.choice && currentQuestion?.field === "date" ? resolveWorkspaceDateReply(input.message, input.today) : null;
     if (input.choice) {
       if (!pending) return respond({ error: "STALE_CHOICE", message: t.invalid }, 409);
       const question = inspectWorkspaceProposal(state, pending, input.language).question;
       if (!question || question.operationId !== input.choice.operationId || question.field !== input.choice.field || !question.choices.some(choice => choice.value === input.choice!.value)) return respond({ error: "INVALID_CHOICE", message: t.invalid }, 409);
       actions = actions.map(action => action.id === input.choice!.operationId ? workspaceActionSchema.parse({ ...action, [input.choice!.field]: input.choice!.value }) : action);
+    } else if (fieldReply) {
+      if ("error" in fieldReply) {
+        const message = fieldReply.error === "CURRENCY_MISMATCH"
+          ? input.language === "vi" ? `Số tiền bạn nói là ${fieldReply.currency}, nhưng ví đã chọn dùng ${fieldReply.expectedCurrency}. Bạn muốn đổi ví hay nhập lại số tiền đúng tiền tệ của ví?`
+            : input.language === "zh" ? `你输入的币种为 ${fieldReply.currency}，所选钱包使用 ${fieldReply.expectedCurrency}。请更换钱包或输入正确币种的金额。`
+              : `You specified ${fieldReply.currency}, but the selected wallet uses ${fieldReply.expectedCurrency}. Change the wallet or enter an amount in its currency.`
+          : input.language === "vi" ? `Giá trị ${t[currentQuestion!.field].toLowerCase()} chưa hợp lệ. Bạn nhập một số trong phạm vi cho phép; Finn vẫn giữ các thông tin đã có.`
+            : input.language === "zh" ? `${t[currentQuestion!.field]}无效，请输入允许范围内的数值。其他信息已保留。`
+              : `The ${t[currentQuestion!.field].toLowerCase()} is invalid. Enter a number within the allowed range; the other details are kept.`;
+        return respond({ error: fieldReply.error, message }, 422);
+      }
+      actions = actions.map(action => action.id === currentQuestion!.operationId ? workspaceActionSchema.parse({ ...action, ...fieldReply.patch }) : action);
     } else if (dateReply) {
       if (dateReply.candidates) {
         const options = dateReply.candidates.join(input.language === "vi" ? " hay " : input.language === "zh" ? " 还是 " : " or ");
@@ -103,6 +119,7 @@ export async function POST(request: Request) {
         const next = workspaceActionSchema.parse({ ...base, ...changes });
         if (index >= 0) actions[index] = next; else actions.push(next);
       }
+      if (pending && JSON.stringify(actions) === JSON.stringify(currentInspection?.proposal.actions)) return respond({ error: "ACTION_REPLY_NOT_UNDERSTOOD", message: input.language === "vi" ? "Finn chưa ghép được câu trả lời này vào yêu cầu đang tạo. Thông tin và lời nhắn vẫn được giữ; bạn có thể nói rõ trường muốn bổ sung hoặc sửa nhé." : input.language === "zh" ? "Finn 暂时无法将此回复关联到正在创建的项目。信息和消息已保留，请说明要补充或修改的字段。" : "Finn couldn't apply this reply to the pending creation. Your details and message are kept; please specify the field to add or change." }, 422);
     }
     const proposal = workspaceProposalSchema.safeParse({ id: pending?.id || input.batchId, actions, status: "collecting" });
     if (!proposal.success) return respond({ error: "INVALID_AI_RESPONSE", message: t.unavailable }, 502);
