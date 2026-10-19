@@ -20,7 +20,8 @@ export async function testPool() {
 }
 export async function syntheticUser(pool) {
   const id = "finance-test-" + randomUUID();
-  await pool.query('INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt") VALUES($1,$2,$3,true,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)', [id, "Synthetic finance test", id + "@example.invalid"]);
+  // Better Auth applies role defaults in its API; its generated SQL schema has no column default.
+  await pool.query('INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt",role) VALUES($1,$2,$3,true,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,$4)', [id, "Synthetic finance test", id + "@example.invalid", "user"]);
   return id;
 }
 export async function cleanupFinance(pool, owners) {

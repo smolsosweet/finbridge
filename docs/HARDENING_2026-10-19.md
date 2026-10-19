@@ -39,4 +39,6 @@ npm run build
 
 The onboarding suite includes PostgreSQL cases and therefore also needs the isolated test database. The UI suite uses disposable identities, a temporary app copy and headless Playwright; its browser runtime must be available locally. Provider error tests use scripted responses and do not assert live provider availability. Existing localization TODO cases remain reported as TODOs.
 
+Test users created directly through SQL must explicitly include `role = 'user'`. Better Auth supplies this default through its API; its generated database column is required and has no SQL default. Verify the pipeline against a fresh database created only by `auth:migrate`, rather than relying on defaults in an older local test database.
+
 Small pre-existing lint blockers in language preference synchronization, wallet deep-link opening, safety pagination and transaction history imports were corrected so the CI gate can execute without disabling lint rules. The changes do not redesign those screens.
