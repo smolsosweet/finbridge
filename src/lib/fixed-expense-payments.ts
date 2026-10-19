@@ -31,7 +31,7 @@ export function nextScheduledExpenseDue(expense: FixedExpense, afterDue: string)
   start.setUTCDate(start.getUTCDate() + 1);
   return plannedOccurrences(expense, start.toISOString().slice(0, 10), `${start.getUTCFullYear() + 2}-12-31`)[0] || null;
 }
-export function unpaidOccurrences(state: AppState, expense: FixedExpense, start: string, end: string) {
+export function unpaidOccurrences(state: Pick<AppState, "transactions">, expense: FixedExpense, start: string, end: string) {
   const result: string[] = [];
   const paid = new Set(state.transactions.filter(t => t.type === "expense" && t.paymentConfirmation === "user" && t.fixedExpenseId === expense.id).map(t => t.fixedExpenseDueDate));
   let cursor = start;

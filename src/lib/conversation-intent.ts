@@ -3,7 +3,7 @@ import { isWorkspaceCreationRequest } from "./workspace-actions";
 import { normalizeVietnameseMessage, parseTransactionAmounts, type TransactionDraft } from "./transaction-drafts";
 import type { CategoryCommand } from "./category-operations";
 
-export const conversationIntents = ["create_transaction", "create_wallet", "create_budget", "create_fixed_expense", "update_pending_transaction", "answer_clarification", "query_financial_data", "analyze_spending", "simulate_financial_scenario", "list_categories", "create_category", "rename_category", "merge_categories", "delete_category", "delete_transactions", "general_finance_question", "unsupported_or_ambiguous_request"] as const;
+export const conversationIntents = ["create_transaction", "create_wallet", "create_budget", "create_fixed_expense", "delete_budget", "delete_fixed_expense", "update_pending_transaction", "answer_clarification", "query_financial_data", "analyze_spending", "simulate_financial_scenario", "list_categories", "create_category", "rename_category", "merge_categories", "delete_category", "delete_transactions", "general_finance_question", "unsupported_or_ambiguous_request"] as const;
 export type ConversationIntent = typeof conversationIntents[number];
 export const draftPatchSchema = z.object({ title: z.string().trim().min(1).max(160).optional(), amount: z.number().finite().positive().max(1e12).nullable().optional(),
   currency: z.string().regex(/^[A-Z]{3}$/).nullable().optional(), type: z.enum(["expense", "income"]).nullable().optional(), category: z.string().max(100).nullable().optional(),
@@ -38,6 +38,7 @@ export function isEndOfPeriodQuestion(message: string): boolean {
 export function isClearlyNewTransaction(message: string) {
   if (isWorkspaceCreationRequest(message) || isCategoryManagementMessage(message) || isDraftCorrection(message) || isHypotheticalMessage(message)) return false;
   const text = normalizeVietnameseMessage(message);
+  if (/\b(?:xoa|delete|remove|clear)\b|删除|移除/.test(text)) return false;
   return parseTransactionAmounts(message).length > 0 && /\b(mua|an|uong|hoc|chi|het|dong|nop|nhan|tra|kham|di|paid|spent|bought|received|earned|breakfast|lunch|dinner|tuition|them (?:mot )?khoan (?:nua|moi)|another (?:one|transaction)|one more)\b|买|花了|收入|学费/.test(text)
     && !/[?？]|\b(bao nhieu|du tien|co du|how much|can i|enough)\b/.test(text);
 }

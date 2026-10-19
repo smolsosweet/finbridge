@@ -19,7 +19,7 @@ test("October 18 forecast reconciles 837000 spent, 13 future days and the displa
   assert.equal(result.estimatedSpending[0].amount, 604_500);
   assert.equal(result.wallets[0].projectedBalance, 8_558_500);
   const explanation = scenarioCalculationExplanation(result, plan, app.wallets, "2026-10-18", "vi");
-  for (const number of ["9,163,000 VND", "46,500 VND", "604,500 VND", "8,558,500 VND", "13 ngày"]) assert.ok(explanation.includes(number), number);
+  for (const number of ["9.163.000 VND", "46.500 VND", "604.500 VND", "8.558.500 VND", "13 ngày"]) assert.ok(explanation.includes(number), number);
   assert.doesNotMatch(explanation, /Giả định\/giới hạn|danh mục có tổng chi cao nhất/i);
   assert.deepEqual(app, before);
 });
@@ -117,9 +117,10 @@ test("labels completed, partial and future weekly periods against the actuals cu
   assert.equal(weeklyPeriodStatus("2026-11-01", "2026-11-07", "2026-10-15"), "future");
 });
 
-test("keeps currencies separate and includes transfer-in in the destination wallet", () => {
+test("does not invent the destination amount of a cross-currency transfer", () => {
   const result = calculateScenario(state(), scenario({ changes: [{ title: "Purchase", amount: 10, direction: "expense", walletId: "usd", currency: "USD", date: "2026-10-14", category: null }], horizonEnd: "2026-10-14" }), "2026-10-14");
-  assert.deepEqual(result.wallets.map(({ walletId, currency, projectedBalance }) => ({ walletId, currency, projectedBalance })), [{ walletId: "usd", currency: "USD", projectedBalance: 615 }]);
+  assert.deepEqual(result.wallets.map(({ walletId, currency, projectedBalance }) => ({ walletId, currency, projectedBalance })), [{ walletId: "usd", currency: "USD", projectedBalance: 590 }]);
+  assert.ok(result.unavailableEstimates.some(message => /incomplete or inconsistent/.test(message)));
 });
 
 test("sends wallet and category labels without financial amounts while retaining wallet choices", () => {
@@ -157,7 +158,7 @@ test("uses this month's spending pace for the end-of-period estimate", () => {
   );
   const result = calculateScenario(app, scenario({ horizonEnd: "2026-10-24", estimateSpending: true, changes: [] }), "2026-10-14");
   assert.equal(result.estimatedSpending.length, 1);
-  assert.equal(result.estimatedSpending[0].amount, 71_428.57); // 100,000 month-to-date divided by 14 elapsed days, projected for 10 days
+  assert.equal(result.estimatedSpending[0].amount, 71_429); // VND rounds to whole dong: 100,000 / 14 * 10
   assert.equal(result.estimatedSpending[0].basis, "current-month-pace");
 });
 
@@ -214,7 +215,7 @@ test("does not claim percentage savings when category history is sparse", () => 
   app.transactions.push({ id: "one-month", title: "Dining", amount: 30_000, type: "expense", category: "Dining", date: "2026-08-20", wallet: "vnd", note: "" });
   const result = calculateScenario(app, scenario({ changes: [], spendingReductions: [{ category: "Dining", percent: 20, walletId: "vnd", currency: "VND", startDate: "2026-10-14", endDate: "2026-10-31" }] }), "2026-10-14");
   assert.equal(result.savings.length, 0);
-  assert.equal(result.unavailableEstimates.length, 1);
+  assert.ok(result.unavailableEstimates.some(message => /category history|recorded history|history/i.test(message)));
 });
 
 test("answers wallet-wide spending queries with deterministic per-currency totals", () => {
@@ -242,9 +243,9 @@ test("budget questions keep limits separate from actual balance and scheduled bi
   app.settings = { language: "English" };
   const answer = answerFinancialQuery({ action: "budget_status", walletId: "vnd", scope: "selected", periodStart: null, periodEnd: null, category: null, searchTerm: null, transactionType: null }, app, "vnd", "2026-10-14");
   assert.match(answer, /500,000/);
-  assert.match(answer, /Spent 0 VND/);
+  assert.match(answer, /Spent: \*\*0 VND\*\*/);
   assert.match(answer, /200,000/);
-  assert.match(answer, /budget limit is not a wallet balance/i);
+  assert.match(answer, /Budget limit left after these items/);
 });
 
 test("reports empty periods without inventing financial data", () => {
