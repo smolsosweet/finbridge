@@ -31,6 +31,11 @@ export function definitelyRejectedWorkspace(error: unknown) {
 }
 export function workspaceSaveErrorMessage(error: unknown, language: "vi" | "en" | "zh") {
   const code = error instanceof Error ? error.message : "";
+  if (code === "INSUFFICIENT_FUNDS" || code === "BALANCE_UNAVAILABLE") return {
+    vi: "Giao dịch chưa được lưu vì ví không đủ tiền hoặc chưa xác minh được số dư. Bản nháp vẫn được giữ; hãy kiểm tra ví và số tiền rồi thử lại.",
+    en: "The transaction was not saved: insufficient or unverified wallet funds. Your draft is kept; check the wallet and amount, then retry.",
+    zh: "交易未保存：钱包金额不足或无法核实余额。草稿已保留，请检查钱包和金额后重试。",
+  }[language];
   const key = code === "PAYLOAD_TOO_LARGE" ? "large" : ["INVALID_WORKSPACE", "INVALID_PLANNING_CHANGE", "INVALID_BILL_PAYMENT"].includes(code) ? "invalid" : ["UNAUTHENTICATED", "ACCOUNT_CHANGED", "INVALID_ORIGIN"].includes(code) ? "auth" : ["WORKSPACE_CONFLICT", "MUTATION_MISMATCH"].includes(code) ? "conflict" : code === "RATE_LIMITED" ? "rate" : "unknown";
   return {
     vi: { large: "Ảnh hoặc sổ dữ liệu quá lớn để gửi. Bản nháp vẫn được giữ; hãy dùng ảnh nhỏ hơn hoặc tải bản chưa lưu trước khi thử lại.", invalid: "Máy chủ từ chối dữ liệu chưa hợp lệ; giao dịch này chưa được lưu. Hãy kiểm tra số tiền, tiền tệ, ví và thông tin cần bổ sung rồi xác nhận lại.", auth: "Phiên đăng nhập hoặc tài khoản đã thay đổi. Giữ trang này mở và đăng nhập lại đúng tài khoản trước khi thử lưu.", conflict: "Sổ dữ liệu đã thay đổi ở nơi khác. Hãy tải bản chưa lưu ở thanh thông báo trước khi đồng bộ lại.", rate: "Có quá nhiều lần lưu liên tiếp. Bản nháp vẫn được giữ; hãy chờ một chút rồi xác nhận lại.", unknown: "Chưa nhận được xác nhận lưu từ máy chủ. Giữ trang mở và bấm xác nhận lại để kiểm tra; Finn không tạo giao dịch trùng." },

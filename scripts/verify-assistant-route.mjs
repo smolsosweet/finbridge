@@ -370,6 +370,73 @@ test("handler rejects invalid origins, account changes and missing sessions befo
   assert.equal((await POST(request(body("hello")))).status, 401); assert.equal(fixture.calls.length, 0);
 });
 
+test("forecast interpretation and calculations complete in one provider call without a second workspace read", async () => {
+  fixture.data.settings.language="Tiếng Việt";
+  fixture.data.transactions=[{id:"food",title:"Cơm",amount:25000,type:"expense",wallet:"vnd",category:"Thức ăn & Đồ uống",date:"2026-10-18",note:""}];
+  const before=structuredClone(fixture.data);
+  for(const message of ["nếu tôi chi như hiện tại thì cuối tháng còn dư tiền không", "xài đà này tới hết tháng ổn hông", "Will my money last this month?", "这个月按现在的速度花钱够吗？", "ok", "tôi đợi nãy giờ"]) {
+    fixture.calls=[];fixture.reads=[];
+    fixture.output=response({intent:"simulate_financial_scenario",scenarioPlan:{name:"Theo nhịp hiện tại",walletId:"vnd",horizonEnd:"2026-10-31",estimateSpending:true,actions:[]},presentation:{detail:"standard",layout:"conversation"}});
+    const http=await POST(request(body(message))), result=await http.json();
+    assert.equal(http.status,200);assert.equal(fixture.calls.length,1);assert.deepEqual(fixture.reads,["owner"]);
+    assert.equal(result.scenarioResponse.scenarios.length,1);assert.equal(result.calculations[0].wallets[0].balanceNow,975000);
+    assert.equal(result.calculations[0].wallets[0].projectedBalance,956944);
+    assert.equal(result.scenarioResponse.scenarios[0].changes.length,0);
+    assert.match(fixture.calls[0].contents,/no background task/);
+    assert.deepEqual(fixture.data,before);
+  }
+});
+
+test("shoe scenario carries one explicit hypothetical expense and a separately calculated baseline", async () => {
+  fixture.calls=[];
+  fixture.output=response({intent:"simulate_financial_scenario",scenarioPlan:{name:"Mua giày",walletId:"vnd",horizonEnd:"2026-10-31",estimateSpending:true,actions:[{kind:"change",title:"Giày",amount:3000000,direction:"expense",percent:null,walletId:"vnd",currency:"VND",category:"Mua sắm",date:"2026-10-19",startDate:null,endDate:null}]}});
+  const result=await (await POST(request(body("nếu tui mua giày 3 triệu thì cuối tháng còn đủ tiền sài không")))).json();
+  assert.equal(fixture.calls.length,1);
+  assert.equal(result.baselines[0].wallets[0].projectedBalance-result.calculations[0].wallets[0].projectedBalance,3000000);
+  assert.equal(result.drafts.length,0);assert.equal(fixture.data.transactions.length,0);
+});
+
+test("a completed general response cannot pretend a later background calculation is still running", async () => {
+  fixture.data.settings.language="Tiếng Việt";
+  fixture.output=response({intent:"general_finance_question",reply:"Đang tính toán số dư của bạn. Vui lòng đợi trong giây lát."});
+  const result=await (await POST(request(body("tôi đợi nãy giờ")))).json();
+  assert.doesNotMatch(result.reply,/Đang tính toán|Vui lòng đợi/);assert.match(result.reply,/chưa tính được/);
+});
+
+test("fixed-expense deletion cannot fall through to transaction matching even after a wrong provider intent", async () => {
+  fixture.data.fixedExpenses=[{id:"internet",title:"Tiền mạng",walletId:"vnd",budgetId:"",amount:239000,category:"Mua sắm",dueDate:"2026-10-20",recurrence:"monthly",active:true},{id:"rent",title:"Tiền nhà",walletId:"vnd",budgetId:"",amount:3000000,category:"Mua sắm",dueDate:"2026-10-20",recurrence:"monthly",active:true}];
+  const before=structuredClone(fixture.data);
+  fixture.output=response({intent:"delete_transactions",deletionScope:"all"});
+  const generic=await (await POST(request(body("tôi muốn xóa chi phí cố định")))).json();
+  assert.equal(generic.operationIntent,"delete_fixed_expense");assert.equal(generic.planningDeletion.targets.length,2);assert.deepEqual(generic.planningDeletion.selectedIds,[]);assert.equal(generic.drafts.length,0);
+  const named=await (await POST(request(body("tôi muốn xóa chi phí Tiền mạng")))).json();
+  assert.equal(named.operationIntent,"delete_fixed_expense");assert.deepEqual(named.planningDeletion.selectedIds,["internet"]);assert.equal(named.planningDeletion.status,"pending");
+  assert.deepEqual(fixture.data,before);
+});
+
+test("budget references are grounded in the account and can be resolved by a contextual deletion", async () => {
+  fixture.data.goals=[{id:"living",kind:"budget",title:"Sinh hoạt",amount:7000000,saved:0,currency:"VND",date:"2026-10-01",cycle:"monthly",category:"",wallet:"vnd",direction:"",person:""}];
+  fixture.output=response({intent:"query_financial_data",action:"budget_status",walletId:"vnd"});
+  const listed=await (await POST(request(body("hiện tại có ngân sách gì")))).json();
+  assert.deepEqual(listed.financialEntities,[{kind:"budget",id:"living",title:"Sinh hoạt"}]);
+  fixture.output=response({intent:"delete_budget",planningDeletion:{kind:"budget",ids:["living"],searchTerm:null,scope:"matching"}});
+  const result=await (await POST(request(body("xóa ngân sách này",{history:[{role:"assistant",text:`Previous planning entity references: ${JSON.stringify(listed.financialEntities)}`}],planningContext:{goals:[{...fixture.data.goals[0],id:"foreign",title:"Foreign budget"}],fixedExpenses:[]}})))).json();
+  assert.deepEqual(result.planningDeletion.selectedIds,["living"]);assert.equal(result.planningDeletion.targets[0].title,"Sinh hoạt");assert.equal(result.planningDeletion.targets.some(t=>t.id==="foreign"),false);
+  assert.equal(fixture.data.goals.length,1);assert.equal(fixture.data.transactions.length,0);
+});
+
+test("a model cannot silently turn an unnamed budget request into delete-all", async () => {
+  fixture.data.goals=["a","b"].map(id=>({id,kind:"budget",title:id,amount:1000,saved:0,currency:"VND",date:"2026-10-01",cycle:"monthly",category:"",wallet:"vnd",direction:"",person:""}));
+  fixture.output=response({intent:"delete_budget",planningDeletion:{kind:"budget",ids:["a","b"],searchTerm:null,scope:"all"}});
+  const generic=await (await POST(request(body("tôi muốn xóa ngân sách")))).json();assert.deepEqual(generic.planningDeletion.selectedIds,[]);
+  const all=await (await POST(request(body("xóa tất cả ngân sách")))).json();assert.deepEqual(all.planningDeletion.selectedIds,["a","b"]);assert.equal(fixture.data.goals.length,2);
+});
+
+test("foreign target IDs return a safe account-owned selection rather than a forged confirmation", async () => {
+  fixture.output=response({intent:"delete_fixed_expense",planningDeletion:{kind:"fixed_expense",ids:["foreign"],searchTerm:null,scope:"matching"}});
+  const result=await (await POST(request(body("remove that recurring bill")))).json();assert.equal(result.operationIntent,"delete_fixed_expense");assert.deepEqual(result.planningDeletion.targets,[]);assert.deepEqual(result.planningDeletion.selectedIds,[]);
+});
+
 test("provider API failures are actionable, disclose no provider name, and never produce mutations", async () => {
   for (const [status, name, expected, code] of [[429, "Error", 429, "AI_QUOTA_OR_RATE_LIMIT"], [503, "Error", 503, "AI_BUSY"], [401, "Error", 502, "AI_CONFIGURATION_ERROR"], [undefined, "TimeoutError", 504, "AI_TIMEOUT"]]) {
     fixture.error = Object.assign(new Error("Synthetic failure"), { status, name });

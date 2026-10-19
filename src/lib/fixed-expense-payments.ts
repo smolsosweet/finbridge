@@ -31,7 +31,7 @@ export function nextScheduledExpenseDue(expense: FixedExpense, afterDue: string)
   start.setUTCDate(start.getUTCDate() + 1);
   return plannedOccurrences(expense, start.toISOString().slice(0, 10), `${start.getUTCFullYear() + 2}-12-31`)[0] || null;
 }
-export function unpaidOccurrences(state: AppState, expense: FixedExpense, start: string, end: string) {
+export function unpaidOccurrences(state: Pick<AppState, "transactions">, expense: FixedExpense, start: string, end: string) {
   const result: string[] = [];
   const paid = new Set(state.transactions.filter(t => t.type === "expense" && t.paymentConfirmation === "user" && t.fixedExpenseId === expense.id).map(t => t.fixedExpenseDueDate));
   let cursor = start;
@@ -63,7 +63,10 @@ export function recordFixedExpensePayment(state: AppState, expenseId: string, in
   if (fixedExpensePayment(state,expenseId,input.dueDate)) return state;
   if(existing)return {...state,transactions:state.transactions.map(t=>t.id===existing.id?{...t,fixedExpenseId:expenseId,fixedExpenseDueDate:input.dueDate,paymentConfirmation:"user"}:t)};
   if (!input.transactionId || input.transactionId.length>100 || state.transactions.some(t=>t.id===input.transactionId)) throw new Error("INVALID_BILL_PAYMENT");
-  const transaction: Transaction = {id:input.transactionId,title:expense.title,amount:input.amount,type:"expense",category:expense.category,wallet:source.id,date:input.paidOn,note:input.note,fixedExpenseId:expense.id,fixedExpenseDueDate:input.dueDate,paymentConfirmation:"user"};
+  const now = new Date();
+  const timeString = [String(now.getHours()).padStart(2, "0"), String(now.getMinutes()).padStart(2, "0"), String(now.getSeconds()).padStart(2, "0")].join(":");
+  const transactionDate = input.paidOn.length === 10 ? `${input.paidOn}T${timeString}` : input.paidOn;
+  const transaction: Transaction = {id:input.transactionId,title:expense.title,amount:input.amount,type:"expense",category:expense.category,wallet:source.id,date:transactionDate,note:input.note,fixedExpenseId:expense.id,fixedExpenseDueDate:input.dueDate,paymentConfirmation:"user"};
   return {...state,transactions:[...state.transactions,transaction]};
 }
 // Validate new/edited links on the server too. Historical payments survive removal

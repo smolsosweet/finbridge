@@ -1,0 +1,15 @@
+.warning {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid #d6a545;
+  border-radius: 10px;
+  background: #fffaeb;
+  color: #704509;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.warning strong { display: block; }
+.warning p { margin: 3px 0 0; color: inherit; }
+.warning > div + div { margin-top: 6px; }
+.blocked { border-color: #d89494; background: #fff4f4; color: #922b2b; }

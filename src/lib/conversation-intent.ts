@@ -2,8 +2,17 @@ import { z } from "zod";
 import { isWorkspaceCreationRequest } from "./workspace-actions";
 import { normalizeVietnameseMessage, parseTransactionAmounts, type TransactionDraft } from "./transaction-drafts";
 import type { CategoryCommand } from "./category-operations";
+import type { AppState } from "../components/sites/rolly/replica/store";
+import { isFixedExpensePaymentMessage, isFixedExpenseStatusMessage, isPlanningEditMessage } from "./planning-actions";
 
-export const conversationIntents = ["create_transaction", "create_wallet", "create_budget", "create_fixed_expense", "update_pending_transaction", "answer_clarification", "query_financial_data", "analyze_spending", "simulate_financial_scenario", "list_categories", "create_category", "rename_category", "merge_categories", "delete_category", "delete_transactions", "general_finance_question", "unsupported_or_ambiguous_request"] as const;
+export const conversationIntents = [
+  "create_transaction", "create_wallet", "create_budget", "create_fixed_expense",
+  "pay_fixed_expense", "pause_fixed_expense", "resume_fixed_expense", "edit_budget", "edit_fixed_expense",
+  "delete_budget", "delete_fixed_expense", "update_pending_transaction", "answer_clarification",
+  "query_financial_data", "analyze_spending", "simulate_financial_scenario", "list_categories",
+  "create_category", "rename_category", "merge_categories", "delete_category", "delete_transactions",
+  "general_finance_question", "unsupported_or_ambiguous_request", "settings_action"
+] as const;
 export type ConversationIntent = typeof conversationIntents[number];
 export const draftPatchSchema = z.object({ title: z.string().trim().min(1).max(160).optional(), amount: z.number().finite().positive().max(1e12).nullable().optional(),
   currency: z.string().regex(/^[A-Z]{3}$/).nullable().optional(), type: z.enum(["expense", "income"]).nullable().optional(), category: z.string().max(100).nullable().optional(),
@@ -35,9 +44,11 @@ export function isEndOfPeriodQuestion(message: string): boolean {
   return /\b(cuoi thang|cuoi ky|het thang|den cuoi thang|end of month|end of period)\b/.test(text)
     && /\b(con|du|bao nhieu|con lai|tien|money|left|remain)\b/.test(text);
 }
-export function isClearlyNewTransaction(message: string) {
+export function isClearlyNewTransaction(message: string, state?: Pick<AppState, "fixedExpenses" | "goals">) {
   if (isWorkspaceCreationRequest(message) || isCategoryManagementMessage(message) || isDraftCorrection(message) || isHypotheticalMessage(message)) return false;
+  if (isFixedExpensePaymentMessage(message, state) || isFixedExpenseStatusMessage(message, state) || isPlanningEditMessage(message, state)) return false;
   const text = normalizeVietnameseMessage(message);
+  if (/\b(?:xoa|delete|remove|clear)\b|删除|移除/.test(text)) return false;
   return parseTransactionAmounts(message).length > 0 && /\b(mua|an|uong|hoc|chi|het|dong|nop|nhan|tra|kham|di|paid|spent|bought|received|earned|breakfast|lunch|dinner|tuition|them (?:mot )?khoan (?:nua|moi)|another (?:one|transaction)|one more)\b|买|花了|收入|学费/.test(text)
     && !/[?？]|\b(bao nhieu|du tien|co du|how much|can i|enough)\b/.test(text);
 }

@@ -146,6 +146,8 @@ html{scrollbar-gutter:stable}
 .r-two-options>button{background:var(--r-surface);color:#7b8384;border:1px solid #e0e0e0;border-radius:12px;padding:13px;display:flex;align-items:center;justify-content:center;gap:8px}
 .r-two-options>button.active{background:#e2f5f6;border:2px solid #3cc6ca;color:#21b8bf}
 .r-two-options>.r-primary{background:var(--r-teal);color:white}
+.r-ai-delete-confirm .r-primary:not(:disabled){cursor:pointer}
+.r-ai-delete-confirm .r-primary:disabled{opacity:.5;cursor:not-allowed}
 .r-save-goal{margin-top:16px}
 .r-wallet-selected{border:1px solid #10bdc7!important;background:#eafcfc!important;color:#09b7c4!important;display:inline-flex;gap:7px;align-items:center;border-radius:12px;padding:10px}
 .r-overlay{position:fixed;inset:0;background:#0008;z-index:80;display:flex;align-items:center;justify-content:center;padding:20px}

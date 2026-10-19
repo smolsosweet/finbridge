@@ -9,7 +9,7 @@ function emphasized(text: string) {
       : /^[−-]?\d.*\s[A-Z]{3}$/.test(part) ? <strong key={index}>{part}</strong> : <Fragment key={index}>{part}</Fragment>);
 }
 
-export function FinancialChatAnswer({ text }: { text: string }) {
+export function FinancialChatAnswer({ text, calculationDetails, calculationLabel = "Calculation details" }: { text: string; calculationDetails?: string; calculationLabel?: string }) {
   return <div className="r-financial-chat-answer">{text.split(/\n\s*\n/).filter(Boolean).map((block, index) => {
     const lines = block.split("\n");
     if (/^(?:Giả định\/giới hạn|Assumptions\/limits|假设\/限制):/.test(lines[0])) {
@@ -37,5 +37,5 @@ export function FinancialChatAnswer({ text }: { text: string }) {
         ? <ul key={groupIndex}>{run.items.map((item, itemIndex) => <li key={itemIndex}>{emphasized(item)}</li>)}</ul>
         : <p key={groupIndex}>{emphasized(run.items.join("\n"))}</p>)}
     </section>;
-  })}</div>;
+  })}{calculationDetails && calculationDetails !== text && <details><summary>{calculationLabel}</summary>{calculationDetails.split(/\n\s*\n/).filter(Boolean).map((block, index) => <p key={index}>{emphasized(block)}</p>)}</details>}</div>;
 }

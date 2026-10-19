@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { ledgerDateKey } from "./calendarLedger";
 import { Camera, Mic, Square, Send, Settings, Plus, X, Trash2 } from "lucide-react";
 import { EmptyState, Field, Mascot, Modal, PageHeader, Toggle } from "./Ui";
-import { currencySymbol, flushWorkspace, flushWorkspaceForAnalysis, getWorkspaceState, money, today, updateState, useAppState, workspaceOwner, workspacePersistence, type AppState, type ChatMessage, type Transaction } from "./store";
+import { currencySymbol, flushWorkspace, flushWorkspaceForAnalysis, getWorkspaceState, money, setSetting, today, updateState, useAppState, workspaceOwner, workspacePersistence, type AppState, type ChatMessage, type Transaction } from "./store";
 import { applyCategoryOperation, prepareCategoryOperation, renameCategoryMessageReferences, type CategoryCommand, type CategoryConfirmation } from "@/lib/category-operations";
 import { categoryOperationCopy, categoryOperationDescription, categoryOperationError } from "@/lib/category-operation-copy";
 import { isCategoryManagementMessage, isClearlyNewTransaction, isDraftCorrection, localCategoryCommand, resolvePendingDraft, type ConversationIntent } from "@/lib/conversation-intent";
@@ -14,6 +14,7 @@ import { applyDraftAmountCorrection, categoryResolutionDraftIds, createTimeoutTr
 import { resolveExplicitWallet, resolveUniqueCurrencyWallet } from "@/lib/transaction-currency";
 import { answerFinancialQuery, resolveFinancialFollowup, type FinancialAction } from "@/lib/financial-chat";
 import { modelHistory } from "@/lib/chat-local-plan";
+import { answerPresentationSchema } from "@/lib/assistant-response";
 import { resolveSpendingPlanAdjustment, spendingPlanAdjustmentSchema, spendingPlanOptionsSchema, type SpendingPlanOptions } from "@/lib/financial-outlook";
 import { ChatSpendingPlan } from "./ChatSpendingPlan";
 import { FinancialChatAnswer } from "./FinancialChatAnswer";
@@ -22,15 +23,56 @@ import { AI_AUDIO_BYTES, AI_RECORDING_SECONDS } from "@/lib/ai-limits";
 import { definitelyRejectedWorkspace, workspaceSaveErrorMessage } from "@/lib/workspace-payload";
 import { pendingDraftInterruption, pendingDraftReminder, rollbackRejectedDrafts, shouldBlockNewDraft } from "@/lib/pending-draft-policy";
 import { asksForCalculationExplanation, scenarioCalculationExplanation } from "@/lib/scenario-explanation";
+import { scenarioAnswer } from "@/lib/scenario-answer";
+import { applyPlanningDeletion, explicitPlanningDeletion, planningConfirmationReply, planningDeletionCopy, planningDeletionSchema, planningEntities, planningReferencesSchema, planningSelectionReply, type PlanningDeletion } from "@/lib/planning-deletion";
+import { PlanningDeletionCard } from "./PlanningDeletionCard";
+import { FixedExpensePaymentCard } from "./FixedExpensePaymentCard";
+import { FixedExpenseStatusCard } from "./FixedExpenseStatusCard";
+import { PlanningEditCard } from "./PlanningEditCard";
+import {
+  fixedExpensePaymentProposalSchema,
+  type FixedExpensePaymentProposal,
+  fixedExpenseStatusProposalSchema,
+  type FixedExpenseStatusProposal,
+  planningEditProposalSchema,
+  type PlanningEditProposal,
+  fixedExpensePaymentCopy,
+  fixedExpenseStatusCopy,
+  planningEditCopy,
+  isFixedExpensePaymentMessage,
+  isFixedExpenseStatusMessage,
+  isPlanningEditMessage,
+  prepareFixedExpensePayment,
+  prepareFixedExpenseStatus,
+  preparePlanningEdit,
+  applyFixedExpensePayment,
+  applyFixedExpenseStatus,
+  applyPlanningEdit,
+  planningActionConfirmationReply,
+} from "@/lib/planning-actions";
 import { hasCompatibleDraftWallet, unavailableWalletReply } from "@/lib/transaction-drafts";
 import { WorkspaceActionCard } from "./WorkspaceActionCard";
 import { applyWorkspaceProposal, inspectWorkspaceProposal, isWorkspaceCreationRequest, workspaceActionCopy, workspaceProposalSchema, type ActionField, type WorkspaceProposal } from "@/lib/workspace-actions";
-import { calculateScenario, normalizePlannerResponse, scenarioContext, type ScenarioResult } from "@/lib/scenario-planner";
+import { calculateScenario, normalizePlannerResponse, scenarioContext, type NormalizedPlannerResponse, type ScenarioResult } from "@/lib/scenario-planner";
 import planStyles from "./FinancialOutlook.module.css";
 import { tools } from "./Tools";
-import { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName, type AppLanguage } from "@/lib/i18n";
-import { findTransactionsForDeletion, type TransactionDeletionCriteria } from "@/lib/transaction-deletion";
+import { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName, type AppLanguage, LANGUAGE_LABELS } from "@/lib/i18n";
+import { findTransactionsForDeletion, detectRelativeOrder, cleanDeletionSearchTerm, type TransactionDeletionCriteria } from "@/lib/transaction-deletion";
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
+import { draftAmountWarnings } from "@/lib/draft-amount-warnings";
+import { DraftAmountWarnings } from "./DraftAmountWarnings";
+import { draftFundingIssues, fundingIssueMessage } from "@/lib/transaction-funding";
+import { SettingsActionCard } from "./SettingsActionCard";
+import {
+  settingsActionProposalSchema,
+  type SettingsActionProposal,
+  settingsActionCopy,
+  isSettingsThemeMessage,
+  isSettingsLanguageMessage,
+  isSettingsWalletArchiveMessage,
+  prepareWalletArchive,
+  applyWalletArchive,
+} from "@/lib/settings-actions";
 
 const lockedDeletionConfirmations = new Set<string>();
 const CATEGORY_FLOW_COPY = {
@@ -249,7 +291,11 @@ export function TransactionForm({
       type,
       title,
       amount: parsedAmount,
-      date,
+      date: (existing?.date && existing.date.slice(0, 10) === date && existing.date.length > 10)
+        ? existing.date
+        : date.length === 10
+          ? `${date}T${[String(new Date().getHours()).padStart(2, "0"), String(new Date().getMinutes()).padStart(2, "0"), String(new Date().getSeconds()).padStart(2, "0")].join(":")}`
+          : date,
       category,
       subcategory,
       wallet,
@@ -551,6 +597,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           const restoredMessages = saved.messages.map((originalMessage) => {
             let message = { ...originalMessage, text: originalMessage.role === "assistant" && originalMessage.text === "Xin chào!👋 Hãy mô tả giao dịch; tôi sẽ tạo bản nháp để bạn kiểm tra trước khi lưu." ? "Xin chào!👋 Hãy mô tả giao dịch; Finn sẽ tạo bản nháp để bạn kiểm tra trước khi lưu." : originalMessage.text };
             if (message.workspaceProposal?.status === "saving") message = { ...message, workspaceProposal: { ...message.workspaceProposal, status: "failed" } };
+            if (message.planningDeletion?.status === "saving") message = { ...message, planningDeletion: { ...message.planningDeletion, status: "failed" } };
             if (message.categoryOperation?.status === "saving") message = { ...message, categoryOperation: { ...message.categoryOperation, status: "failed" } };
             if (message.transactionDeletion?.status === "saving") message = { ...message, transactionDeletion: { ...message.transactionDeletion, status: "failed" } };
             const blockedReferences = [...(message.draftIds || []), ...(message.walletChoiceDraftIds || []), ...(message.categoryChoiceDraftIds || [])].filter(id => blockedIds.has(id));
@@ -728,6 +775,202 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   function markWorkspaceProposal(id: string, patch: Partial<WorkspaceProposal>) {
     setMessages(previous => previous.map(item => item.workspaceProposal?.id === id ? { ...item, workspaceProposal: { ...item.workspaceProposal, ...patch } } : item));
   }
+  function markPlanningDeletion(id: string, patch: Partial<PlanningDeletion>) {
+    setMessages(previous => previous.map(item => item.planningDeletion?.id === id ? { ...item, planningDeletion: { ...item.planningDeletion, ...patch } } : item));
+  }
+  function selectPlanningDeletion(id: string, targetId: string, selected: boolean) {
+    if (busy || committing) return;
+    setMessages(previous => previous.map(item => {
+      const proposal = item.planningDeletion;
+      if (proposal?.id !== id || proposal.applied || !["pending", "failed"].includes(proposal.status) || !proposal.targets.some(t => t.id === targetId)) return item;
+      return { ...item, planningDeletion: { ...proposal, selectedIds: selected ? [...new Set([...proposal.selectedIds, targetId])] : proposal.selectedIds.filter(key => key !== targetId), error: undefined } };
+    }));
+  }
+  function cancelPlanningDeletion(id: string) {
+    if (busy || committing) return;
+    const proposal = [...messages].reverse().find(m => m.planningDeletion?.id === id)?.planningDeletion;
+    if (!proposal || proposal.applied || !["pending", "failed"].includes(proposal.status)) return;
+    markPlanningDeletion(id, { status: "cancelled", error: undefined });
+  }
+  async function confirmPlanningDeletion(id: string) {
+    if (workspaceCreationLock.current || busy || committing || categoryBusy || deletingId) return;
+    const proposal = [...messages].reverse().find(m => m.planningDeletion?.id === id)?.planningDeletion;
+    if (!proposal || !["pending", "failed"].includes(proposal.status) || !proposal.selectedIds.length) return;
+    const owner = workspaceOwner(), generation = conversationGeneration.current;
+    const t = planningDeletionCopy[resolveLanguage(state.settings.language)];
+    let applied = !!proposal.applied;
+    workspaceCreationLock.current = true; setCommitting(true); markPlanningDeletion(id, { status: "saving", error: undefined });
+    try {
+      if (!applied) {
+        await flushWorkspace(true);
+        if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+        updateState(current => {
+          if (workspaceOwner() !== owner) throw new Error("ACCOUNT_CHANGED");
+          const next = applyPlanningDeletion(current, proposal);
+          const chat = next.transactionChat || { messages, drafts, clarifyingDraftId };
+          return { ...next, transactionChat: { ...chat, messages: chat.messages.map(item => item.planningDeletion?.id === id ? { ...item, planningDeletion: { ...item.planningDeletion, status: "saving", applied: true } } : item) } };
+        });
+        applied = true; markPlanningDeletion(id, { applied: true, status: "saving" });
+      }
+      await flushWorkspace(true);
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+      markPlanningDeletion(id, { status: "confirmed", applied: true, error: undefined });
+      setMessages(previous => [...previous, { role: "assistant", text: t.saved }]);
+    } catch (error) {
+      if (workspaceOwner() === owner && conversationGeneration.current === generation) markPlanningDeletion(id, { status: "failed", applied, error: !applied && error instanceof Error && error.message === "PLANNING_DATA_CHANGED" ? t.stale : t.failed });
+    } finally { workspaceCreationLock.current = false; setCommitting(false); }
+  }
+  function markFixedExpensePayment(id: string, patch: Partial<FixedExpensePaymentProposal>) {
+    setMessages(previous => previous.map(item => item.fixedExpensePayment?.id === id ? { ...item, fixedExpensePayment: { ...item.fixedExpensePayment, ...patch } } : item));
+  }
+  function cancelFixedExpensePayment(id: string) {
+    if (busy || committing) return;
+    const proposal = [...messages].reverse().find(m => m.fixedExpensePayment?.id === id)?.fixedExpensePayment;
+    if (!proposal || proposal.applied || !["pending", "failed"].includes(proposal.status)) return;
+    markFixedExpensePayment(id, { status: "cancelled", error: undefined });
+  }
+  async function confirmFixedExpensePayment(id: string) {
+    if (workspaceCreationLock.current || busy || committing || categoryBusy || deletingId) return;
+    const proposal = [...messages].reverse().find(m => m.fixedExpensePayment?.id === id)?.fixedExpensePayment;
+    if (!proposal || !["pending", "failed"].includes(proposal.status)) return;
+    const owner = workspaceOwner(), generation = conversationGeneration.current;
+    const t = fixedExpensePaymentCopy[resolveLanguage(state.settings.language)];
+    let applied = !!proposal.applied;
+    workspaceCreationLock.current = true; setCommitting(true); markFixedExpensePayment(id, { status: "saving", error: undefined });
+    try {
+      if (!applied) {
+        await flushWorkspace(true);
+        if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+        updateState(current => {
+          if (workspaceOwner() !== owner) throw new Error("ACCOUNT_CHANGED");
+          const next = applyFixedExpensePayment(current, proposal, today());
+          const chat = next.transactionChat || { messages, drafts, clarifyingDraftId };
+          return { ...next, transactionChat: { ...chat, messages: chat.messages.map(item => item.fixedExpensePayment?.id === id ? { ...item, fixedExpensePayment: { ...item.fixedExpensePayment, status: "saving", applied: true } } : item) } };
+        });
+        applied = true; markFixedExpensePayment(id, { applied: true, status: "saving" });
+      }
+      await flushWorkspace(true);
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+      markFixedExpensePayment(id, { status: "confirmed", applied: true, error: undefined });
+      setMessages(previous => [...previous, { role: "assistant", text: t.saved }]);
+    } catch {
+      if (workspaceOwner() === owner && conversationGeneration.current === generation) markFixedExpensePayment(id, { status: "failed", applied, error: t.failed });
+    } finally { workspaceCreationLock.current = false; setCommitting(false); }
+  }
+
+  function markFixedExpenseStatus(id: string, patch: Partial<FixedExpenseStatusProposal>) {
+    setMessages(previous => previous.map(item => item.fixedExpenseStatus?.id === id ? { ...item, fixedExpenseStatus: { ...item.fixedExpenseStatus, ...patch } } : item));
+  }
+  function cancelFixedExpenseStatus(id: string) {
+    if (busy || committing) return;
+    const proposal = [...messages].reverse().find(m => m.fixedExpenseStatus?.id === id)?.fixedExpenseStatus;
+    if (!proposal || proposal.applied || !["pending", "failed"].includes(proposal.status)) return;
+    markFixedExpenseStatus(id, { status: "cancelled", error: undefined });
+  }
+  async function confirmFixedExpenseStatus(id: string) {
+    if (workspaceCreationLock.current || busy || committing || categoryBusy || deletingId) return;
+    const proposal = [...messages].reverse().find(m => m.fixedExpenseStatus?.id === id)?.fixedExpenseStatus;
+    if (!proposal || !["pending", "failed"].includes(proposal.status)) return;
+    const owner = workspaceOwner(), generation = conversationGeneration.current;
+    const t = fixedExpenseStatusCopy[resolveLanguage(state.settings.language)];
+    let applied = !!proposal.applied;
+    workspaceCreationLock.current = true; setCommitting(true); markFixedExpenseStatus(id, { status: "saving", error: undefined });
+    try {
+      if (!applied) {
+        await flushWorkspace(true);
+        if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+        updateState(current => {
+          if (workspaceOwner() !== owner) throw new Error("ACCOUNT_CHANGED");
+          const next = applyFixedExpenseStatus(current, proposal);
+          const chat = next.transactionChat || { messages, drafts, clarifyingDraftId };
+          return { ...next, transactionChat: { ...chat, messages: chat.messages.map(item => item.fixedExpenseStatus?.id === id ? { ...item, fixedExpenseStatus: { ...item.fixedExpenseStatus, status: "saving", applied: true } } : item) } };
+        });
+        applied = true; markFixedExpenseStatus(id, { applied: true, status: "saving" });
+      }
+      await flushWorkspace(true);
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+      markFixedExpenseStatus(id, { status: "confirmed", applied: true, error: undefined });
+      setMessages(previous => [...previous, { role: "assistant", text: t.saved }]);
+    } catch {
+      if (workspaceOwner() === owner && conversationGeneration.current === generation) markFixedExpenseStatus(id, { status: "failed", applied, error: t.failed });
+    } finally { workspaceCreationLock.current = false; setCommitting(false); }
+  }
+
+  function markPlanningEdit(id: string, patch: Partial<PlanningEditProposal>) {
+    setMessages(previous => previous.map(item => item.planningEdit?.id === id ? { ...item, planningEdit: { ...item.planningEdit, ...patch } } : item));
+  }
+  function cancelPlanningEdit(id: string) {
+    if (busy || committing) return;
+    const proposal = [...messages].reverse().find(m => m.planningEdit?.id === id)?.planningEdit;
+    if (!proposal || proposal.applied || !["pending", "failed"].includes(proposal.status)) return;
+    markPlanningEdit(id, { status: "cancelled", error: undefined });
+  }
+  async function confirmPlanningEdit(id: string) {
+    if (workspaceCreationLock.current || busy || committing || categoryBusy || deletingId) return;
+    const proposal = [...messages].reverse().find(m => m.planningEdit?.id === id)?.planningEdit;
+    if (!proposal || !["pending", "failed"].includes(proposal.status)) return;
+    const owner = workspaceOwner(), generation = conversationGeneration.current;
+    const t = planningEditCopy[resolveLanguage(state.settings.language)];
+    let applied = !!proposal.applied;
+    workspaceCreationLock.current = true; setCommitting(true); markPlanningEdit(id, { status: "saving", error: undefined });
+    try {
+      if (!applied) {
+        await flushWorkspace(true);
+        if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+        updateState(current => {
+          if (workspaceOwner() !== owner) throw new Error("ACCOUNT_CHANGED");
+          const next = applyPlanningEdit(current, proposal);
+          const chat = next.transactionChat || { messages, drafts, clarifyingDraftId };
+          return { ...next, transactionChat: { ...chat, messages: chat.messages.map(item => item.planningEdit?.id === id ? { ...item, planningEdit: { ...item.planningEdit, status: "saving", applied: true } } : item) } };
+        });
+        applied = true; markPlanningEdit(id, { applied: true, status: "saving" });
+      }
+      await flushWorkspace(true);
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+      markPlanningEdit(id, { status: "confirmed", applied: true, error: undefined });
+      setMessages(previous => [...previous, { role: "assistant", text: t.saved }]);
+    } catch {
+      if (workspaceOwner() === owner && conversationGeneration.current === generation) markPlanningEdit(id, { status: "failed", applied, error: t.failed });
+    } finally { workspaceCreationLock.current = false; setCommitting(false); }
+  }
+
+  function markSettingsAction(id: string, patch: Partial<SettingsActionProposal>) {
+    setMessages(previous => previous.map(item => item.settingsAction?.id === id ? { ...item, settingsAction: { ...item.settingsAction, ...patch } } : item));
+  }
+  function cancelSettingsAction(id: string) {
+    if (busy || committing) return;
+    const proposal = [...messages].reverse().find(m => m.settingsAction?.id === id)?.settingsAction;
+    if (!proposal || proposal.applied || !["pending", "failed"].includes(proposal.status)) return;
+    markSettingsAction(id, { status: "cancelled", error: undefined });
+  }
+  async function confirmSettingsAction(id: string) {
+    if (workspaceCreationLock.current || busy || committing || categoryBusy || deletingId) return;
+    const proposal = [...messages].reverse().find(m => m.settingsAction?.id === id)?.settingsAction;
+    if (!proposal || !["pending", "failed"].includes(proposal.status)) return;
+    const owner = workspaceOwner(), generation = conversationGeneration.current;
+    const t = settingsActionCopy[resolveLanguage(state.settings.language)];
+    let applied = !!proposal.applied;
+    workspaceCreationLock.current = true; setCommitting(true); markSettingsAction(id, { status: "saving", error: undefined });
+    try {
+      if (!applied) {
+        await flushWorkspace(true);
+        if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+        updateState(current => {
+          if (workspaceOwner() !== owner) throw new Error("ACCOUNT_CHANGED");
+          const next = applyWalletArchive(current, proposal);
+          const chat = next.transactionChat || { messages, drafts, clarifyingDraftId };
+          return { ...next, transactionChat: { ...chat, messages: chat.messages.map(item => item.settingsAction?.id === id ? { ...item, settingsAction: { ...item.settingsAction, status: "saving", applied: true } } : item) } };
+        });
+        applied = true; markSettingsAction(id, { applied: true, status: "saving" });
+      }
+      await flushWorkspace(true);
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+      markSettingsAction(id, { status: "confirmed", applied: true, error: undefined });
+      setMessages(previous => [...previous, { role: "assistant", text: t.savedArchive }]);
+    } catch {
+      if (workspaceOwner() === owner && conversationGeneration.current === generation) markSettingsAction(id, { status: "failed", applied, error: t.failed });
+    } finally { workspaceCreationLock.current = false; setCommitting(false); }
+  }
   function cancelWorkspaceProposal(id: string) {
     if (busy || committing) return;
     const proposal = [...messages].reverse().find(item => item.workspaceProposal?.id === id)?.workspaceProposal;
@@ -852,6 +1095,164 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   async function send(value: string, requestedDraftId?: string) {
     const message = value.trim();
     if (!message || busy || aiRequestLock.current || committing || categoryBusy || deletingId) return;
+    const recentAssistant = [...messages].reverse().find(m => m.role === "assistant");
+    const pendingPlanningDeletion = recentAssistant?.planningDeletion;
+    if (pendingPlanningDeletion && ["pending", "failed"].includes(pendingPlanningDeletion.status)) {
+      const reply = planningConfirmationReply(message);
+      if (reply === "confirm" && pendingPlanningDeletion.selectedIds.length) {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); await confirmPlanningDeletion(pendingPlanningDeletion.id); return;
+      }
+      if (reply === "cancel") { setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); cancelPlanningDeletion(pendingPlanningDeletion.id); return; }
+      const selection = planningSelectionReply(message, pendingPlanningDeletion);
+      if (selection && !pendingPlanningDeletion.applied) {
+        setText(""); setMessages(previous => [...previous.map(m => m.planningDeletion?.id === pendingPlanningDeletion.id ? { ...m, planningDeletion: { ...m.planningDeletion, status: "cancelled" as const } } : m), { role: "user", text: message }, { role: "assistant", text: planningDeletionCopy[resolveLanguage(state.settings.language)].review, planningDeletion: { ...pendingPlanningDeletion, id: crypto.randomUUID(), selectedIds: [selection], status: "pending" } }]); return;
+      }
+    }
+    const pendingFixedExpensePayment = recentAssistant?.fixedExpensePayment;
+    if (pendingFixedExpensePayment && ["pending", "failed"].includes(pendingFixedExpensePayment.status)) {
+      const reply = planningActionConfirmationReply(message);
+      if (reply === "confirm") {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); await confirmFixedExpensePayment(pendingFixedExpensePayment.id); return;
+      }
+      if (reply === "cancel") {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); cancelFixedExpensePayment(pendingFixedExpensePayment.id); return;
+      }
+    }
+    const pendingFixedExpenseStatus = recentAssistant?.fixedExpenseStatus;
+    if (pendingFixedExpenseStatus && ["pending", "failed"].includes(pendingFixedExpenseStatus.status)) {
+      const reply = planningActionConfirmationReply(message);
+      if (reply === "confirm") {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); await confirmFixedExpenseStatus(pendingFixedExpenseStatus.id); return;
+      }
+      if (reply === "cancel") {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); cancelFixedExpenseStatus(pendingFixedExpenseStatus.id); return;
+      }
+    }
+    const pendingPlanningEdit = recentAssistant?.planningEdit;
+    if (pendingPlanningEdit && ["pending", "failed"].includes(pendingPlanningEdit.status)) {
+      const reply = planningActionConfirmationReply(message);
+      if (reply === "confirm") {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); await confirmPlanningEdit(pendingPlanningEdit.id); return;
+      }
+      if (reply === "cancel") {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); cancelPlanningEdit(pendingPlanningEdit.id); return;
+      }
+    }
+    const pendingSettingsAction = recentAssistant?.settingsAction;
+    if (pendingSettingsAction && ["pending", "failed"].includes(pendingSettingsAction.status)) {
+      const reply = planningActionConfirmationReply(message);
+      if (reply === "confirm") {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); await confirmSettingsAction(pendingSettingsAction.id); return;
+      }
+      if (reply === "cancel") {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); cancelSettingsAction(pendingSettingsAction.id); return;
+      }
+    }
+    const currentLang = resolveLanguage(state.settings.language);
+    if (!requestedDraftId && isFixedExpensePaymentMessage(message, state)) {
+      setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
+      const { proposal, clarification } = prepareFixedExpensePayment(state, message, today(), crypto.randomUUID());
+      if (proposal) {
+        setMessages(previous => [...previous, { role: "assistant", text: fixedExpensePaymentCopy[currentLang].note, fixedExpensePayment: proposal, localOnly: true }]);
+      } else {
+        setMessages(previous => [...previous, { role: "assistant", text: clarification || fixedExpensePaymentCopy[currentLang].failed, localOnly: true }]);
+      }
+      return;
+    }
+    if (!requestedDraftId && isFixedExpenseStatusMessage(message, state)) {
+      setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
+      const { proposal, clarification } = prepareFixedExpenseStatus(state, message, crypto.randomUUID());
+      if (proposal) {
+        setMessages(previous => [...previous, { role: "assistant", text: proposal.action === "pause" ? fixedExpenseStatusCopy[currentLang].pauseNote : fixedExpenseStatusCopy[currentLang].resumeNote, fixedExpenseStatus: proposal, localOnly: true }]);
+      } else {
+        setMessages(previous => [...previous, { role: "assistant", text: clarification || fixedExpenseStatusCopy[currentLang].failed, localOnly: true }]);
+      }
+      return;
+    }
+    if (!requestedDraftId && isPlanningEditMessage(message, state)) {
+      setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
+      const { proposal, clarification } = preparePlanningEdit(state, message, crypto.randomUUID());
+      if (proposal) {
+        setMessages(previous => [...previous, { role: "assistant", text: planningEditCopy[currentLang].note, planningEdit: proposal, localOnly: true }]);
+      } else {
+        setMessages(previous => [...previous, { role: "assistant", text: clarification || planningEditCopy[currentLang].failed, localOnly: true }]);
+      }
+      return;
+    }
+    if (!requestedDraftId) {
+      const targetTheme = isSettingsThemeMessage(message);
+      if (targetTheme) {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
+        setSetting("theme", targetTheme);
+        const reply = targetTheme === "dark" ? settingsActionCopy[currentLang].themeDark : settingsActionCopy[currentLang].themeLight;
+        setMessages(previous => [...previous, { role: "assistant", text: reply, localOnly: true }]);
+        return;
+      }
+      const targetLang = isSettingsLanguageMessage(message);
+      if (targetLang) {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
+        setSetting("language", LANGUAGE_LABELS[targetLang]);
+        const reply = targetLang === "en" ? settingsActionCopy.en.langEn : targetLang === "zh" ? settingsActionCopy.zh.langZh : settingsActionCopy.vi.langVi;
+        setMessages(previous => [...previous, { role: "assistant", text: reply, localOnly: true }]);
+        return;
+      }
+      if (isSettingsWalletArchiveMessage(message, state)) {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
+        const { proposal, clarification } = prepareWalletArchive(state, message, crypto.randomUUID());
+        if (proposal) {
+          setMessages(previous => [...previous, { role: "assistant", text: "", settingsAction: proposal, localOnly: true }]);
+        } else {
+          setMessages(previous => [...previous, { role: "assistant", text: clarification || settingsActionCopy[currentLang].failed, localOnly: true }]);
+        }
+        return;
+      }
+      const normMsg = normalizeVietnameseMessage(message);
+      const isGenericDeletionQuestion = /^(?:toi\s+)?(?:muon\s+)?(?:xoa|huy|bo|delete|remove)\s+(?:giao\s*d[ií]ch|giao\s*diichj|gd|transactions?)[.!?\s]*$/i.test(normMsg);
+      if (isGenericDeletionQuestion) {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
+        const prompt = {
+          vi: "Bạn muốn xóa giao dịch nào? Hãy cho biết tên, số tiền, ngày hoặc danh mục; dữ liệu chưa bị thay đổi.",
+          en: "Which transaction would you like to delete? Please specify title, amount, date, or category; no data has been changed.",
+          zh: "你想删除哪笔交易？请说明名称、金额、日期或类别；尚未更改任何数据。",
+        }[currentLang];
+        setMessages(previous => [...previous, { role: "assistant", text: prompt, localOnly: true }]);
+        return;
+      }
+      const relOrder = detectRelativeOrder(message);
+      if (relOrder && /\b(?:xoa|huy|bo|delete|remove)\b/i.test(normMsg)) {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
+        const term = cleanDeletionSearchTerm(message);
+        const matches = findTransactionsForDeletion(state.transactions, {
+          scope: "matching",
+          amount: null,
+          walletId: null,
+          periodStart: null,
+          periodEnd: null,
+          category: null,
+          searchTerm: term,
+          type: null,
+          relativeOrder: relOrder,
+        });
+        if (!matches.length) {
+          setMessages(previous => [...previous, { role: "assistant", text: "Hiện chưa có giao dịch nào để xóa.", localOnly: true }]);
+          return;
+        }
+        const targetId = matches[0].id;
+        setMessages(previous => [...previous, {
+          role: "assistant",
+          text: `Mình tìm thấy 1 giao dịch khớp yêu cầu. Hãy chọn đúng giao dịch cần xóa rồi xác nhận; hiện chưa giao dịch nào bị xóa.`,
+          transactionDeletion: {
+            confirmationId: crypto.randomUUID(),
+            transactionIds: [targetId],
+            selectedIds: [targetId],
+            scope: "matching",
+            status: "pending",
+          },
+          localOnly: true,
+        }]);
+        return;
+      }
+    }
     const outstanding = latestDrafts.current;
     if (!requestedDraftId && outstanding.length === 1 && /^(?:(?:huy|bo)(?:\s+(?:ban nhap|giao dich nay|giao dich do))?|cancel(?:\s+(?:draft|this draft))?|取消(?:草稿)?)[.!\s]*$/i.test(normalizeVietnameseMessage(message))) {
       setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); removeDraft(outstanding[0].id); return;
@@ -859,7 +1260,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     if (!requestedDraftId && outstanding.length === 1 && /^(?:xac nhan(?:\s+luu)?|dong y|confirm|yes|确认)[.!\s]*$/i.test(normalizeVietnameseMessage(message))) {
       setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); await confirmDrafts([outstanding[0].id]); return;
     }
-    if (!requestedDraftId && shouldBlockNewDraft(message, outstanding)) {
+    if (!requestedDraftId && !explicitPlanningDeletion(message, state) && shouldBlockNewDraft(message, outstanding)) {
       setMessages(previous => [...previous, { role: "user", text: message }, pendingDraftInterruption(message, outstanding, resolveLanguage(state.settings.language))]);
       setText(message); return;
     }
@@ -869,11 +1270,11 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
       await confirmWorkspaceProposal(pendingWorkspace.id); return;
     }
-    if (!requestedDraftId && (isWorkspaceCreationRequest(message) || pendingWorkspace)) {
+    if (!requestedDraftId && !explicitPlanningDeletion(message, state) && (isWorkspaceCreationRequest(message) || pendingWorkspace)) {
       if (await requestWorkspaceCreation(message)) return;
     }
     const pendingDrafts = drafts.filter(d => !state.transactions.some(t => t.id === d.id));
-    const explicitlyNew = isClearlyNewTransaction(message);
+    const explicitlyNew = isClearlyNewTransaction(message, state);
     const categoryManagement = isCategoryManagementMessage(message);
     const deletionRequest = !categoryManagement && /\b(?:xoa|delete|remove|clear)\b/.test(normalizeVietnameseMessage(message));
     const target = explicitlyNew ? null : resolvePendingDraft(message, pendingDrafts, null, requestedDraftId || focusedDraftId || (pendingDrafts.length === 1 ? clarifyingDraftId : null));
@@ -983,6 +1384,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           today: today(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           selectedWalletId,
+          ...(workspacePersistence() === "browser" ? { planningContext: { goals: state.goals, fixedExpenses: state.fixedExpenses || [] } } : {}),
           pendingDrafts: [...(activeDraft ? [activeDraft] : []), ...pendingDrafts.filter(d => d.id !== activeDraftId)].slice(0, 50),
           activeDraftId,
           referencedCategories,
@@ -1005,6 +1407,52 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       const validShape = returned.every((item) => item && typeof item === "object" && typeof (item as TransactionDraft).id === "string" && typeof (item as TransactionDraft).title === "string" && Array.isArray((item as TransactionDraft).needsReview));
       if (!validShape || returned.length > 20) throw new Error("AI trả về dữ liệu chưa hợp lệ. Vui lòng thử lại.");
       const ai = result as { intent: string; operationIntent?: ConversationIntent; targetDraftId?: string | null; categoryOperation?: CategoryCommand | null; action?: string; actions?: FinancialAction[]; walletId?: string | null; scope?: "selected" | "all"; periodStart?: string | null; periodEnd?: string | null; category?: string | null; searchTerm?: string | null; transactionType?: "expense" | "income" | null; percentage?: number | null; financialAnswer?: string | null; reply?: string; deletion?: TransactionDeletionCriteria };
+      if (ai.operationIntent === "delete_budget" || ai.operationIntent === "delete_fixed_expense") {
+        const parsed = planningDeletionSchema.safeParse((result as { planningDeletion?: unknown }).planningDeletion);
+        if (!parsed.success) throw new Error(serviceCopy.unavailable);
+        setMessages(previous => [...previous, { role: "assistant", text: parsed.data.targets.length ? "" : planningDeletionCopy[resolveLanguage(state.settings.language)].empty, ...(parsed.data.targets.length ? { planningDeletion: parsed.data } : {}) }]);
+        return;
+      }
+      if (ai.operationIntent === "pay_fixed_expense" && (result as { fixedExpensePayment?: unknown }).fixedExpensePayment) {
+        const parsed = fixedExpensePaymentProposalSchema.safeParse((result as { fixedExpensePayment?: unknown }).fixedExpensePayment);
+        if (parsed.success) {
+          setMessages(previous => [...previous, { role: "assistant", text: ai.reply || "", fixedExpensePayment: parsed.data }]);
+          return;
+        }
+      }
+      if ((ai.operationIntent === "pause_fixed_expense" || ai.operationIntent === "resume_fixed_expense") && (result as { fixedExpenseStatus?: unknown }).fixedExpenseStatus) {
+        const parsed = fixedExpenseStatusProposalSchema.safeParse((result as { fixedExpenseStatus?: unknown }).fixedExpenseStatus);
+        if (parsed.success) {
+          setMessages(previous => [...previous, { role: "assistant", text: ai.reply || "", fixedExpenseStatus: parsed.data }]);
+          return;
+        }
+      }
+      if ((ai.operationIntent === "edit_budget" || ai.operationIntent === "edit_fixed_expense") && (result as { planningEdit?: unknown }).planningEdit) {
+        const parsed = planningEditProposalSchema.safeParse((result as { planningEdit?: unknown }).planningEdit);
+        if (parsed.success) {
+          setMessages(previous => [...previous, { role: "assistant", text: ai.reply || "", planningEdit: parsed.data }]);
+          return;
+        }
+      }
+      if (ai.operationIntent === "settings_action" && (result as { settingsAction?: unknown }).settingsAction) {
+        const parsed = settingsActionProposalSchema.safeParse((result as { settingsAction?: unknown }).settingsAction);
+        if (parsed.success) {
+          if (parsed.data.action === "theme" && parsed.data.theme) {
+            setSetting("theme", parsed.data.theme);
+            setMessages(previous => [...previous, { role: "assistant", text: ai.reply || "", localOnly: true }]);
+            return;
+          }
+          if (parsed.data.action === "language" && parsed.data.language) {
+            setSetting("language", LANGUAGE_LABELS[parsed.data.language]);
+            setMessages(previous => [...previous, { role: "assistant", text: ai.reply || "", localOnly: true }]);
+            return;
+          }
+          if (parsed.data.action === "archive_wallet") {
+            setMessages(previous => [...previous, { role: "assistant", text: ai.reply || "", settingsAction: parsed.data }]);
+            return;
+          }
+        }
+      }
       if (shouldBlockNewDraft(message, latestDrafts.current, ai.intent)) {
         setMessages(previous => [...previous, pendingDraftInterruption(message, latestDrafts.current, resolveLanguage(state.settings.language))]);
         setText(message); return;
@@ -1051,34 +1499,26 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (ai.operationIntent === "simulate_financial_scenario") {
         const snapshot = getWorkspaceState();
         const input = { message, preferredLanguage: resolveLanguage(snapshot.settings.language), today: today(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", history: modelHistory(messages).slice(-6), selectedWalletId, context: scenarioContext(snapshot) };
-        const response = await fetch("/api/ai/scenario-planner", { method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": submissionOwner || "", "x-finbridge-language": input.preferredLanguage }, body: JSON.stringify(input), signal: AbortSignal.any([AbortSignal.timeout(35_000), requestController.signal]) });
-        const raw: unknown = await response.json().catch(() => null);
+        // The assistant already interpreted and validated the scenario in its one
+        // provider call. Keep the legacy endpoint only for older responses.
+        const embedded = result as { scenarioResponse?: NormalizedPlannerResponse | null; calculations?: ScenarioResult[] | null; baselines?: ScenarioResult[] | null; presentation?: unknown };
+        let raw: unknown = embedded.scenarioResponse ? { ...embedded.scenarioResponse, calculations: embedded.calculations } : null;
+        if (!raw) {
+          const response = await fetch("/api/ai/scenario-planner", { method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": submissionOwner || "", "x-finbridge-language": input.preferredLanguage }, body: JSON.stringify(input), signal: AbortSignal.any([AbortSignal.timeout(35_000), requestController.signal]) });
+          raw = await response.json().catch(() => null);
+          if (!response.ok) throw new Error(aiQuotaClientMessage(raw, input.preferredLanguage) || serviceCopy.unavailable);
+        }
         if (workspaceOwner() !== submissionOwner || conversationGeneration.current !== submissionGeneration) return;
-        if (!response.ok) throw new Error(aiQuotaClientMessage(raw, input.preferredLanguage) || serviceCopy.unavailable);
-        const plan = normalizePlannerResponse(raw, input);
-        const labels = {
-          vi: { now: "Hiện tại", projected: "Dự kiến cuối kỳ", risk: "Có thể thiếu", note: "Mô phỏng, không thay đổi dữ liệu thật", assumptions: "Giả định" },
-          en: { now: "Current balance", projected: "Projected balance", risk: "Potential shortfall", note: "Simulation only; actual data is unchanged", assumptions: "Assumptions" },
-          zh: { now: "当前余额", projected: "预计余额", risk: "可能短缺", note: "仅为模拟，不更改实际数据", assumptions: "假设" },
-        }[input.preferredLanguage];
+        const plan = embedded.scenarioResponse || normalizePlannerResponse(raw, input);
+        const presentation = answerPresentationSchema.safeParse(embedded.presentation);
         const explanations: string[] = [];
         const parts = plan.scenarios.map(scenario => {
           const serverCalculations = raw && typeof raw === "object" && "calculations" in raw && Array.isArray(raw.calculations) ? raw.calculations as ScenarioResult[] : [];
           const result = workspacePersistence() === "browser" ? calculateScenario(snapshot, scenario, input.today) : serverCalculations.find(c => c.scenarioId === scenario.id);
           if (!result || !Array.isArray(result.wallets) || result.wallets.some(w => !snapshot.wallets.some(wallet => wallet.id === w.walletId && wallet.currency === w.currency) || ![w.balanceNow, w.projectedBalance, w.shortfall].every(Number.isFinite))) throw new Error(serviceCopy.unavailable);
           explanations.push(scenarioCalculationExplanation(result, scenario, snapshot.wallets, input.today, input.preferredLanguage));
-          const paceNote = { vi: "Dự kiến nếu giữ nhịp chi hiện tại; chưa cộng thu nhập mới ngoài kịch bản.", en: "Estimate at the same spending pace; no new income outside the scenario is added.", zh: "假设保持当前支出速度；不增加情景以外的新收入。" }[input.preferredLanguage];
-          const missingNote = { vi: "Chưa đủ lịch sử cho một phần dự báo chi tiêu.", en: "Some spending could not be forecast from the available history.", zh: "部分支出缺少足够的历史数据。" }[input.preferredLanguage];
-          // Build verdict from aggregate projected balances across all wallets in this scenario
-          const allPositive = result.wallets.every(w => w.projectedBalance >= 0);
-          const anyShortfall = result.wallets.some(w => w.shortfall > 0);
-          const verdictLine = anyShortfall
-            ? { vi: "⚠️ Có thể thiếu tiền — xem chi tiết bên dưới", en: "⚠️ Potential shortfall — see details below", zh: "⚠️ 可能资金不足 — 详见下方" }[input.preferredLanguage]
-            : allPositive
-              ? { vi: "✅ Còn đủ — dự kiến cuối kỳ vẫn dương", en: "✅ On track — projected balance stays positive", zh: "✅ 资金充足 — 预计期末余额为正" }[input.preferredLanguage]
-              : { vi: "⚠️ Dự kiến âm cuối kỳ — xem chi tiết", en: "⚠️ Projected negative balance — see details", zh: "⚠️ 预计期末余额为负 — 详见下方" }[input.preferredLanguage];
-          const walletLines = result.wallets.map(w => `${snapshot.wallets.find(item => item.id === w.walletId)?.name || w.walletId}: ${labels.now} ${formatTransactionMoney(w.balanceNow, w.currency)} → ${labels.projected} **${formatTransactionMoney(w.projectedBalance, w.currency)}**${w.shortfall > 0 ? ` · ${labels.risk} ${formatTransactionMoney(w.shortfall, w.currency)}` : ""}`);
-          return [scenario.name, verdictLine, ...walletLines, ...(result.includesPaceForecast ? [paceNote] : []), ...(result.unavailableEstimates.length ? [missingNote] : [])].join("\n");
+          const baseline = workspacePersistence() === "browser" ? calculateScenario(snapshot, { ...scenario, changes: [], spendingReductions: [], dailySpendingLimits: [] }, input.today) : embedded.baselines?.find(b => b.scenarioId === scenario.id);
+          return scenarioAnswer(result, scenario, snapshot.wallets, input.today, input.preferredLanguage, baseline, presentation.success ? presentation.data : undefined);
         });
         setMessages(previous => [...previous, { role: "assistant", text: parts.length ? parts.join("\n\n") : plan.clarification || plan.reply || serviceCopy.unavailable, scenarios: plan.scenarios, scenarioExplanation: explanations.length ? explanations.join("\n\n") : undefined, localOnly: true }]);
         return;
@@ -1115,6 +1555,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (ai.intent === "financial") {
         const allowedActions: FinancialAction[] = ["balance", "balance_after_obligation", "spending_summary", "category_breakdown", "top_category", "category_savings", "transactions", "budget_status", "safe_daily_allowance", "upcoming_obligations", "goals", "spending_trend", "anomalies", "explain", "unknown"];
         const actions = (ai.actions || [ai.action]).filter((action): action is FinancialAction => allowedActions.includes(action as FinancialAction));
+        const presentation = answerPresentationSchema.safeParse((result as { presentation?: unknown }).presentation);
         const localAnswer = answerFinancialQuery({
           action: allowedActions.includes(ai.action as FinancialAction) ? ai.action as FinancialAction : "unknown",
           actions,
@@ -1122,10 +1563,15 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           scope: ai.scope === "all" ? "all" : "selected", periodStart: ai.periodStart || null, periodEnd: ai.periodEnd || null,
           category: state.categories.includes(ai.category || "") ? ai.category || null : null,
           searchTerm: ai.searchTerm || null, transactionType: ai.transactionType || null, percentage: ai.percentage,
-        }, state, wallet, today());
+        }, state, wallet, today(), presentation.success ? presentation.data : undefined);
         const answer = typeof ai.financialAnswer === "string" ? ai.financialAnswer : localAnswer;
         setClarifyingDraftId(activeDraftId);
-        setMessages((previous) => [...previous, { role: "assistant", text: answer, localOnly: true, financialContext: {
+        const serverEntities = planningReferencesSchema.safeParse((result as { financialEntities?: unknown }).financialEntities);
+        const financialEntities: NonNullable<ChatMessage["financialEntities"]> = workspacePersistence() !== "browser" && serverEntities.success ? serverEntities.data : actions.includes("budget_status") ? planningEntities(state, "budget").filter(t => {
+          const budget = state.goals.find(g => g.id === t.id)!;
+          return (ai.scope === "all" || budget.wallet === (ai.walletId || wallet)) && (!ai.searchTerm || budget.title.toLowerCase().includes(ai.searchTerm.toLowerCase())) && (!ai.category || (budget.category || budget.title).toLowerCase().includes(ai.category.toLowerCase()));
+        }).map(t => ({ kind: "budget", id: t.id, title: t.title })) : [];
+        setMessages((previous) => [...previous, { role: "assistant", text: answer, localOnly: true, financialEntities, financialContext: {
           walletId: ai.walletId || wallet || null, scope: ai.scope === "all" ? "all" : "selected", searchTerm: ai.searchTerm || null,
           action: ai.action || "unknown", category: ai.category || null, periodStart: ai.periodStart || null,
           periodEnd: ai.periodEnd || null, percentage: ai.percentage ?? null,
@@ -1353,6 +1799,10 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       setMessages(previous => [...previous, { role: "assistant", text: workspaceSaveErrorMessage(null, resolveLanguage(state.settings.language)), draftIds: uncertainDraftIds }]); return;
     }
     const selected = drafts.filter(draft => ids.includes(draft.id));
+    const fundingProblem = draftFundingIssues(selected, getWorkspaceState(), today())[0];
+    if (fundingProblem) {
+      setMessages(previous => [...previous, { role: "assistant", text: fundingIssueMessage(fundingProblem.issue, resolveLanguage(state.settings.language)), draftIds: ids }]); return;
+    }
     if (!selected.some(draft => uncertainDraftIds.includes(draft.id) || state.transactions.some(t => t.id === draft.id)) && readyDrafts(selected, state).length !== selected.length) {
       setMessages(previous => [...previous, { role: "assistant", text: { vi: "Bản nháp còn thiếu thông tin. Bạn bổ sung các mục được đánh dấu bên dưới trước khi xác nhận nhé.", en: "The draft needs more details. Complete the marked fields below before confirming.", zh: "草稿信息不完整，请先补全下面标记的字段再确认。" }[resolveLanguage(state.settings.language)], draftIds: ids }]); return;
     }
@@ -1621,9 +2071,34 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       </div>
       <span className="r-chat-date">Hôm nay</span>
       {messages.map((message, index) => <div key={index} className={"r-message " + message.role + (message.draftIds ? " r-ai-draft-message" : "")}>
-        {message.spendingPlan ? <>{message.text && <p>{message.text}</p>}<ChatSpendingPlan state={state} asOf={today()} options={message.spendingPlan} onScope={busy || committing ? undefined : (options: SpendingPlanOptions) => setMessages(previous => [...previous, { role: "assistant", text: "", spendingPlan: options, localOnly: true }])}/></> : message.role === "assistant" && (message.financialContext || message.scenarioExplanation || message.draftTargetChoices) && !/gemini|AI Studio/i.test(message.text) ? <FinancialChatAnswer text={message.text} /> : <p>{message.role === "assistant" && /gemini|AI Studio/i.test(message.text)
+        {message.spendingPlan ? <>{message.text && <p>{message.text}</p>}<ChatSpendingPlan state={state} asOf={today()} options={message.spendingPlan} onScope={busy || committing ? undefined : (options: SpendingPlanOptions) => setMessages(previous => [...previous, { role: "assistant", text: "", spendingPlan: options, localOnly: true }])}/></> : message.role === "assistant" && (message.financialContext || message.scenarioExplanation || message.draftTargetChoices) && !/gemini|AI Studio/i.test(message.text) ? <FinancialChatAnswer text={message.text} calculationDetails={message.scenarioExplanation} calculationLabel={{ vi: "Xem cách tính", en: "Calculation details", zh: "查看计算方式" }[resolveLanguage(state.settings.language)]} /> : <p>{message.role === "assistant" && /gemini|AI Studio/i.test(message.text)
           ? message.draftIds?.length ? serviceCopy.draftReady : serviceCopy.unavailable
           : message.text}</p>}
+        {message.planningDeletion && !messages.slice(index + 1).some(item => item.planningDeletion?.id === message.planningDeletion?.id) && (() => {
+          const parsed = planningDeletionSchema.safeParse(message.planningDeletion);
+          return parsed.success ? <PlanningDeletionCard proposal={parsed.data} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
+            onSelect={(id, selected) => selectPlanningDeletion(parsed.data.id, id, selected)} onConfirm={() => void confirmPlanningDeletion(parsed.data.id)} onCancel={() => cancelPlanningDeletion(parsed.data.id)} /> : null;
+        })()}
+        {message.fixedExpensePayment && !messages.slice(index + 1).some(item => item.fixedExpensePayment?.id === message.fixedExpensePayment?.id) && (() => {
+          const parsed = fixedExpensePaymentProposalSchema.safeParse(message.fixedExpensePayment);
+          return parsed.success ? <FixedExpensePaymentCard proposal={parsed.data} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
+            onConfirm={() => void confirmFixedExpensePayment(parsed.data.id)} onCancel={() => cancelFixedExpensePayment(parsed.data.id)} /> : null;
+        })()}
+        {message.fixedExpenseStatus && !messages.slice(index + 1).some(item => item.fixedExpenseStatus?.id === message.fixedExpenseStatus?.id) && (() => {
+          const parsed = fixedExpenseStatusProposalSchema.safeParse(message.fixedExpenseStatus);
+          return parsed.success ? <FixedExpenseStatusCard proposal={parsed.data} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
+            onConfirm={() => void confirmFixedExpenseStatus(parsed.data.id)} onCancel={() => cancelFixedExpenseStatus(parsed.data.id)} /> : null;
+        })()}
+        {message.planningEdit && !messages.slice(index + 1).some(item => item.planningEdit?.id === message.planningEdit?.id) && (() => {
+          const parsed = planningEditProposalSchema.safeParse(message.planningEdit);
+          return parsed.success ? <PlanningEditCard proposal={parsed.data} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
+            onConfirm={() => void confirmPlanningEdit(parsed.data.id)} onCancel={() => cancelPlanningEdit(parsed.data.id)} /> : null;
+        })()}
+        {message.settingsAction && !messages.slice(index + 1).some(item => item.settingsAction?.id === message.settingsAction?.id) && (() => {
+          const parsed = settingsActionProposalSchema.safeParse(message.settingsAction);
+          return parsed.success ? <SettingsActionCard proposal={parsed.data} lang={resolveLanguage(state.settings.language)}
+            onConfirm={() => void confirmSettingsAction(parsed.data.id)} onCancel={() => cancelSettingsAction(parsed.data.id)} /> : null;
+        })()}
         {message.workspaceProposal && !messages.slice(index + 1).some(item => item.workspaceProposal?.id === message.workspaceProposal?.id) && (() => {
           const parsed = workspaceProposalSchema.safeParse(message.workspaceProposal);
           return parsed.success ? <WorkspaceActionCard proposal={parsed.data} state={state} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
@@ -1673,14 +2148,14 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
                 const transactionWallet = state.wallets.find((item) => item.id === transaction.wallet);
                 return <label key={transaction.id}>
                   <input type="checkbox" checked={deletion.selectedIds.includes(transaction.id)} disabled={!!deletingId} onChange={(event) => selectTransactionForDeletion(deletion.confirmationId, transaction.id, event.target.checked)} />
-                  <span><b>{transaction.title}</b><small>{transaction.date.slice(0, 10)} · {transaction.category} · {transactionWallet?.name || "Ví"}</small></span>
+                  <span><b>{transaction.title}</b><small>{transaction.date.slice(0, 10)}{transaction.date.length > 10 ? ` ${transaction.date.slice(11, 16)}` : ""} · {transaction.category} · {transactionWallet?.name || "Ví"}</small></span>
                   <strong>{transactionWallet ? formatTransactionMoney(transaction.amount, transactionWallet.currency) : `${transaction.amount.toLocaleString("en-US")} · Chưa rõ tiền tệ`}</strong>
                 </label>;
               })}</div> : <p>{copy.empty}</p>}
               <small>{deletion.selectedIds.length} {copy.selected.toLocaleLowerCase()}</small>
               <div className="r-two-options">
                 <button type="button" className="r-secondary" disabled={!!deletingId} onClick={() => cancelTransactionDeletion(deletion.confirmationId)}>{copy.cancel}</button>
-                <button type="button" className="r-danger" disabled={!!deletingId || !deletion.selectedIds.length || !candidates.length} onClick={() => void confirmTransactionDeletion(deletion.confirmationId)}>{copy.confirm} ({deletion.selectedIds.length})</button>
+                <button type="button" className="r-primary" disabled={!!deletingId || !deletion.selectedIds.length || !candidates.length} onClick={() => void confirmTransactionDeletion(deletion.confirmationId)}>{copy.confirm} ({deletion.selectedIds.length})</button>
               </div>
             </>}
           </section>;
@@ -1743,7 +2218,8 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           const rawDraft = drafts.find((draft) => draft.id === id);
           if (!rawDraft) return null;
           const draft = validateDraftForState(rawDraft, state);
-          const valid = readyDrafts([draft], state).length === 1;
+          const fundingIssue = draftFundingIssues([draft], state, today())[0]?.issue;
+          const valid = readyDrafts([draft], state).length === 1 && !fundingIssue;
           const draftWallet = state.wallets.find((item) => item.id === draft.wallet && !item.archived);
           const labels: Record<string, string> = { amount: "số tiền", type: "loại giao dịch", category: "danh mục", date: "ngày", wallet: "ví/tiền tệ" };
           const needsReview = draft.needsReview.map((field) => labels[field] || field);
@@ -1752,6 +2228,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
             {receiptImageUrls[id] && <div className="r-ai-receipt-thumb" role="img" aria-label="Ảnh hóa đơn đính kèm bản nháp" style={{ backgroundImage: `url("${receiptImageUrls[id]}")` }} />}
             <div className="r-ai-draft-summary"><b>{draft.title.trim() || "Chưa có mô tả"}</b>{" "}<strong>{draft.amount !== null && draft.currency ? formatTransactionMoney(draft.amount, draft.currency) : "Chưa rõ số tiền/tiền tệ"}</strong></div>
             <p className="r-ai-draft-details">{draft.category || draft.newCategory?.name || "Chưa chọn danh mục"} · {draft.date || "Chưa rõ ngày"} · {draftWallet ? `${draftWallet.name} (${draftWallet.currency})` : draft.currency ? `Chưa chọn ví · ${draft.currency}` : "Chưa chọn ví/tiền tệ"}</p>
+            <DraftAmountWarnings id={`draft-funding-${id}`} warnings={draftAmountWarnings(draft, state, today())} fundingIssue={fundingIssue} language={resolveLanguage(state.settings.language)} />
             {needsReview.length > 0 && <small className="r-ai-draft-review">Cần xem lại: {needsReview.join(", ")}</small>}
             {draft.needsReview.includes("wallet") && !messages.some((item) => item.walletChoiceDraftIds?.includes(id)) && <label className="r-ai-draft-details">
               {{ en: "Payment wallet", vi: "Ví thanh toán", zh: "付款钱包" }[resolveLanguage(state.settings.language)]}
@@ -1763,7 +2240,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
             <div className="r-two-options"><button type="button" className="r-secondary" disabled={committing || uncertainDraftIds.includes(id)} onClick={() => setEditingDraftId(id)}>Chỉnh sửa</button><button type="button" className="r-primary" disabled={(!valid && !uncertainDraftIds.includes(id)) || committing} onClick={() => confirmDrafts([id])}>{uncertainDraftIds.includes(id) ? { vi: "Kiểm tra lưu lại", en: "Check save again", zh: "重新检查保存" }[resolveLanguage(state.settings.language)] : "Xác nhận"}</button></div>
             {uncertainDraftIds.includes(id) && <small role="status">{workspaceSaveErrorMessage(null, resolveLanguage(state.settings.language))}</small>}
             {needsReview.length > 0 && <button type="button" className="r-ai-clarify-button" onClick={() => { setClarifyingDraftId(id); setFocusedDraftId(id); setText(""); }}>Trả lời để bổ sung thông tin</button>}
-            {!valid && <small className="r-ai-draft-review">Hãy bổ sung các thông tin còn thiếu trước khi xác nhận.</small>}
+            {!valid && !fundingIssue && <small className="r-ai-draft-review">Hãy bổ sung các thông tin còn thiếu trước khi xác nhận.</small>}
           </article>;
         })}
       </div>)}
