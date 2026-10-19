@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { AppState } from "@/components/sites/rolly/replica/store";
-export const SETUP_CURRENCIES = ["VND", "CNY", "USD", "EUR", "GBP", "AUD", "SGD", "JPY"] as const;
+export const SETUP_CURRENCIES = ["VND", "CNY", "USD"] as const;
 export const OCCUPATIONS = ["student", "freelancer", "employee", "business_owner", "retired", "not_specified"] as const;
 const amount = z.number().finite().min(0).max(1_000_000_000_000).multipleOf(0.01);
 const openingBalance = z.number().finite().min(-1_000_000_000_000).max(1_000_000_000_000).multipleOf(0.01);

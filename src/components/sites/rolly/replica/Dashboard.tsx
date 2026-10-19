@@ -166,21 +166,13 @@ export const DASHBOARD_I18N = {
     saveWallet: "Lưu ví",
     currencyOptions: {
       VND: "VND (Việt Nam Đồng)",
+      CNY: "CNY (Nhân Dân Tệ)",
       USD: "USD (Đô la Mỹ)",
-      EUR: "EUR (Euro)",
-      JPY: "JPY (Yên Nhật)",
-      SGD: "SGD (Đô la Singapore)",
-      GBP: "GBP (Bảng Anh)",
-      AUD: "AUD (Đô la Úc)",
     },
     currencyOptionsList: [
       { code: "VND", label: "VND (Việt Nam Đồng)" },
+      { code: "CNY", label: "CNY (Nhân Dân Tệ)" },
       { code: "USD", label: "USD (Đô la Mỹ)" },
-      { code: "EUR", label: "EUR (Euro)" },
-      { code: "JPY", label: "JPY (Yên Nhật)" },
-      { code: "SGD", label: "SGD (Đô la Singapore)" },
-      { code: "GBP", label: "GBP (Bảng Anh)" },
-      { code: "AUD", label: "AUD (Đô la Úc)" },
     ],
 
     // F4: Wallet Selectors & Action Aria-labels
@@ -448,21 +440,13 @@ export const DASHBOARD_I18N = {
     saveWallet: "Save wallet",
     currencyOptions: {
       VND: "VND (Vietnamese Dong)",
+      CNY: "CNY (Chinese Yuan)",
       USD: "USD (US Dollar)",
-      EUR: "EUR (Euro)",
-      JPY: "JPY (Japanese Yen)",
-      SGD: "SGD (Singapore Dollar)",
-      GBP: "GBP (British Pound)",
-      AUD: "AUD (Australian Dollar)",
     },
     currencyOptionsList: [
       { code: "VND", label: "VND (Vietnamese Dong)" },
+      { code: "CNY", label: "CNY (Chinese Yuan)" },
       { code: "USD", label: "USD (US Dollar)" },
-      { code: "EUR", label: "EUR (Euro)" },
-      { code: "JPY", label: "JPY (Japanese Yen)" },
-      { code: "SGD", label: "SGD (Singapore Dollar)" },
-      { code: "GBP", label: "GBP (British Pound)" },
-      { code: "AUD", label: "AUD (Australian Dollar)" },
     ],
 
     // F4: Wallet Selectors & Action Aria-labels
@@ -730,21 +714,13 @@ export const DASHBOARD_I18N = {
     saveWallet: "保存钱包",
     currencyOptions: {
       VND: "VND (越南盾)",
+      CNY: "CNY (人民币)",
       USD: "USD (美元)",
-      EUR: "EUR (欧元)",
-      JPY: "JPY (日元)",
-      SGD: "SGD (新加坡元)",
-      GBP: "GBP (英镑)",
-      AUD: "AUD (澳大利亚元)",
     },
     currencyOptionsList: [
       { code: "VND", label: "VND (越南盾)" },
+      { code: "CNY", label: "CNY (人民币)" },
       { code: "USD", label: "USD (美元)" },
-      { code: "EUR", label: "EUR (欧元)" },
-      { code: "JPY", label: "JPY (日元)" },
-      { code: "SGD", label: "SGD (新加坡元)" },
-      { code: "GBP", label: "GBP (英镑)" },
-      { code: "AUD", label: "AUD (澳大利亚元)" },
     ],
 
     // F4: Wallet Selectors & Action Aria-labels

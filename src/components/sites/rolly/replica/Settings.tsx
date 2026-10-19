@@ -576,10 +576,8 @@ const COPY_WALLET_SCREEN = {
     saveWallet: "Lưu ví",
     currencyNames: {
       VND: "VND (Việt Nam Đồng)",
+      CNY: "CNY (Nhân Dân Tệ)",
       USD: "USD (Đô la Mỹ)",
-      EUR: "EUR (Euro)",
-      CNY: "CNY (Nhân dân tệ)",
-      JPY: "JPY (Yên Nhật)",
     },
   },
   en: {
@@ -595,10 +593,8 @@ const COPY_WALLET_SCREEN = {
     saveWallet: "Save wallet",
     currencyNames: {
       VND: "VND (Vietnamese Dong)",
-      USD: "USD (US Dollar)",
-      EUR: "EUR (Euro)",
       CNY: "CNY (Chinese Yuan)",
-      JPY: "JPY (Japanese Yen)",
+      USD: "USD (US Dollar)",
     },
   },
   zh: {
@@ -614,10 +610,8 @@ const COPY_WALLET_SCREEN = {
     saveWallet: "保存钱包",
     currencyNames: {
       VND: "VND (越南盾)",
-      USD: "USD (美元)",
-      EUR: "EUR (欧元)",
       CNY: "CNY (人民币)",
-      JPY: "JPY (日元)",
+      USD: "USD (美元)",
     },
   },
 };
@@ -698,7 +692,7 @@ export function WalletScreen({
           <label>
             {t.currencyLabel}
             <select value={currency} onChange={(e) => setCurrency(e.target.value)}>
-              {(["VND", "USD", "EUR", "CNY", "JPY"] as const).map((c) => (
+              {(["VND", "CNY", "USD"] as const).map((c) => (
                 <option key={c} value={c}>
                   {t.currencyNames[c] || c}
                 </option>

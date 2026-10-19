@@ -106,7 +106,7 @@ export function inspectWorkspaceProposal(state: AppState, proposal: WorkspacePro
     const fail = (duplicate = false) => ({ ...ask("name"), error: duplicate ? t.duplicate : t.invalid });
     if (!action.name) return ask("name");
     if (action.kind === "wallet") {
-      if (!action.currency) return ask("currency", ["VND", "USD", "CNY", "EUR", "GBP", "AUD", "SGD", "JPY"].map(value => ({ label: value, value })));
+      if (!action.currency) return ask("currency", ["VND", "CNY", "USD"].map(value => ({ label: value, value })));
       if (!Intl.supportedValuesOf("currency").includes(action.currency)) return { ...ask("currency"), error: t.invalid };
       if (!action.walletType) return ask("walletType", ["cash", "credit"].map(value => ({ label: t[value as "cash" | "credit"], value })));
       if (action.initialBalance === null || !preciseMoney(action.initialBalance, action.currency)) return ask("initialBalance");
