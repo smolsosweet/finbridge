@@ -1,6 +1,8 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
 import { z } from "zod";
-import { getSession } from "@/lib/auth-session";
+import { requireAiSession } from "@/lib/ai-access";
+import { createQuotaGemini } from "@/lib/ai-quota-gemini";
+import { aiQuotaErrorResponse } from "@/lib/ai-quota";
 import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 
 export const runtime = "nodejs";
@@ -73,19 +75,9 @@ function validDate(value: string | null): boolean {
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
 }
 
-function isLocalDemoRequest(request: Request): boolean {
-  if (process.env.NODE_ENV !== "development" || process.env.FINBRIDGE_DEMO_MODE !== "true") return false;
-  const host = request.headers.get("host")?.split(":")[0];
-  const origin = request.headers.get("origin");
-  if (host !== "localhost" && host !== "127.0.0.1") return false;
-  try { return !!origin && new URL(origin).host === request.headers.get("host"); }
-  catch { return false; }
-}
-
 export async function POST(request: Request) {
-  if (!isLocalDemoRequest(request) && !(await getSession())) {
-    return Response.json({ error: "UNAUTHENTICATED", message: "Hãy đăng nhập để dùng trợ lý giao dịch." }, { status: 401 });
-  }
+  const session = await requireAiSession(request);
+  if (session instanceof Response) return session;
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED", message: "Phân tích giao dịch hiện chưa sẵn sàng. Vui lòng thử lại sau." }, { status: 503 });
 
@@ -98,7 +90,7 @@ export async function POST(request: Request) {
   const categories = new Map(input.categories.map((category) => [`${category.type}:${category.name}`, true]));
 
   try {
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { retryOptions: { attempts: 1 } } });
+    const ai = createQuotaGemini(apiKey, session.user.id, "transaction-drafts");
     const result = await ai.models.generateContent({
       model: process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite",
       contents: [
@@ -145,7 +137,9 @@ export async function POST(request: Request) {
       };
     });
     return Response.json({ batchId: input.batchId, drafts });
-  } catch {
+  } catch (error) {
+    const quotaResponse = aiQuotaErrorResponse(error, request);
+    if (quotaResponse) return quotaResponse;
     return Response.json({ error: "AI_REQUEST_FAILED", message: "Không thể phân tích giao dịch lúc này. Vui lòng thử lại." }, { status: 502 });
   }
 }

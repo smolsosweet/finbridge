@@ -1,6 +1,7 @@
-import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
-import { getSession } from "@/lib/auth-session";
+import { requireAiSession } from "@/lib/ai-access";
+import { createQuotaGemini } from "@/lib/ai-quota-gemini";
+import { aiQuotaErrorResponse } from "@/lib/ai-quota";
 import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 
 export const runtime = "nodejs";
@@ -11,19 +12,9 @@ const requestSchema = z.object({
   audioBase64: z.string().min(100).max(7_000_000).regex(/^[A-Za-z0-9+/]+={0,2}$/),
 }).strict();
 
-function isLocalDemoRequest(request: Request) {
-  if (process.env.NODE_ENV !== "development" || process.env.FINBRIDGE_DEMO_MODE !== "true") return false;
-  const host = request.headers.get("host")?.split(":")[0];
-  const origin = request.headers.get("origin");
-  if (host !== "localhost" && host !== "127.0.0.1") return false;
-  try { return !!origin && new URL(origin).host === request.headers.get("host"); }
-  catch { return false; }
-}
-
 export async function POST(request: Request) {
-  if (!isLocalDemoRequest(request) && !(await getSession())) {
-    return Response.json({ error: "UNAUTHENTICATED", message: "Hãy đăng nhập để dùng FinBridge AI." }, { status: 401 });
-  }
+  const session = await requireAiSession(request);
+  if (session instanceof Response) return session;
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED", message: "Chuyển giọng nói hiện chưa sẵn sàng. Vui lòng thử lại sau." }, { status: 503 });
 
@@ -40,7 +31,7 @@ export async function POST(request: Request) {
 
   const startedAt = Date.now();
   try {
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { retryOptions: { attempts: 1 } } });
+    const ai = createQuotaGemini(apiKey, session.user.id, "speech-transcription");
     const result = await ai.models.generateContent({
       model: process.env.GEMINI_AUDIO_MODEL?.trim() || process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite",
       contents: [{ parts: [
@@ -55,6 +46,8 @@ export async function POST(request: Request) {
     }
     return Response.json({ text });
   } catch (error) {
+    const quotaResponse = aiQuotaErrorResponse(error, request);
+    if (quotaResponse) return quotaResponse;
     const status = error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : null;
     const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
     console.error("[FinBridge AI] transcription failed", { durationMs: Date.now() - startedAt, status, name: error instanceof Error ? error.name : "UnknownError" });

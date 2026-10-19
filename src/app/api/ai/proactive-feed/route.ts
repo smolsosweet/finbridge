@@ -1,6 +1,8 @@
-import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
+import { ThinkingLevel, Type } from "@google/genai";
 import { z } from "zod";
-import { getSession } from "@/lib/auth-session";
+import { requireAiSession } from "@/lib/ai-access";
+import { createQuotaGemini } from "@/lib/ai-quota-gemini";
+import { aiQuotaErrorResponse } from "@/lib/ai-quota";
 import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 
 export const runtime = "nodejs";
@@ -17,17 +19,9 @@ const inputSchema = z.object({
 }).strict();
 const outputSchema = z.object({ alerts: z.array(z.object({ id: z.string().min(1).max(200), explanation: z.string().trim().min(1).max(300), suggestion: z.string().trim().min(1).max(300) }).strict()).max(30) }).strict();
 
-function isLocalDemoRequest(request: Request) {
-  if (process.env.NODE_ENV !== "development" || process.env.FINBRIDGE_DEMO_MODE !== "true") return false;
-  const host = request.headers.get("host")?.split(":")[0];
-  const origin = request.headers.get("origin");
-  if (host !== "localhost" && host !== "127.0.0.1") return false;
-  try { return !!origin && new URL(origin).host === request.headers.get("host"); }
-  catch { return false; }
-}
-
 export async function POST(request: Request) {
-  if (!isLocalDemoRequest(request) && !(await getSession())) return Response.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+  const session = await requireAiSession(request);
+  if (session instanceof Response) return session;
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED" }, { status: 503 });
   let raw: unknown;
@@ -41,7 +35,7 @@ export async function POST(request: Request) {
   const timeoutMs = getGeminiTimeoutMs("GEMINI_FEED_TIMEOUT_MS", 6_000, 9_000);
   const startedAt = Date.now();
   try {
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { retryOptions: { attempts: 1 } } });
+    const ai = createQuotaGemini(apiKey, session.user.id, "proactive-feed");
     const result = await ai.models.generateContent({
       model,
       contents: [
@@ -71,6 +65,8 @@ export async function POST(request: Request) {
     console.info("[FinBridge AI] proactive feed explanations completed", { durationMs: Date.now() - startedAt, count: seen.size });
     return Response.json({ alerts: validated.data.alerts });
   } catch (error) {
+    const quotaResponse = aiQuotaErrorResponse(error, request);
+    if (quotaResponse) return quotaResponse;
     const status = error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : null;
     console.warn("[FinBridge AI] proactive feed explanations unavailable", { durationMs: Date.now() - startedAt, status, name: error instanceof Error ? error.name : "UnknownError" });
     return Response.json({ error: status === 429 ? "AI_RATE_LIMITED" : "AI_UNAVAILABLE" }, { status: status === 429 ? 429 : 503 });

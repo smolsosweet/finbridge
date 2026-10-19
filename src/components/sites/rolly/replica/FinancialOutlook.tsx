@@ -44,7 +44,7 @@ export function FinancialOutlook({ editable = false, compact = false, notificati
     pending.forEach((alert) => attemptedIds.current.add(`${lang}:${alert.id}`));
     const language = lang;
     const payload = pending.map(({ id, kind, problem, figures, when, cause, priority, suggestedAction, assumptions }) => ({ id, kind, problem, figures, when, cause, priority, suggestedAction, assumptions }));
-    void fetch("/api/ai/proactive-feed", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ language, alerts: payload }) })
+    void fetch("/api/ai/proactive-feed", { method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-language": language }, body: JSON.stringify({ language, alerts: payload }) })
       .then(async (response) => response.ok ? response.json() as Promise<{ alerts?: unknown }> : null)
       .then((data) => {
         if (!data || !Array.isArray(data.alerts)) return;

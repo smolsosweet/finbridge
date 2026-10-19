@@ -1,6 +1,8 @@
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { ThinkingLevel } from "@google/genai";
 import { z } from "zod";
-import { getSession } from "@/lib/auth-session";
+import { requireAiSession } from "@/lib/ai-access";
+import { createQuotaGemini } from "@/lib/ai-quota-gemini";
+import { aiQuotaErrorResponse } from "@/lib/ai-quota";
 import { database } from "@/lib/database";
 import { workspaceRepository } from "@/lib/workspace-repository";
 import type { AppState } from "@/components/sites/rolly/replica/store";
@@ -29,22 +31,9 @@ const requestSchema = z.object({
   }).strict(),
 }).strict();
 
-function localDemo(request: Request) {
-  if (process.env.NODE_ENV !== "development" || process.env.FINBRIDGE_DEMO_MODE !== "true") return false;
-  const host = request.headers.get("host")?.split(":")[0];
-  const origin = request.headers.get("origin");
-  try { return (host === "localhost" || host === "127.0.0.1") && !!origin && new URL(origin).host === request.headers.get("host"); }
-  catch { return false; }
-}
-
 export async function POST(request: Request) {
-  const demo = localDemo(request);
-  const expectedOrigin = process.env.BETTER_AUTH_URL ? new URL(process.env.BETTER_AUTH_URL).origin : new URL(request.url).origin;
-  if (!demo && request.headers.get("origin") !== expectedOrigin) return Response.json({ error: "INVALID_ORIGIN", message: "Please reload the page and try again." }, { status: 403 });
-  const session = demo ? null : await getSession();
-  if (!demo && !session) {
-    return Response.json({ error: "UNAUTHENTICATED", message: "Please sign in to use Financial Scenario Planner." }, { status: 401 });
-  }
+  const session = await requireAiSession(request);
+  if (session instanceof Response) return session;
 
   let raw: unknown;
   try { raw = await request.json(); } catch {
@@ -92,7 +81,7 @@ export async function POST(request: Request) {
   const started = Date.now();
 
   try {
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { retryOptions: { attempts: 1 } } });
+    const ai = createQuotaGemini(apiKey, session.user.id, "scenario-planner");
     const modelContext = {
       wallets: input.context.wallets.map(({ id, name, currency }) => ({ id, name, currency })),
       budgets: input.context.budgets.map(({ id, title, currency, category, wallet }) => ({ id, title, currency, category, wallet })),
@@ -170,6 +159,8 @@ export async function POST(request: Request) {
     const normalized = normalizePlannerResponse(decoded, input);
     return respondPlan(normalized);
   } catch (error) {
+    const quotaResponse = aiQuotaErrorResponse(error, request);
+    if (quotaResponse) return quotaResponse;
     const status = providerStatus(error);
     const timeout = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
     const errorName = error instanceof Error ? error.name : "UnknownError";

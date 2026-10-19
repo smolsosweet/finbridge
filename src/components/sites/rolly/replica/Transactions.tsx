@@ -1,4 +1,5 @@
 "use client";
+import { aiQuotaClientMessage } from "@/lib/ai-quota";
 
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
@@ -778,7 +779,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       await flushWorkspaceForAnalysis();
       if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return true;
       const snapshot = getWorkspaceState();
-      const response = await fetch("/api/ai/workspace-actions", { method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": owner || "" },
+      const response = await fetch("/api/ai/workspace-actions", { method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": owner || "", "x-finbridge-language": language },
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
         body: JSON.stringify({ batchId, message, language, today: today(), pending, history: modelHistory(messages).slice(-8), ...(choice ? { choice } : {}),
           ...(workspacePersistence() === "browser" ? { context: { wallets: snapshot.wallets, goals: snapshot.goals, fixedExpenses: snapshot.fixedExpenses || [], categories: snapshot.categories, categoryMeta: snapshot.categoryMeta, ...(snapshot.walletCategories ? { walletCategories: snapshot.walletCategories } : {}) } } : {}) }),
@@ -787,6 +788,8 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return true;
       const result = raw && typeof raw === "object" ? raw as { mode?: unknown; proposal?: unknown; reply?: unknown; message?: unknown } : null;
       if (!response.ok || !result) {
+        const quotaMessage = aiQuotaClientMessage(raw, language);
+        if (quotaMessage) { validationMessage = quotaMessage; throw new Error(quotaMessage); }
         if (response.status === 422 && typeof result?.message === "string") validationMessage = result.message;
         throw new Error(result?.message === t.invalid ? t.invalid : t.unavailable);
       }
@@ -970,7 +973,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       const response = await fetch("/api/ai/assistant", {
         signal: AbortSignal.any([AbortSignal.timeout(30_000), requestController.signal]),
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": submissionOwner || "" },
+        headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": submissionOwner || "", "x-finbridge-language": resolveLanguage(state.settings.language) },
         body: JSON.stringify({
           batchId,
           message,
@@ -1045,10 +1048,10 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (ai.operationIntent === "simulate_financial_scenario") {
         const snapshot = getWorkspaceState();
         const input = { message, preferredLanguage: resolveLanguage(snapshot.settings.language), today: today(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", history: modelHistory(messages).slice(-6), selectedWalletId, context: scenarioContext(snapshot) };
-        const response = await fetch("/api/ai/scenario-planner", { method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": submissionOwner || "" }, body: JSON.stringify(input), signal: AbortSignal.any([AbortSignal.timeout(35_000), requestController.signal]) });
+        const response = await fetch("/api/ai/scenario-planner", { method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": submissionOwner || "", "x-finbridge-language": input.preferredLanguage }, body: JSON.stringify(input), signal: AbortSignal.any([AbortSignal.timeout(35_000), requestController.signal]) });
         const raw: unknown = await response.json().catch(() => null);
         if (workspaceOwner() !== submissionOwner || conversationGeneration.current !== submissionGeneration) return;
-        if (!response.ok) throw new Error(serviceCopy.unavailable);
+        if (!response.ok) throw new Error(aiQuotaClientMessage(raw, input.preferredLanguage) || serviceCopy.unavailable);
         const plan = normalizePlannerResponse(raw, input);
         const labels = {
           vi: { now: "Hiện tại", projected: "Dự kiến cuối kỳ", risk: "Có thể thiếu", note: "Mô phỏng, không thay đổi dữ liệu thật", assumptions: "Giả định" },
@@ -1269,7 +1272,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
       const response = await fetch("/api/ai/receipt-drafts", {
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(65_000)]), method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-finbridge-language": resolveLanguage(state.settings.language) },
         body: JSON.stringify({
           imageDataUrl, today: today(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           defaultWalletId: wallet || state.wallets.find((item) => !item.archived)?.id || "",
@@ -1554,7 +1557,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       const bytes = new Uint8Array(await blob.arrayBuffer());
       let binary = "";
       for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-      const response = await fetch("/api/ai/speech-transcription", { signal: AbortSignal.timeout(20_000), method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mimeType: blob.type || "audio/webm", audioBase64: btoa(binary) }) });
+      const response = await fetch("/api/ai/speech-transcription", { signal: AbortSignal.timeout(20_000), method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-language": resolveLanguage(state.settings.language) }, body: JSON.stringify({ mimeType: blob.type || "audio/webm", audioBase64: btoa(binary) }) });
       const result = await response.json() as { text?: string; message?: string };
       if (!response.ok || !result.text?.trim()) throw new Error(result.message || "Chưa nhận diện được lời nói. Hãy thử lại.");
       setText(result.text.trim());

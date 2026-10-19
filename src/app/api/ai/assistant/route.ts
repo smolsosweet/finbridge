@@ -1,6 +1,8 @@
-import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
+import { ThinkingLevel, Type } from "@google/genai";
 import { z } from "zod";
-import { getSession } from "@/lib/auth-session";
+import { requireAiSession } from "@/lib/ai-access";
+import { createQuotaGemini } from "@/lib/ai-quota-gemini";
+import { aiQuotaErrorResponse } from "@/lib/ai-quota";
 import { database } from "@/lib/database";
 import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 import { answerFinancialQuery, asksForAllWalletBalances, resolveFinancialFollowup, type FinancialAction } from "@/lib/financial-chat";
@@ -131,22 +133,9 @@ function inferRelativeDeletionDate(message: string, today: string): string | nul
   return date.toISOString().slice(0, 10);
 }
 
-function isLocalDemoRequest(request: Request) {
-  if (process.env.NODE_ENV !== "development" || process.env.FINBRIDGE_DEMO_MODE !== "true") return false;
-  const host = request.headers.get("host")?.split(":")[0];
-  const origin = request.headers.get("origin");
-  if (host !== "localhost" && host !== "127.0.0.1") return false;
-  try { return !!origin && new URL(origin).host === request.headers.get("host"); }
-  catch { return false; }
-}
-
 export async function POST(request: Request) {
-  const origin = request.headers.get("origin");
-  const expectedOrigin = process.env.BETTER_AUTH_URL ? new URL(process.env.BETTER_AUTH_URL).origin : new URL(request.url).origin;
-  if (origin !== expectedOrigin && !isLocalDemoRequest(request)) return Response.json({ error: "INVALID_ORIGIN", message: "Hãy tải lại trang rồi thử lại." }, { status: 403 });
-  const localDemo = isLocalDemoRequest(request);
-  const session = localDemo ? null : await getSession();
-  if (!localDemo && !session) return Response.json({ error: "UNAUTHENTICATED", message: "Hãy đăng nhập để dùng FinBridge AI." }, { status: 401 });
+  const session = await requireAiSession(request);
+  if (session instanceof Response) return session;
   if (session && request.headers.get("x-finbridge-workspace-owner") !== session.user.id) return Response.json({ error: "ACCOUNT_CHANGED", message: "Tài khoản đã thay đổi. Hãy tải lại trang." }, { status: 409 });
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED", message: "Trợ lý hiện chưa sẵn sàng. Vui lòng thử lại sau." }, { status: 503 });
@@ -177,7 +166,7 @@ export async function POST(request: Request) {
   const thinkingLevel = model.startsWith("gemini-3.") ? (/flash-lite$/.test(model) ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW) : undefined;
   const startedAt = Date.now();
   try {
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { retryOptions: { attempts: 1 } } });
+    const ai = createQuotaGemini(apiKey, session.user.id, "assistant");
     const result = await ai.models.generateContent({
       model,
       contents: [
@@ -359,6 +348,8 @@ export async function POST(request: Request) {
         searchTerm: value.deletionSearchTerm, type: value.deletionType },
     });
   } catch (error) {
+    const quotaResponse = aiQuotaErrorResponse(error, request);
+    if (quotaResponse) return quotaResponse;
     const status = error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : null;
     const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
     console.error("[FinBridge AI] assistant failed", { durationMs: Date.now() - startedAt, status, name: error instanceof Error ? error.name : "UnknownError" });
