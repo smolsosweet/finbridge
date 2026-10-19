@@ -1,4 +1,4 @@
-const maximumDataUrlLength = 1800000;
+import { AI_IMAGE_DATA_URL_LENGTH as maximumDataUrlLength } from "./ai-limits";
 export function receiptImageDimensions(width: number, height: number, maximumEdge = 2560) {
   if (![width, height].every(value => Number.isFinite(value) && value > 0)) throw new Error("INVALID_RECEIPT_IMAGE");
   const scale = Math.min(1, maximumEdge / Math.max(width, height));

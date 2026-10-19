@@ -1,3 +1,6 @@
+import { readAiJson } from "@/lib/ai-request";
+import { AI_RECEIPT_JSON_BYTES } from "@/lib/ai-limits";
+import { AI_IMAGE_DATA_URL_LENGTH } from "@/lib/ai-limits";
 import { ThinkingLevel, Type } from "@google/genai";
 import { z } from "zod";
 import { requireAiSession } from "@/lib/ai-access";
@@ -7,9 +10,10 @@ import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const schema = z.object({
-  imageDataUrl: z.string().max(7_100_000),
+  imageDataUrl: z.string().max(AI_IMAGE_DATA_URL_LENGTH),
   today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   timeZone: z.string().min(1).max(80),
   defaultWalletId: z.string().min(1).max(100),
@@ -55,25 +59,22 @@ function validDate(value: string | null): value is string {
 export async function POST(request: Request) {
   const session = await requireAiSession(request);
   if (session instanceof Response) return session;
-  if (Number(request.headers.get("content-length") || 0) > 7_500_000) {
-    return Response.json({ error: "IMAGE_TOO_LARGE", message: "Ảnh quá lớn. Vui lòng chọn ảnh dưới 5 MB." }, { status: 413 });
-  }
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED", message: "Đọc hóa đơn hiện chưa sẵn sàng. Vui lòng thử lại sau." }, { status: 503 });
 
-  let raw: unknown;
-  try { raw = await request.json(); }
-  catch { return Response.json({ error: "INVALID_REQUEST", message: "Không đọc được ảnh đã chọn." }, { status: 400 }); }
+  const body = await readAiJson(request, AI_RECEIPT_JSON_BYTES);
+  if (body instanceof Response) return body;
+  const raw = body.value;
   const parsed = schema.safeParse(raw);
   if (!parsed.success) return Response.json({ error: "INVALID_REQUEST", message: "Ảnh hoặc thông tin ví không hợp lệ." }, { status: 400 });
   const input = parsed.data;
   const imageMatch = input.imageDataUrl.match(/^data:(image\/(?:jpeg|png|webp|heic|heif));base64,([A-Za-z0-9+/]+={0,2})$/i);
-  if (!imageMatch || imageMatch[2].length > 7_000_000) {
+  if (!imageMatch) {
     return Response.json({ error: "INVALID_IMAGE", message: "Định dạng ảnh chưa hỗ trợ hoặc ảnh quá lớn. Hãy chọn JPEG, PNG hoặc WebP dưới 5 MB." }, { status: 400 });
   }
 
   const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite";
-  const timeoutMs = getGeminiTimeoutMs("GEMINI_OCR_TIMEOUT_MS", 60_000, 60_000);
+  const timeoutMs = getGeminiTimeoutMs("GEMINI_OCR_TIMEOUT_MS", 50_000, 50_000);
   const startedAt = Date.now();
   try {
     const ai = createQuotaGemini(apiKey, session.user.id, "receipt-drafts");

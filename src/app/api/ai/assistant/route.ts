@@ -1,3 +1,5 @@
+import { readAiJson } from "@/lib/ai-request";
+import { AI_JSON_BYTES } from "@/lib/ai-limits";
 import { ThinkingLevel, Type } from "@google/genai";
 import { z } from "zod";
 import { requireAiSession } from "@/lib/ai-access";
@@ -18,6 +20,7 @@ import { financialConversationEntities, resolveObligationReference } from "@/lib
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 40;
 
 const pendingDraftSchema = z.object({
   id: z.string().min(1).max(100), title: z.string().min(1).max(160), amount: z.number().positive().nullable(),
@@ -139,9 +142,9 @@ export async function POST(request: Request) {
   if (session && request.headers.get("x-finbridge-workspace-owner") !== session.user.id) return Response.json({ error: "ACCOUNT_CHANGED", message: "Tài khoản đã thay đổi. Hãy tải lại trang." }, { status: 409 });
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED", message: "Trợ lý hiện chưa sẵn sàng. Vui lòng thử lại sau." }, { status: 503 });
-  let raw: unknown;
-  try { raw = await request.json(); }
-  catch { return Response.json({ error: "INVALID_REQUEST", message: "Tin nhắn không hợp lệ." }, { status: 400 }); }
+  const body = await readAiJson(request, AI_JSON_BYTES);
+  if (body instanceof Response) return body;
+  const raw = body.value;
   const parsed = requestSchema.safeParse(raw);
   if (!parsed.success) return Response.json({ error: "INVALID_REQUEST", message: "Thông tin ví hoặc ngữ cảnh chat không hợp lệ." }, { status: 400 });
   const input = parsed.data;

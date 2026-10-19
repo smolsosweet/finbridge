@@ -1,3 +1,5 @@
+import { readAiJson } from "@/lib/ai-request";
+import { AI_JSON_BYTES } from "@/lib/ai-limits";
 import { createHash } from "node:crypto";
 import { ThinkingLevel } from "@google/genai";
 import { z } from "zod";
@@ -35,10 +37,9 @@ export async function POST(request: Request) {
   const session = await requireAiSession(request);
   if (session instanceof Response) return session;
   if (session && request.headers.get("x-finbridge-workspace-owner") !== session.user.id) return respond({ error: "ACCOUNT_CHANGED" }, 409);
-  if (Number(request.headers.get("content-length") || 0) > 600_000) return respond({ error: "PAYLOAD_TOO_LARGE" }, 413);
-  let raw: unknown;
-  try { const body = await request.text(); if (body.length > 600_000) return respond({ error: "PAYLOAD_TOO_LARGE" }, 413); raw = JSON.parse(body); }
-  catch { return respond({ error: "INVALID_REQUEST" }, 400); }
+  const body = await readAiJson(request, AI_JSON_BYTES);
+  if (body instanceof Response) return body;
+  const raw = body.value;
   const parsed = inputSchema.safeParse(raw);
   if (!parsed.success) return respond({ error: "INVALID_REQUEST" }, 400);
   const input = parsed.data, t = workspaceActionCopy[input.language];

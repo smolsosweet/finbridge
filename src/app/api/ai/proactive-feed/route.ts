@@ -1,3 +1,5 @@
+import { readAiJson } from "@/lib/ai-request";
+import { AI_JSON_BYTES } from "@/lib/ai-limits";
 import { ThinkingLevel, Type } from "@google/genai";
 import { z } from "zod";
 import { requireAiSession } from "@/lib/ai-access";
@@ -7,6 +9,7 @@ import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 40;
 
 const inputSchema = z.object({
   language: z.enum(["vi", "en", "zh"]),
@@ -24,9 +27,9 @@ export async function POST(request: Request) {
   if (session instanceof Response) return session;
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED" }, { status: 503 });
-  let raw: unknown;
-  try { raw = await request.json(); }
-  catch { return Response.json({ error: "INVALID_REQUEST" }, { status: 400 }); }
+  const body = await readAiJson(request, AI_JSON_BYTES);
+  if (body instanceof Response) return body;
+  const raw = body.value;
   const parsed = inputSchema.safeParse(raw);
   if (!parsed.success || new Set(parsed.data.alerts.map((alert) => alert.id)).size !== parsed.data.alerts.length) return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
   const { language, alerts } = parsed.data;

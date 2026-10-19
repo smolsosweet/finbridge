@@ -1,3 +1,5 @@
+import { readAiJson } from "@/lib/ai-request";
+import { AI_JSON_BYTES } from "@/lib/ai-limits";
 import { ThinkingLevel } from "@google/genai";
 import { z } from "zod";
 import { requireAiSession } from "@/lib/ai-access";
@@ -14,6 +16,9 @@ import {
   calculateScenario,
   scenarioContext,
 } from "@/lib/scenario-planner";
+
+export const runtime = "nodejs";
+export const maxDuration = 40;
 
 const requestSchema = z.object({
   message: z.string().trim().min(1).max(1200),
@@ -35,10 +40,9 @@ export async function POST(request: Request) {
   const session = await requireAiSession(request);
   if (session instanceof Response) return session;
 
-  let raw: unknown;
-  try { raw = await request.json(); } catch {
-    return Response.json({ error: "INVALID_REQUEST", message: "Please send a valid scenario request." }, { status: 400 });
-  }
+  const body = await readAiJson(request, AI_JSON_BYTES);
+  if (body instanceof Response) return body;
+  const raw = body.value;
 
   const parsed = requestSchema.safeParse(raw);
   if (!parsed.success) {

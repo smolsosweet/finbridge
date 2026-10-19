@@ -109,3 +109,24 @@ test("unconfigured quotas block real SDK network access without a RAM fallback",
     assert.equal(response.status, 503); assert.equal((await response.json()).error, "AI_QUOTA_NOT_CONFIGURED"); assert.equal(fixture.calls, 0);
   } finally { process.env.AI_QUOTA_SERVER_DAILY_POINTS = previous; }
 });
+
+test("every AI route bounds chunked uploads before reserving quota or sending to Gemini", async () => {
+  for (const [route, POST] of Object.entries(routes)) {
+    let cancelled = false;
+    const req = request(route);
+    const streamed = new Request(req.url, { method: "POST", headers: req.headers, duplex: "half", body: new ReadableStream({
+      pull(controller) { controller.enqueue(new Uint8Array(100_000)); },
+      cancel() { cancelled = true; },
+    }) });
+    const response = await POST(streamed);
+    assert.equal(response.status, 413, route); assert.equal(cancelled, true, route);
+  }
+  assert.equal(fixture.reservations.length, 0); assert.equal(fixture.calls, 0);
+});
+
+test("speech output is bounded before it can populate a chat input", async () => {
+  for (const [text, reason] of [["A".repeat(2001), "STOP"], ["truncated", "MAX_TOKENS"]]) {
+    globalThis.fetch = async () => Response.json({ candidates: [{ content: { parts: [{ text }], role: "model" }, finishReason: reason }] });
+    assert.equal((await routes["speech-transcription"](request("speech-transcription"))).status, 502);
+  }
+});

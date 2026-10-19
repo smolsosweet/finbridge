@@ -18,6 +18,7 @@ import { resolveSpendingPlanAdjustment, spendingPlanAdjustmentSchema, spendingPl
 import { ChatSpendingPlan } from "./ChatSpendingPlan";
 import { FinancialChatAnswer } from "./FinancialChatAnswer";
 import { prepareReceiptImage } from "@/lib/receipt-image";
+import { AI_AUDIO_BYTES, AI_RECORDING_SECONDS } from "@/lib/ai-limits";
 import { definitelyRejectedWorkspace, workspaceSaveErrorMessage } from "@/lib/workspace-payload";
 import { pendingDraftInterruption, pendingDraftReminder, rollbackRejectedDrafts, shouldBlockNewDraft } from "@/lib/pending-draft-policy";
 import { asksForCalculationExplanation, scenarioCalculationExplanation } from "@/lib/scenario-explanation";
@@ -508,6 +509,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   const recorder = useRef<MediaRecorder | null>(null);
   const recorderStream = useRef<MediaStream | null>(null);
   const audioChunks = useRef<Blob[]>([]);
+  const recordingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const aiRequestLock = useRef(false);
@@ -520,6 +522,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   const lastSubmission = useRef<{ owner: string | null; message: string; batchId: string; failed: boolean } | null>(null);
   const close = () => { recorder.current?.stop(); setListening(false); setModal(""); };
   useEffect(() => () => {
+    if (recordingTimer.current) clearTimeout(recordingTimer.current);
     const activeRecorder = recorder.current;
     if (activeRecorder && activeRecorder.state !== "inactive") {
       activeRecorder.onstop = null;
@@ -1553,7 +1556,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     aiRequestLock.current = true;
     setTranscribing(true);
     try {
-      if (blob.size > 5 * 1024 * 1024) throw new Error("Bản ghi quá dài. Hãy nói ngắn hơn rồi thử lại.");
+      if (blob.size > AI_AUDIO_BYTES) throw new Error(resolveLanguage(state.settings.language) === "vi" ? "Bản ghi quá lớn. Hãy nói ngắn hơn hoặc nhập bằng tay." : resolveLanguage(state.settings.language) === "zh" ? "录音过大。请缩短录音或手动输入。" : "Recording is too large. Record a shorter message or type it.");
       const bytes = new Uint8Array(await blob.arrayBuffer());
       let binary = "";
       for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
@@ -1577,11 +1580,13 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       recorderStream.current = stream;
       audioChunks.current = [];
       const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find((type) => MediaRecorder.isTypeSupported(type));
-      const activeRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const activeRecorder = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 64_000 });
       recorder.current = activeRecorder;
       activeRecorder.ondataavailable = (event) => { if (event.data.size) audioChunks.current.push(event.data); };
       activeRecorder.onerror = () => setVoiceError("Có lỗi khi ghi âm. Hãy kiểm tra micro rồi thử lại.");
       activeRecorder.onstop = () => {
+        if (recordingTimer.current) clearTimeout(recordingTimer.current);
+        recordingTimer.current = null;
         const audio = new Blob(audioChunks.current, { type: activeRecorder.mimeType });
         recorderStream.current?.getTracks().forEach((track) => track.stop());
         recorderStream.current = null;
@@ -1591,6 +1596,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         else setVoiceError("Chưa ghi được âm thanh. Hãy thử nói lại.");
       };
       activeRecorder.start();
+      recordingTimer.current = setTimeout(() => { if (activeRecorder.state !== "inactive") activeRecorder.stop(); }, AI_RECORDING_SECONDS * 1000);
       setListening(true);
       setVoiceError("");
     } catch (error) {

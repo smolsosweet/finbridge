@@ -1,3 +1,5 @@
+import { readAiJson } from "@/lib/ai-request";
+import { AI_JSON_BYTES } from "@/lib/ai-limits";
 import { Type } from "@google/genai";
 import { z } from "zod";
 import { requireAiSession } from "@/lib/ai-access";
@@ -7,6 +9,7 @@ import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 40;
 
 const requestSchema = z.object({
   batchId: z.string().uuid(),
@@ -81,9 +84,9 @@ export async function POST(request: Request) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED", message: "Phân tích giao dịch hiện chưa sẵn sàng. Vui lòng thử lại sau." }, { status: 503 });
 
-  let raw: unknown;
-  try { raw = await request.json(); }
-  catch { return Response.json({ error: "INVALID_REQUEST", message: "Yêu cầu không hợp lệ." }, { status: 400 }); }
+  const body = await readAiJson(request, AI_JSON_BYTES);
+  if (body instanceof Response) return body;
+  const raw = body.value;
   const parsed = requestSchema.safeParse(raw);
   if (!parsed.success) return Response.json({ error: "INVALID_REQUEST", message: "Thông tin ví hoặc danh mục không hợp lệ." }, { status: 400 });
   const input = parsed.data;
@@ -105,7 +108,7 @@ export async function POST(request: Request) {
         ] : []),
         `Tin nhắn: ${input.message}`,
       ].join("\n"),
-      config: { responseMimeType: "application/json", responseSchema, abortSignal: AbortSignal.any([AbortSignal.timeout(getGeminiTimeoutMs("GEMINI_CHAT_TIMEOUT_MS", 20_000, 25_000)), request.signal]) },
+      config: { maxOutputTokens: 4096, responseMimeType: "application/json", responseSchema, abortSignal: AbortSignal.any([AbortSignal.timeout(getGeminiTimeoutMs("GEMINI_CHAT_TIMEOUT_MS", 20_000, 25_000)), request.signal]) },
     });
     const decoded: unknown = JSON.parse(result.text || "");
     const output = responseSchema.safeParse(decoded);

@@ -56,6 +56,7 @@
     "test:transaction-ai": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-transaction-ai.mjs",
     "ai:quota:migrate": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/migrate-ai-quota.mjs",
     "test:ai-quota": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-ai-quota.mjs scripts/verify-ai-quota-routes.mjs",
+    "test:ai-request": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-ai-request.mjs",
     "test:ai-quota:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-ai-quota-postgres.mjs",
     "test:conversation": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-conversation.mjs scripts/verify-assistant-route.mjs scripts/verify-obligation-context.mjs",
     "test:chat-plan": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-chat-spending-plan.mjs scripts/verify-chat-spending-plan-ui.mjs",
@@ -71,7 +72,7 @@
     "test:data-safety": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-data-safety.mjs scripts/verify-persistence-routes.mjs",
     "test:feedback": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-feedback.mjs",
     "test:feedback:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-feedback-postgres.mjs",
-    "test:business:unit": "npm run test:auth && npm run test:workspace && npm run test:calendar && npm run test:transfers && npm run test:transfer-reference && npm run test:planning && npm run test:bill-payments && npm run test:safety && npm run test:onboarding && npm run test:notification-center && npm run test:localization && npm run test:data-safety && npm run test:feedback && npm run test:ai-quota",
+    "test:business:unit": "npm run test:auth && npm run test:workspace && npm run test:calendar && npm run test:transfers && npm run test:transfer-reference && npm run test:planning && npm run test:bill-payments && npm run test:safety && npm run test:onboarding && npm run test:notification-center && npm run test:localization && npm run test:data-safety && npm run test:feedback && npm run test:ai-quota && npm run test:ai-request",
     "test:business:postgres": "npm run test:auth:postgres && npm run test:workspace:postgres && npm run test:planning:postgres && npm run test:bill-payments:postgres && npm run test:safety:postgres && npm run test:transfers:postgres && npm run test:transfer-reference:postgres && npm run test:feedback:postgres && npm run test:ai-quota:postgres",
     "test:feedback:ui": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/verify-feedback-ui.mjs"
   },
