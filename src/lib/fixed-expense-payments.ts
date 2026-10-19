@@ -1,5 +1,5 @@
-import type { AppState, FixedExpense, Transaction } from "../components/sites/rolly/replica/store";
-import { occurrencePayment, plannedOccurrences } from "../components/sites/rolly/replica/planningModel";
+import type { AppState, FixedExpense, Transaction } from "../components/finbridge/workspace/store";
+import { occurrencePayment, plannedOccurrences } from "../components/finbridge/workspace/planningModel";
 
 export function expenseWallet(state: AppState, expense: FixedExpense) {
   const budget = state.goals.find(g => g.kind === "budget" && g.id === expense.budgetId);

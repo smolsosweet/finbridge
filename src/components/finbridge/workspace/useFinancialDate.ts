@@ -1,6 +1,6 @@
 "use client";
 import { useSyncExternalStore } from "react";
-import { financialCalendarDate } from "../../../../lib/financial-calendar";
+import { financialCalendarDate } from "../../../lib/financial-calendar";
 
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setInterval> | undefined;

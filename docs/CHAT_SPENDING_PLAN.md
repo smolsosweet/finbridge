@@ -98,10 +98,10 @@ or a production deployment has been verified.
 | `src/lib/chat-local-plan.ts` | Grounded text compatibility and assumption-only follow-up history |
 | `src/lib/transaction-drafts.ts` | Currency minor-unit formatting, including three-decimal currencies |
 | `src/app/api/ai/assistant/route.ts` | Validated plan parameters and structured AI adjustment output |
-| `src/components/sites/rolly/replica/store.ts` | Optional plan parameters on existing chat messages |
-| `src/components/sites/rolly/replica/Transactions.tsx` | Plan button, plan rendering, contextual recalculation and wallet scoping |
-| `src/components/sites/rolly/replica/ChatSpendingPlan.tsx` | Four-section localized plan presentation |
-| `src/components/sites/rolly/replica/ChatSpendingPlan.module.css` | Scoped responsive styling |
+| `src/components/finbridge/workspace/store.ts` | Optional plan parameters on existing chat messages |
+| `src/components/finbridge/workspace/Transactions.tsx` | Plan button, plan rendering, contextual recalculation and wallet scoping |
+| `src/components/finbridge/workspace/ChatSpendingPlan.tsx` | Four-section localized plan presentation |
+| `src/components/finbridge/workspace/ChatSpendingPlan.module.css` | Scoped responsive styling |
 | `scripts/verify-chat-spending-plan.mjs` | Calculation, context, isolation and persistence regression tests |
 | `scripts/verify-chat-spending-plan-ui.mjs` | Actual component render and wallet-scoping tests |
 | `scripts/verify-assistant-route.mjs` | Plan follow-up and invalid-input tests with scripted provider |

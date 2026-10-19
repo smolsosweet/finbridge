@@ -1,6 +1,6 @@
-import type { AppState, Transaction, Wallet } from "../components/sites/rolly/replica/store";
+import type { AppState, Transaction, Wallet } from "../components/finbridge/workspace/store";
 import { trackedBalance, validOutlookDate } from "./financial-outlook";
-import { currencyScale } from "../components/sites/rolly/replica/planningModel";
+import { currencyScale } from "../components/finbridge/workspace/planningModel";
 import { formatScenarioMoney, type ScenarioLanguage } from "./scenario-format";
 
 export interface FundingState {

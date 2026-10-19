@@ -1,7 +1,7 @@
 "use client";
 import { useState, useSyncExternalStore } from "react";
 import { canImportLegacyWorkspace, legacyWorkspaceBackup } from "@/lib/workspace-storage";
-import { importOldWorkspace, subscribeWorkspace, workspaceOwner } from "@/components/sites/rolly/replica/store";
+import { importOldWorkspace, subscribeWorkspace, workspaceOwner } from "@/components/finbridge/workspace/store";
 
 export function LegacyWorkspaceNotice() {
   const [dismissed, setDismissed] = useState(false);

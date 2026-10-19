@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { AuthCard } from "@/components/sites/rolly/AuthCard";
+import { AuthCard } from "@/components/finbridge/AuthCard";
 import type { AuthMode } from "@/lib/auth-form-copy";
 export function LoginEntry({ lang, configured, errorCode = "", mode = "login", mailMode = "unavailable", token = "", verified = false, preferStoredLanguage = true }: { lang: string; configured: boolean; errorCode?: string; mode?: AuthMode; mailMode?: "local" | "smtp" | "brevo" | "unavailable"; token?: string; verified?: boolean; preferStoredLanguage?: boolean }) {
   const router = useRouter();

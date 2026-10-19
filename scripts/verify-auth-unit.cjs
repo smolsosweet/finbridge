@@ -23,7 +23,7 @@ test("account deactivation clears only the closed owner's local data after serve
   const helper = compile("src/lib/deactivate-account.ts", name => {
     if (name === "./auth-client") return { authClient: { async signOut() { signedOut++; } } };
     if (name === "./workspace-storage") return storage;
-    if (name === "@/components/sites/rolly/replica/store") return { flushWorkspace: async () => {}, workspaceOwner: () => owner, clearUserWorkspace: id => { assert.equal(id, "A"); cleared = true; } };
+    if (name === "@/components/finbridge/workspace/store") return { flushWorkspace: async () => {}, workspaceOwner: () => owner, clearUserWorkspace: id => { assert.equal(id, "A"); cleared = true; } };
     return require(name);
   });
   try {
@@ -112,7 +112,7 @@ test("actual store partitions accounts, clears memory on logout, and preserves s
   const s = fixture(), previousWindow = global.window, previousStorage = global.localStorage;
   global.window = new EventTarget(); global.localStorage = s;
   try {
-    const store = compile("src/components/sites/rolly/replica/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "@/lib/language-preference" ? languagePreference : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
+    const store = compile("src/components/finbridge/workspace/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "@/lib/language-preference" ? languagePreference : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
     assert.throws(() => store.updateState((state) => state));
     languagePreference.rememberPreferredLanguage("zh");
     store.activateUserWorkspace("A", "Google A");
@@ -139,7 +139,7 @@ test("actual store imports only after choice and retains the legacy backup", () 
   const s = fixture(), previousWindow = global.window, previousStorage = global.localStorage;
   global.window = new EventTarget(); global.localStorage = s;
   try {
-    const store = compile("src/components/sites/rolly/replica/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "@/lib/language-preference" ? languagePreference : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
+    const store = compile("src/components/finbridge/workspace/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "@/lib/language-preference" ? languagePreference : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
     store.activateUserWorkspace("A", "Google A"); assert.throws(() => store.importOldWorkspace(false));
     assert.equal(store.useAppState().transactions.length, 0);
     store.importOldWorkspace(true); assert.equal(store.useAppState().transactions.length, 1);
@@ -151,7 +151,7 @@ test("default category arrays do not leak across accounts", () => {
   const s = fixture(), previousWindow = global.window, previousStorage = global.localStorage;
   global.window = new EventTarget(); global.localStorage = s;
   try {
-    const store = compile("src/components/sites/rolly/replica/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "@/lib/language-preference" ? languagePreference : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
+    const store = compile("src/components/finbridge/workspace/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "@/lib/language-preference" ? languagePreference : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
     store.activateUserWorkspace("A", "A"); store.useAppState().categories.push("A-only");
     store.activateUserWorkspace("B", "B"); assert.ok(!store.useAppState().categories.includes("A-only"));
   } finally { global.window = previousWindow; global.localStorage = previousStorage; }

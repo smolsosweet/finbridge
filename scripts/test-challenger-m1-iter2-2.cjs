@@ -15,7 +15,7 @@ console.log("=== CHALLENGER M1-ITER2-2 INDEPENDENT EMPIRICAL SUITE ===");
 
 // 1. Inspect Dashboard.tsx source for edit-wallet-name
 const dashboardSource = fs.readFileSync(
-  path.resolve(__dirname, "../src/components/sites/rolly/replica/Dashboard.tsx"),
+  path.resolve(__dirname, "../src/components/finbridge/workspace/Dashboard.tsx"),
   "utf8"
 );
 

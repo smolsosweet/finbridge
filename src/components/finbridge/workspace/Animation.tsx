@@ -9,7 +9,7 @@ export function Animation({ name = "cheerleader", className = "" }: { name?: str
     let animation: { destroy: () => void } | undefined;
     import("lottie-web").then(({ default: lottie }) => {
       if (disposed || !container.current) return;
-      animation = lottie.loadAnimation({ container: container.current, renderer: "svg", loop: !window.matchMedia("(prefers-reduced-motion: reduce)").matches, autoplay: !window.matchMedia("(prefers-reduced-motion: reduce)").matches, path: `/sites/rolly/jsons/${name}.json`, rendererSettings: { preserveAspectRatio: "xMidYMid meet" } });
+      animation = lottie.loadAnimation({ container: container.current, renderer: "svg", loop: !window.matchMedia("(prefers-reduced-motion: reduce)").matches, autoplay: !window.matchMedia("(prefers-reduced-motion: reduce)").matches, path: `/finbridge/jsons/${name}.json`, rendererSettings: { preserveAspectRatio: "xMidYMid meet" } });
     });
     return () => { disposed = true; animation?.destroy(); };
   }, [name]);

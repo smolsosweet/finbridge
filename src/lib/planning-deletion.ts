@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AppState } from "../components/sites/rolly/replica/store";
+import type { AppState } from "../components/finbridge/workspace/store";
 
 export type PlanningKind = "budget" | "fixed_expense";
 export const planningReferencesSchema = z.array(z.object({ kind: z.enum(["budget", "fixed_expense"]), id: z.string().min(1).max(100), title: z.string().max(10000) }).strict()).max(500);

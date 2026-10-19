@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { AppState, Goal } from "../components/sites/rolly/replica/store";
-import { budgetWindow } from "../components/sites/rolly/replica/planningModel";
+import type { AppState, Goal } from "../components/finbridge/workspace/store";
+import { budgetWindow } from "../components/finbridge/workspace/planningModel";
 
 const id = z.string().min(1).max(100);
 const name = z.string().trim().min(1).max(100);

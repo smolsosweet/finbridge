@@ -19,7 +19,7 @@ const {
 } = i18nExports;
 
 // Extract Settings.tsx isSentinelWalletName to confirm equivalence
-const settingsSource = fs.readFileSync(path.resolve(__dirname, "../src/components/sites/rolly/replica/Settings.tsx"), "utf8");
+const settingsSource = fs.readFileSync(path.resolve(__dirname, "../src/components/finbridge/workspace/Settings.tsx"), "utf8");
 const settingsCompiled = ts.transpileModule(settingsSource, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;

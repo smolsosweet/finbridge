@@ -34,7 +34,7 @@ export function SettingsTab({ onLogout }: SettingsTabProps) {
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-teal-50 flex items-center justify-center relative overflow-hidden">
             <Image
-              src="/sites/rolly/images/user.png"
+              src="/finbridge/images/user.png"
               alt="User Avatar"
               width={32}
               height={32}

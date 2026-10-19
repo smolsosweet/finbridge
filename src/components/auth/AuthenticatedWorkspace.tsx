@@ -6,7 +6,7 @@ import { DatabaseWorkspace } from "./DatabaseWorkspace";
 import { authClient } from "@/lib/auth-client";
 import { AuthenticatedUserContext, type AuthenticatedUser } from "./AuthenticatedUser";
 import { SafetyProvider } from "@/components/safety/SafetyProvider";
-import { activateUserWorkspace, clearUserWorkspace, subscribeWorkspace, workspaceOwner, useAppState } from "@/components/sites/rolly/replica/store";
+import { activateUserWorkspace, clearUserWorkspace, subscribeWorkspace, workspaceOwner, useAppState } from "@/components/finbridge/workspace/store";
 import { resolveLanguage } from "@/lib/i18n";
 
 export function AuthenticatedWorkspace({ user, children, demoMode = false }: { user: AuthenticatedUser; children: ReactNode; demoMode?: boolean }) {

@@ -1,4 +1,4 @@
-import type { AppState, ChatMessage } from "../components/sites/rolly/replica/store";
+import type { AppState, ChatMessage } from "../components/finbridge/workspace/store";
 import { calculateSpendingPlan } from "./financial-outlook";
 export function modelHistory(messages: ChatMessage[]) {
   // Never send locally computed amounts to Gemini. Preserve only non-sensitive

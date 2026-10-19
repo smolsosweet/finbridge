@@ -92,8 +92,8 @@
 - `src/lib/scenario-format.ts`, `src/lib/scenario-explanation.ts`: consistent
   money/date formatting and explicit calculation components.
 - `src/lib/financial-chat.ts`: adaptable headings and consistent balance inputs.
-- `src/components/sites/rolly/replica/Transactions.tsx`: consume embedded scenario results.
-- `src/components/sites/rolly/replica/FinancialChatAnswer.tsx`: expandable calculations.
+- `src/components/finbridge/workspace/Transactions.tsx`: consume embedded scenario results.
+- `src/components/finbridge/workspace/FinancialChatAnswer.tsx`: expandable calculations.
 - `scripts/verify-assistant-responses.mjs`, `scripts/verify-assistant-route.mjs`,
   `scripts/verify-scenario-planner.mjs`: regression tests.
 - `scripts/verify-assistant-live.mjs`: opt-in live provider checks.
@@ -142,5 +142,5 @@
 Additional files: `src/lib/planning-deletion.ts`,
 `src/lib/conversation-intent.ts`, `src/lib/chat-local-plan.ts`,
 `src/lib/fixed-expense-payments.ts` (narrower read-only input type),
-`src/components/sites/rolly/replica/PlanningDeletionCard.tsx`, `Planning.tsx`,
+`src/components/finbridge/workspace/PlanningDeletionCard.tsx`, `Planning.tsx`,
 `Transactions.tsx`, `store.ts`, and `scripts/verify-planning-deletion.mjs`.

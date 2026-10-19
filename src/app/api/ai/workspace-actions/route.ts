@@ -10,7 +10,7 @@ import { database } from "@/lib/database";
 import { workspaceRepository } from "@/lib/workspace-repository";
 import { workspaceSchema } from "@/lib/workspace-model";
 import { getGeminiTimeoutMs } from "@/lib/gemini-config";
-import type { AppState } from "@/components/sites/rolly/replica/store";
+import type { AppState } from "@/components/finbridge/workspace/store";
 import { detectWorkspaceCreationKind, emptyWorkspaceAction, inspectWorkspaceProposal, isWorkspaceCreationRequest, resolveWorkspaceDateReply, workspaceActionCopy, workspaceActionSchema, workspaceProposalSchema } from "@/lib/workspace-actions";
 import { resolveWorkspaceFieldReply } from "@/lib/workspace-action-replies";
 

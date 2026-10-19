@@ -122,7 +122,7 @@ test("presentation adapts to question complexity without changing calculated fig
 
 test("actual answer component renders readable metrics and collapsed calculation details without interpreting HTML", () => {
   const module={exports:{}},require=createRequire(import.meta.url);
-  const code=ts.transpileModule(readFileSync("src/components/sites/rolly/replica/FinancialChatAnswer.tsx","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;
+  const code=ts.transpileModule(readFileSync("src/components/finbridge/workspace/FinancialChatAnswer.tsx","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;
   new Function("require","module","exports",code)(require,module,module.exports);
   const html=renderToStaticMarkup(React.createElement(module.exports.FinancialChatAnswer,{text:"Dự kiến còn **123.000 VND**\n\n• Hiện có: 200.000 VND\n• Hóa đơn: 77.000 VND",calculationDetails:"200.000 VND − 77.000 VND = 123.000 VND\n<script>alert(1)</script>",calculationLabel:"Xem cách tính"}));
   assert.match(html,/<strong>123.000 VND<\/strong>/);assert.match(html,/<ul>/);assert.match(html,/<details><summary>Xem cách tính<\/summary>/);

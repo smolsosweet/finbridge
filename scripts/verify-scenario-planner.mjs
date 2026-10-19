@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { calculateScenario, scenarioContext } from "../src/lib/scenario-planner.ts";
 import { answerFinancialQuery } from "../src/lib/financial-chat.ts";
-import { weeklyPeriodStatus, weeklySpendingRows } from "../src/components/sites/rolly/replica/planningModel.ts";
+import { weeklyPeriodStatus, weeklySpendingRows } from "../src/components/finbridge/workspace/planningModel.ts";
 import { asksForCalculationExplanation, scenarioCalculationExplanation } from "../src/lib/scenario-explanation.ts";
 
 test("October 18 forecast reconciles 837000 spent, 13 future days and the displayed balance", () => {

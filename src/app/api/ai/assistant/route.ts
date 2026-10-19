@@ -13,7 +13,7 @@ import { createTimeoutTransactionDraft, editDraftById, normalizeVietnameseMessag
 import { conversationIntents, draftPatchSchema, isCategoryManagementMessage, isClearlyNewTransaction, resolvePendingDraft } from "@/lib/conversation-intent";
 import { categoryCommandSchema, prepareCategoryOperation } from "@/lib/category-operations";
 import { categoryOperationError } from "@/lib/category-operation-copy";
-import type { AppState } from "@/components/sites/rolly/replica/store";
+import type { AppState } from "@/components/finbridge/workspace/store";
 import { workspaceRepository } from "@/lib/workspace-repository";
 import { spendingPlanAdjustmentSchema, spendingPlanOptionsSchema } from "@/lib/financial-outlook";
 import { financialConversationEntities, resolveObligationReference } from "@/lib/financial-obligation-query";

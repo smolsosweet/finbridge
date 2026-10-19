@@ -18,6 +18,13 @@ const nextConfig: NextConfig = {
   env: { FINBRIDGE_BUILD_COMMIT: buildCommit(), FINBRIDGE_BUILD_DIRTY: buildDirty() },
   devIndicators: false,
   allowedDevOrigins: ["127.0.0.1"],
+  async redirects() {
+    // Preserve cached pages, bookmarks and saved image URLs after the asset move.
+    return [
+      { source: "/sites/rolly/images/Rolly-365-streak-removebg-preview.png", destination: "/finbridge/images/monthly-streak.png", permanent: true },
+      { source: "/sites/rolly/:path*", destination: "/finbridge/:path*", permanent: true },
+    ];
+  },
   async headers() {
     return [{ source: "/:path*", headers: [
       { key: "X-Frame-Options", value: "DENY" },

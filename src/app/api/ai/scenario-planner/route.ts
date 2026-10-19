@@ -7,7 +7,7 @@ import { createQuotaGemini } from "@/lib/ai-quota-gemini";
 import { aiQuotaErrorResponse } from "@/lib/ai-quota";
 import { database } from "@/lib/database";
 import { workspaceRepository } from "@/lib/workspace-repository";
-import type { AppState } from "@/components/sites/rolly/replica/store";
+import type { AppState } from "@/components/finbridge/workspace/store";
 import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 import {
   cleanJsonText,

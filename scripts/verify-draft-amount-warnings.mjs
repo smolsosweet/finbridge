@@ -110,21 +110,21 @@ test("CNY precision and even-sample median are respected; missing/invalid amount
 
 test("warning UI renders localized evidence, escapes user categories, and never replaces confirmation controls", () => {
   const require = createRequire(import.meta.url), module = { exports: {} };
-  const code = ts.transpileModule(readFileSync("src/components/sites/rolly/replica/DraftAmountWarnings.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const code = ts.transpileModule(readFileSync("src/components/finbridge/workspace/DraftAmountWarnings.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
   new Function("require", "module", "exports", code)(id => id.includes("scenario-format") ? format : id.includes("transaction-funding") ? funding : id.endsWith(".module.css") ? { default: { warning: "warning", blocked: "blocked" } } : require(id), module, module.exports);
   for (const language of ["vi", "en", "zh"]) {
     const html = renderToStaticMarkup(React.createElement(module.exports.DraftAmountWarnings, { language, warnings: [{ kind: "unusually_high", category: "<script>bad</script>", currency: "CNY", referenceAmount: 10 }] }));
     assert.match(html, /role="status"/); assert.match(html, /CNY/); assert.doesNotMatch(html, /<script>|disabled|Gemini/);
   }
   assert.equal(renderToStaticMarkup(React.createElement(module.exports.DraftAmountWarnings, { language: "vi", warnings: [] })), "");
-  const source = readFileSync("src/components/sites/rolly/replica/Transactions.tsx", "utf8");
+  const source = readFileSync("src/components/finbridge/workspace/Transactions.tsx", "utf8");
   assert.match(source, /warnings=\{draftAmountWarnings\(draft, state, today\(\)\)\} fundingIssue=\{fundingIssue\}/);
   const blocked = renderToStaticMarkup(React.createElement(module.exports.DraftAmountWarnings, { language: "vi", warnings: [], fundingIssue: { kind: "INSUFFICIENT_FUNDS", available: 9_069_378, shortfall: 90_930_622, currency: "VND", credit: false } }));
   assert.match(blocked, /90\.930\.622 VND/); assert.doesNotMatch(blocked, /vẫn có thể xác nhận/);
 });
 
 test("the actual chat confirmation button is disabled for insufficient funds, including a credit-typed wallet", () => {
-  const path = "src/components/sites/rolly/replica/Transactions.tsx", source = readFileSync(path, "utf8");
+  const path = "src/components/finbridge/workspace/Transactions.tsx", source = readFileSync(path, "utf8");
   const ast = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   let fundingDeclaration, validDeclaration, button;
   function visit(node) {

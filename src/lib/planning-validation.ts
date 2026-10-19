@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
-import type { AppState } from "../components/sites/rolly/replica/store";
-import { validBudget, validFixedExpense, validPlanningMoney } from "../components/sites/rolly/replica/planningModel";
+import type { AppState } from "../components/finbridge/workspace/store";
+import { validBudget, validFixedExpense, validPlanningMoney } from "../components/finbridge/workspace/planningModel";
 
 /** Enforce business rules at the database boundary, even for forged requests.
  * Unchanged legacy records remain readable/editable through unrelated settings.

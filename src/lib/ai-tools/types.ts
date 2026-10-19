@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AppState } from "../../components/sites/rolly/replica/store";
+import type { AppState } from "../../components/finbridge/workspace/store";
 
 export interface ToolExecutionContext {
   userId: string;

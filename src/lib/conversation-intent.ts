@@ -2,7 +2,7 @@ import { z } from "zod";
 import { isWorkspaceCreationRequest } from "./workspace-actions";
 import { normalizeVietnameseMessage, parseTransactionAmounts, type TransactionDraft } from "./transaction-drafts";
 import type { CategoryCommand } from "./category-operations";
-import type { AppState } from "../components/sites/rolly/replica/store";
+import type { AppState } from "../components/finbridge/workspace/store";
 import { isFixedExpensePaymentMessage, isFixedExpenseStatusMessage, isPlanningEditMessage } from "./planning-actions";
 
 export const conversationIntents = [

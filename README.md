@@ -73,6 +73,6 @@ Database tests require `AUTH_TEST_DATABASE_URL` targeting local `finbridge_auth_
 - [Data preservation](docs/AUTH_DATA_PRESERVATION.md)
 - [Security](SECURITY.md) and [third-party notices](THIRD_PARTY_NOTICES.md)
 
-Routes are in `src/app`, auth/setup in `src/components/auth`, and services in `src/lib`. Active finance UI retains `src/components/sites/rolly/replica` for import/test/storage compatibility.
+Routes are in `src/app`, auth/setup in `src/components/auth`, and services in `src/lib`. Active finance UI lives in `src/components/finbridge/workspace`; public UI assets live in `public/finbridge`. See [path migration](docs/FINBRIDGE_PATH_MIGRATION.md) for old URL and browser-data compatibility.
 
 The original scaffold used the MIT-licensed AI Website Cloner Template. Its copyright and [LICENSE](LICENSE) remain; UI prototype provenance is recorded in [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md).

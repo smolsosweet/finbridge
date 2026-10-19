@@ -5,7 +5,7 @@ import { ArrowLeftRight, RefreshCw } from "lucide-react";
 import { LANGUAGE_LOCALES, type AppLanguage } from "@/lib/i18n";
 import { estimateInputSchema, REFERENCE_CURRENCIES, referenceConversion, referenceUsable, type EstimateInput, type ReferenceCurrency, type ReferenceDocument, type ReferenceEstimate } from "@/lib/reference-rates";
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
-import { Modal } from "@/components/sites/rolly/replica/Ui";
+import { Modal } from "@/components/finbridge/workspace/Ui";
 import { REFERENCE_COPY } from "./reference-copy";
 import styles from "./TransferReference.module.css";
 

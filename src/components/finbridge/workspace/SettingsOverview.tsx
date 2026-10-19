@@ -78,7 +78,7 @@ const COPY = {
       },
       {
         heading: "3. Quyền sở hữu trí tuệ",
-        body: "Thành phần mã nguồn mở và tài sản của bên thứ ba tuân theo giấy phép riêng. Ghi nhận nguồn được giữ trong LICENSE và THIRD_PARTY_NOTICES.md. Tên và đường dẫn di sản Rolly không xác lập quyền sở hữu giao diện hoặc tài sản gốc.",
+        body: "Thành phần mã nguồn mở và tài sản của bên thứ ba tuân theo giấy phép riêng. Ghi nhận nguồn được giữ trong LICENSE và THIRD_PARTY_NOTICES.md. Việc đổi tên thành FinBridge không xác lập quyền sở hữu giao diện hoặc tài sản gốc.",
       },
       {
         heading: "4. Giới hạn trách nhiệm",
@@ -138,7 +138,7 @@ const COPY = {
       },
       {
         heading: "3. Intellectual Property Rights",
-        body: "Open-source components and third-party assets retain their own licenses. Attribution is recorded in LICENSE and THIRD_PARTY_NOTICES.md. Legacy Rolly names and paths do not establish ownership of the original interface or assets.",
+        body: "Open-source components and third-party assets retain their own licenses. Attribution is recorded in LICENSE and THIRD_PARTY_NOTICES.md. Renaming the application to FinBridge does not establish ownership of the original interface or assets.",
       },
       {
         heading: "4. Limitation of Liability",
@@ -198,7 +198,7 @@ const COPY = {
       },
       {
         heading: "3. 知识产权",
-        body: "开源组件和第三方素材遵循各自许可证。来源说明保留在 LICENSE 和 THIRD_PARTY_NOTICES.md 中。遗留的 Rolly 名称和路径不代表拥有原始界面或素材的权利。",
+        body: "开源组件和第三方素材遵循各自许可证。来源说明保留在 LICENSE 和 THIRD_PARTY_NOTICES.md 中。将应用重命名为 FinBridge 不代表拥有原始界面或素材的权利。",
       },
       {
         heading: "4. 责任限制",

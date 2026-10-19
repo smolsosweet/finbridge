@@ -1,6 +1,8 @@
-import type { AppState } from "@/components/sites/rolly/replica/store";
+import type { AppState } from "@/components/finbridge/workspace/store";
 
 export const LEGACY_WORKSPACE_KEY = "rolly-replica-v2";
+// This is a persisted browser key, not a brand label. Keep reading the original
+// bytes for explicit import; a source/asset rename must never orphan user data.
 export function userWorkspaceKey(userId: string) {
   if (!userId.trim()) throw new Error("An authenticated user ID is required.");
   return "finbridge-workspace-v1:" + encodeURIComponent(userId);

@@ -9,9 +9,9 @@ const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { createRequire } = require("node:module");
 
-const directory = path.resolve(__dirname, "../src/components/sites/rolly/replica");
+const directory = path.resolve(__dirname, "../src/components/finbridge/workspace");
 const srcDir = path.resolve(__dirname, "../src");
-const localRequire = createRequire(path.join(directory, "RollyApp.tsx"));
+const localRequire = createRequire(path.join(directory, "FinBridgeApp.tsx"));
 
 const jsxRuntime = require("react/jsx-runtime");
 
@@ -111,7 +111,7 @@ const financialOutlookModule = compileFile(path.join(directory, "FinancialOutloo
 const settingsModule = compileFile(path.join(directory, "Settings.tsx"));
 const dashboardModule = compileFile(path.join(directory, "Dashboard.tsx"));
 const transactionsModule = compileFile(path.join(directory, "Transactions.tsx"));
-const rollyAppModule = compileFile(path.join(directory, "RollyApp.tsx"));
+const finBridgeAppModule = compileFile(path.join(directory, "FinBridgeApp.tsx"));
 
 // Canonical language resolver resolution
 const resolveLang = settingsOverviewModule.settingsLanguage || function(val) {
@@ -372,7 +372,7 @@ test("Tier 1 & 2: Data Integrity & Custom Entity Preservation (F13)", async (t) 
 });
 
 // -----------------------------------------------------------------------------
-// TIER 1 & TIER 2: GLOBAL CHROME & NAVIGATION (FinBridgeHeader, RollyApp)
+// TIER 1 & TIER 2: GLOBAL CHROME & NAVIGATION (FinBridgeHeader, FinBridgeApp)
 // -----------------------------------------------------------------------------
 test("Tier 1 & 2: Global Chrome & Navigation Localization (F11)", async (t) => {
   await t.test("T11.1: FinBridgeHeader brand tagline and aria-labels translate cleanly", () => {
@@ -420,7 +420,7 @@ test("Tier 1 & 2: Global Chrome & Navigation Localization (F11)", async (t) => {
     assertNoVietnameseLeaks(htmlZh, "FinBridgeHeader (ZH)");
   });
 
-  await t.test("T11.2: RollyApp navigation labels dynamically adapt across EN, VI, ZH", () => {
+  await t.test("T11.2: FinBridgeApp navigation labels dynamically adapt across EN, VI, ZH", () => {
     const navExpectations = {
       "Tiếng Việt": ["Trang chủ", "Giao dịch", "Kế hoạch", "Cài đặt"],
       English: ["Home", "Transactions", "Planning", "Settings"],

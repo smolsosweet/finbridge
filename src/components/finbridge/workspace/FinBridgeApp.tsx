@@ -17,9 +17,9 @@ import { NotificationCenter } from "./NotificationCenter";
 import { SafetyAlerts } from "@/components/safety/SafetyAlerts";
 import { InternationalTransfers } from "@/components/transfers/InternationalTransfers";
 import { FinBridgeMascot } from "@/components/FinBridgeMascot";
-import "./replica.css";
+import "./workspace.css";
 
-export function RollyApp({ screen = "" }: { screen?: string }) {
+export function FinBridgeApp({ screen = "" }: { screen?: string }) {
   const router = useRouter();
   const params = useSearchParams();
   const state = useAppState();

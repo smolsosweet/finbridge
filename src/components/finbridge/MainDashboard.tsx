@@ -15,7 +15,7 @@ import {
   Sparkles,
   LogOut,
 } from "lucide-react";
-import { Transaction, Wallet, ChatMessage } from "@/types/rolly";
+import { Transaction, Wallet, ChatMessage } from "@/types/finbridge";
 import { ReceiptScannerModal } from "./ReceiptScannerModal";
 import { VoiceInputModal } from "./VoiceInputModal";
 
@@ -511,13 +511,13 @@ export function MainDashboard({ onLogout }: MainDashboardProps) {
               <p className="text-xs text-slate-400 mb-4">Auto-sync transactions and statements securely</p>
               <div className="grid grid-cols-4 sm:grid-cols-7 gap-3">
                 {[
-                  { name: "VCB", logo: "/sites/rolly/bank_logos/vcb.png" },
-                  { name: "TCB", logo: "/sites/rolly/bank_logos/tcb.png" },
-                  { name: "MB", logo: "/sites/rolly/bank_logos/mb.png" },
-                  { name: "BIDV", logo: "/sites/rolly/bank_logos/bidv.png" },
-                  { name: "ACB", logo: "/sites/rolly/bank_logos/acb.png" },
-                  { name: "TPB", logo: "/sites/rolly/bank_logos/tpb.png" },
-                  { name: "VPB", logo: "/sites/rolly/bank_logos/vpb.png" },
+                  { name: "VCB", logo: "/finbridge/bank_logos/vcb.png" },
+                  { name: "TCB", logo: "/finbridge/bank_logos/tcb.png" },
+                  { name: "MB", logo: "/finbridge/bank_logos/mb.png" },
+                  { name: "BIDV", logo: "/finbridge/bank_logos/bidv.png" },
+                  { name: "ACB", logo: "/finbridge/bank_logos/acb.png" },
+                  { name: "TPB", logo: "/finbridge/bank_logos/tpb.png" },
+                  { name: "VPB", logo: "/finbridge/bank_logos/vpb.png" },
                 ].map((b) => (
                   <div
                     key={b.name}

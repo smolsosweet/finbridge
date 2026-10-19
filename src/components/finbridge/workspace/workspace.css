@@ -1,11 +1,11 @@
-@font-face{font-family:RollyInter;src:url('/sites/rolly/fonts/source-regular.ttf') format('truetype');font-weight:400;font-display:swap}
-@font-face{font-family:RollyInter;src:url('/sites/rolly/fonts/source-third.ttf') format('truetype');font-weight:500;font-display:swap}
-@font-face{font-family:RollyInter;src:url('/sites/rolly/fonts/source-medium.ttf') format('truetype');font-weight:600 900;font-display:swap}
-@font-face{font-family:RollyMaterial;src:url('/sites/rolly/fonts/material-icons.otf') format('opentype');font-display:block}
-@font-face{font-family:RollyIcons;src:url('/sites/rolly/fonts/fa-solid.ttf') format('truetype');font-weight:900;font-display:block}
-@font-face{font-family:RollyIconsFallback;src:url('/sites/rolly/fonts/fa-solid-full.woff2') format('woff2');font-weight:900;font-display:block}
+@font-face{font-family:FinBridgeSans;src:url('/finbridge/fonts/source-regular.ttf') format('truetype');font-weight:400;font-display:swap}
+@font-face{font-family:FinBridgeSans;src:url('/finbridge/fonts/source-third.ttf') format('truetype');font-weight:500;font-display:swap}
+@font-face{font-family:FinBridgeSans;src:url('/finbridge/fonts/source-medium.ttf') format('truetype');font-weight:600 900;font-display:swap}
+@font-face{font-family:FinBridgeMaterial;src:url('/finbridge/fonts/material-icons.otf') format('opentype');font-display:block}
+@font-face{font-family:FinBridgeIcons;src:url('/finbridge/fonts/fa-solid.ttf') format('truetype');font-weight:900;font-display:block}
+@font-face{font-family:FinBridgeIconsFallback;src:url('/finbridge/fonts/fa-solid-full.woff2') format('woff2');font-weight:900;font-display:block}
 html{scrollbar-gutter:stable}
-.r-app{--r-bg:#f9f9f9;--r-surface:#fff;--r-text:#242424;--r-muted:#858585;--r-line:#dce0e5;--r-teal:#11bfc9;--r-secondary:#e1e4e8;--r-mint:#eefcfc;--r-darkblue:#376b83;min-height:100dvh;background:var(--r-bg);color:var(--r-text);font-family:RollyInter,Arial,sans-serif;font-size:14px;line-height:1.45;overflow-x:clip}
+.r-app{--r-bg:#f9f9f9;--r-surface:#fff;--r-text:#242424;--r-muted:#858585;--r-line:#dce0e5;--r-teal:#11bfc9;--r-secondary:#e1e4e8;--r-mint:#eefcfc;--r-darkblue:#376b83;min-height:100dvh;background:var(--r-bg);color:var(--r-text);font-family:FinBridgeSans,Arial,sans-serif;font-size:14px;line-height:1.45;overflow-x:clip}
 .r-app *{box-sizing:border-box}
 .r-app button,.r-app input,.r-app textarea,.r-app select{font:inherit}
 .r-app button{cursor:pointer}
@@ -16,8 +16,8 @@ html{scrollbar-gutter:stable}
 .r-app h2{font-size:20px;font-weight:500}
 .r-app small{font-size:12px;color:var(--r-muted)}
 .r-app hr{border:0;border-top:1px solid var(--r-line);margin:18px 0}
-.r-icon{font-family:RollyIcons,RollyIconsFallback!important;font-size:20px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;width:24px;line-height:1}
-.r-icon.r-material-icon{font-family:RollyMaterial!important;font-weight:400}
+.r-icon{font-family:FinBridgeIcons,FinBridgeIconsFallback!important;font-size:20px;font-weight:900;display:inline-flex;align-items:center;justify-content:center;width:24px;line-height:1}
+.r-icon.r-material-icon{font-family:FinBridgeMaterial!important;font-weight:400}
 .r-budget-ai{min-height:100dvh;padding:20px 20px 90px;position:relative}
 .r-budget-ai>.r-icon-button{position:absolute;right:24px;top:24px}
 .r-budget-ai .r-mascot{margin-bottom:12px;height:150px}

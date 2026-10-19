@@ -1,6 +1,6 @@
 "use client";
 import { authClient } from "./auth-client";
-import { clearUserWorkspace, flushWorkspace, workspaceOwner } from "@/components/sites/rolly/replica/store";
+import { clearUserWorkspace, flushWorkspace, workspaceOwner } from "@/components/finbridge/workspace/store";
 import { userWorkspaceKey } from "./workspace-storage";
 
 export async function deactivateAccount(userId: string) {

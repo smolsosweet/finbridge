@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import {test} from "node:test";
-import {ledgerDateKey} from "../src/components/sites/rolly/replica/calendarLedger.ts";
+import {ledgerDateKey} from "../src/components/finbridge/workspace/calendarLedger.ts";
 
 test("accounting dates retain their recorded day, including timestamps near midnight",()=>{
   for(const value of ["2026-10-18", "2026-10-18T23:59:00-07:00", "2026-10-18T00:01:00+14:00"])

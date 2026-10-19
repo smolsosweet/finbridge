@@ -7,7 +7,7 @@ const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { createRequire } = require("node:module");
 
-const directory = path.resolve(__dirname, "../src/components/sites/rolly/replica");
+const directory = path.resolve(__dirname, "../src/components/finbridge/workspace");
 const componentFile = path.join(directory, "TransactionHistory.tsx");
 const localRequire = createRequire(componentFile);
 const wallets = [

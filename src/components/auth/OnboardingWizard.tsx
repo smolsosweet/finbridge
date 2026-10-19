@@ -8,11 +8,11 @@ import { onboardingSchema, onboardingDraftSchema, OCCUPATIONS, SETUP_CURRENCIES,
 import { authLanguage } from "@/lib/auth-copy";
 import { rememberPreferredLanguage } from "@/lib/language-preference";
 import { signOutGoogle } from "@/lib/sign-out";
-import { LanguageSelector } from "@/components/sites/rolly/LanguageSelector";
-import type { AppState } from "@/components/sites/rolly/replica/store";
-import { getWorkspaceState, updateState, workspacePersistence } from "@/components/sites/rolly/replica/store";
+import { LanguageSelector } from "@/components/finbridge/LanguageSelector";
+import type { AppState } from "@/components/finbridge/workspace/store";
+import { getWorkspaceState, updateState, workspacePersistence } from "@/components/finbridge/workspace/store";
 import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
-import theme from "@/components/sites/rolly/WelcomeScreen.module.css";
+import theme from "@/components/finbridge/WelcomeScreen.module.css";
 import styles from "./OnboardingWizard.module.css";
 
 const EXIT_COPY = {

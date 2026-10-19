@@ -10,9 +10,9 @@ const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { createRequire } = require("node:module");
 
-const replicaDir = path.resolve(__dirname, "../src/components/sites/rolly/replica");
+const replicaDir = path.resolve(__dirname, "../src/components/finbridge/workspace");
 const srcDir = path.resolve(__dirname, "../src");
-const localRequire = createRequire(path.join(replicaDir, "RollyApp.tsx"));
+const localRequire = createRequire(path.join(replicaDir, "FinBridgeApp.tsx"));
 const jsxRuntime = require("react/jsx-runtime");
 
 // Generic Lucide proxy for zero-overhead SSR icon rendering

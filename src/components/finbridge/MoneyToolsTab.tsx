@@ -30,12 +30,12 @@ export function MoneyToolsTab({ onAddSavings }: MoneyToolsTabProps) {
   ];
 
   const vietnameseBanks = [
-    { name: "Vietcombank (VCB)", logo: "/sites/rolly/bank_logos/vcb.png", balance: "$4,250.00" },
-    { name: "Techcombank (TCB)", logo: "/sites/rolly/bank_logos/tcb.png", balance: "$1,820.50" },
-    { name: "MB Bank", logo: "/sites/rolly/bank_logos/mb.png", balance: "$960.00" },
-    { name: "BIDV", logo: "/sites/rolly/bank_logos/bidv.png", balance: "$640.20" },
-    { name: "ACB", logo: "/sites/rolly/bank_logos/acb.png", balance: "$350.00" },
-    { name: "TPBank", logo: "/sites/rolly/bank_logos/tpb.png", balance: "$1,120.00" },
+    { name: "Vietcombank (VCB)", logo: "/finbridge/bank_logos/vcb.png", balance: "$4,250.00" },
+    { name: "Techcombank (TCB)", logo: "/finbridge/bank_logos/tcb.png", balance: "$1,820.50" },
+    { name: "MB Bank", logo: "/finbridge/bank_logos/mb.png", balance: "$960.00" },
+    { name: "BIDV", logo: "/finbridge/bank_logos/bidv.png", balance: "$640.20" },
+    { name: "ACB", logo: "/finbridge/bank_logos/acb.png", balance: "$350.00" },
+    { name: "TPBank", logo: "/finbridge/bank_logos/tpb.png", balance: "$1,120.00" },
   ];
 
   return (

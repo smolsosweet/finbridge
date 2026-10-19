@@ -89,7 +89,7 @@ test("selection replies stay attached to one pending request and context sends I
 });
 test("real confirmation card has required selection, distinct cancel/confirm actions and localized effects",()=>{
  const require=createRequire(import.meta.url),m={exports:{}};
- const code=ts.transpileModule(readFileSync("src/components/sites/rolly/replica/PlanningDeletionCard.tsx","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;
+ const code=ts.transpileModule(readFileSync("src/components/finbridge/workspace/PlanningDeletionCard.tsx","utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;
  new Function("require","module","exports",code)(name=>name==="@/lib/planning-deletion"?deletion:name==="@/lib/scenario-format"?formatting:require(name),m,m.exports);
  for(const language of ["vi","en","zh"]){
  const props={proposal:preview(state(),"budget"),language,busy:false,onSelect(){},onConfirm(){},onCancel(){}};

@@ -9,10 +9,10 @@ function compile(file, dependencies = {}) {
   return module.exports;
 }
 const onboarding = compile("src/lib/onboarding.ts");
-const dates = compile("src/components/sites/rolly/replica/chartWeek.ts");
-const planning = compile("src/components/sites/rolly/replica/planningModel.ts", { "./chartWeek": dates });
-const payments = compile("src/lib/fixed-expense-payments.ts", { "../components/sites/rolly/replica/planningModel": planning });
-const outlook = compile("src/lib/financial-outlook.ts", { "../components/sites/rolly/replica/planningModel": planning, "./fixed-expense-payments": payments });
+const dates = compile("src/components/finbridge/workspace/chartWeek.ts");
+const planning = compile("src/components/finbridge/workspace/planningModel.ts", { "./chartWeek": dates });
+const payments = compile("src/lib/fixed-expense-payments.ts", { "../components/finbridge/workspace/planningModel": planning });
+const outlook = compile("src/lib/financial-outlook.ts", { "../components/finbridge/workspace/planningModel": planning, "./fixed-expense-payments": payments });
 const chat = compile("src/lib/chat-local-plan.ts", { "./financial-outlook": outlook });
 const repository = compile("src/lib/onboarding-repository.ts", { "./onboarding": onboarding });
 const handler = compile("src/lib/onboarding-handler.ts", { "./onboarding": onboarding });
@@ -83,7 +83,7 @@ test("50 percent spent by day 10 generates a daily ceiling and labeled pace extr
 test("local personalization/planning facts never enter model history, including restored history", () => {
   const messages = [{ role: "assistant", text: "Private preferred name", localOnly: true }, { role: "assistant", text: chat.localPlanReply(state, "2026-10-24"), localOnly: true }, { role: "user", text: "Lunch 50k" }];
   assert.deepEqual(chat.modelHistory(JSON.parse(JSON.stringify(messages))), [{ role: "user", text: "Lunch 50k" }]);
-  assert.ok(fs.readFileSync("src/components/sites/rolly/replica/Transactions.tsx", "utf8").includes("history: modelHistory("));
+  assert.ok(fs.readFileSync("src/components/finbridge/workspace/Transactions.tsx", "utf8").includes("history: modelHistory("));
 });
 const dbURL = process.env.AUTH_TEST_DATABASE_URL;
 if (!dbURL) throw new Error("AUTH_TEST_DATABASE_URL required; no silently skipped database tests.");

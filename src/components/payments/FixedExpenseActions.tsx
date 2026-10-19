@@ -2,15 +2,15 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { CheckCircle2, ExternalLink, ScanLine, Upload } from "lucide-react";
-import { Modal } from "@/components/sites/rolly/replica/Ui";
-import { flushWorkspace, today, updateState, useAppState, type FixedExpense } from "@/components/sites/rolly/replica/store";
+import { Modal } from "@/components/finbridge/workspace/Ui";
+import { flushWorkspace, today, updateState, useAppState, type FixedExpense } from "@/components/finbridge/workspace/store";
 import { bankRecipientSchema, buildBankLink, buildTransferQr, parseTransferQr, transferText, type BankCatalog, type BankRecipient } from "@/lib/bank-transfer";
 import { expenseWallet, fixedExpensePayment, nextExpenseDue, recordFixedExpensePayment } from "@/lib/fixed-expense-payments";
 import { readTransferImage } from "@/lib/read-transfer-image";
-import { currencyScale, plannedOccurrences } from "@/components/sites/rolly/replica/planningModel";
+import { currencyScale, plannedOccurrences } from "@/components/finbridge/workspace/planningModel";
 import { BILL_PAYMENT_COPY } from "@/lib/bill-payment-copy";
 import styles from "./FixedExpenseActions.module.css";
-import { useFinancialDate } from "@/components/sites/rolly/replica/useFinancialDate";
+import { useFinancialDate } from "@/components/finbridge/workspace/useFinancialDate";
 import { fixedExpenseOccurrence, occurrenceStatusCopy } from "@/lib/fixed-expense-payments";
 
 const blank: BankRecipient = {bankBin:"",accountNumber:"",accountName:"",reference:""};

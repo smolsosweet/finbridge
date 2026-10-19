@@ -1,4 +1,4 @@
-import type { AppState } from "../components/sites/rolly/replica/store";
+import type { AppState } from "../components/finbridge/workspace/store";
 import type { WorkspaceRecord } from "./workspace-model";
 import { definitelyRejectedWorkspace, financialWorkspaceFingerprint, WorkspaceRequestError, workspaceWireSnapshot } from "./workspace-payload";
 export type WorkspaceWriteStatus = "saved" | "saving" | "pending" | "error" | "conflict";

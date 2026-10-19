@@ -1,4 +1,4 @@
-import type { AppState } from "../components/sites/rolly/replica/store";
+import type { AppState } from "../components/finbridge/workspace/store";
 
 export function financialWorkspaceFingerprint(state: AppState) {
   const { transactionChat: _chat, planningChat: _planning, ...financial } = state;

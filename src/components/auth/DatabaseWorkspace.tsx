@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { getWorkspaceState, initialState, registerWorkspaceFlusher, replaceDatabaseWorkspace, subscribeWorkspace, workspaceOwner, type AppState } from "@/components/sites/rolly/replica/store";
+import { getWorkspaceState, initialState, registerWorkspaceFlusher, replaceDatabaseWorkspace, subscribeWorkspace, workspaceOwner, type AppState } from "@/components/finbridge/workspace/store";
 import { parseWorkspace, type WorkspaceRecord } from "@/lib/workspace-model";
 import { createWorkspaceWriter, type WorkspaceWriteStatus } from "@/lib/workspace-writer";
 import { readUserWorkspace } from "@/lib/workspace-storage";

@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, CheckCircle2, Clock3, Globe2, Pause, Plus, RefreshCw, ShieldCheck } from "lucide-react";
 import { useAuthenticatedUser } from "@/components/auth/AuthenticatedUser";
-import { FinBridgeHeader } from "@/components/sites/rolly/replica/FinBridgeHeader";
-import { CalendarLedgerModal } from "@/components/sites/rolly/replica/CalendarLedgerModal";
-import { Modal } from "@/components/sites/rolly/replica/Ui";
-import { setSetting, useAppState } from "@/components/sites/rolly/replica/store";
+import { FinBridgeHeader } from "@/components/finbridge/workspace/FinBridgeHeader";
+import { CalendarLedgerModal } from "@/components/finbridge/workspace/CalendarLedgerModal";
+import { Modal } from "@/components/finbridge/workspace/Ui";
+import { setSetting, useAppState } from "@/components/finbridge/workspace/store";
 import { LANGUAGE_LOCALES, resolveLanguage } from "@/lib/i18n";
 import { TRANSFER_APPROVAL_MS, TRANSFER_SCHOOLS, transferDate, type TransferBill, type TransferBillInput, type TransferCommand, type TransferDocument, type TransferPlan, type TransferQuote } from "@/lib/international-transfer";
 import { completedTransfers, pendingTransferBills, transferHistoryTarget, TRANSFER_LIST_BATCH, type TransferView } from "@/lib/transfer-views";
