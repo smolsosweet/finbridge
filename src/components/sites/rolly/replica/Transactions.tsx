@@ -59,6 +59,7 @@ import { findTransactionsForDeletion, detectRelativeOrder, cleanDeletionSearchTe
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 import { draftAmountWarnings } from "@/lib/draft-amount-warnings";
 import { DraftAmountWarnings } from "./DraftAmountWarnings";
+import { draftFundingIssues, fundingIssueMessage } from "@/lib/transaction-funding";
 import { SettingsActionCard } from "./SettingsActionCard";
 import {
   settingsActionProposalSchema,
@@ -1792,6 +1793,10 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       setMessages(previous => [...previous, { role: "assistant", text: workspaceSaveErrorMessage(null, resolveLanguage(state.settings.language)), draftIds: uncertainDraftIds }]); return;
     }
     const selected = drafts.filter(draft => ids.includes(draft.id));
+    const fundingProblem = draftFundingIssues(selected, getWorkspaceState(), today())[0];
+    if (fundingProblem) {
+      setMessages(previous => [...previous, { role: "assistant", text: fundingIssueMessage(fundingProblem.issue, resolveLanguage(state.settings.language)), draftIds: ids }]); return;
+    }
     if (!selected.some(draft => uncertainDraftIds.includes(draft.id) || state.transactions.some(t => t.id === draft.id)) && readyDrafts(selected, state).length !== selected.length) {
       setMessages(previous => [...previous, { role: "assistant", text: { vi: "Bản nháp còn thiếu thông tin. Bạn bổ sung các mục được đánh dấu bên dưới trước khi xác nhận nhé.", en: "The draft needs more details. Complete the marked fields below before confirming.", zh: "草稿信息不完整，请先补全下面标记的字段再确认。" }[resolveLanguage(state.settings.language)], draftIds: ids }]); return;
     }
@@ -2204,7 +2209,8 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           const rawDraft = drafts.find((draft) => draft.id === id);
           if (!rawDraft) return null;
           const draft = validateDraftForState(rawDraft, state);
-          const valid = readyDrafts([draft], state).length === 1;
+          const fundingIssue = draftFundingIssues([draft], state, today())[0]?.issue;
+          const valid = readyDrafts([draft], state).length === 1 && !fundingIssue;
           const draftWallet = state.wallets.find((item) => item.id === draft.wallet && !item.archived);
           const labels: Record<string, string> = { amount: "số tiền", type: "loại giao dịch", category: "danh mục", date: "ngày", wallet: "ví/tiền tệ" };
           const needsReview = draft.needsReview.map((field) => labels[field] || field);
@@ -2213,7 +2219,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
             {receiptImageUrls[id] && <div className="r-ai-receipt-thumb" role="img" aria-label="Ảnh hóa đơn đính kèm bản nháp" style={{ backgroundImage: `url("${receiptImageUrls[id]}")` }} />}
             <div className="r-ai-draft-summary"><b>{draft.title.trim() || "Chưa có mô tả"}</b>{" "}<strong>{draft.amount !== null && draft.currency ? formatTransactionMoney(draft.amount, draft.currency) : "Chưa rõ số tiền/tiền tệ"}</strong></div>
             <p className="r-ai-draft-details">{draft.category || draft.newCategory?.name || "Chưa chọn danh mục"} · {draft.date || "Chưa rõ ngày"} · {draftWallet ? `${draftWallet.name} (${draftWallet.currency})` : draft.currency ? `Chưa chọn ví · ${draft.currency}` : "Chưa chọn ví/tiền tệ"}</p>
-            <DraftAmountWarnings warnings={draftAmountWarnings(draft, state, today())} language={resolveLanguage(state.settings.language)} />
+            <DraftAmountWarnings id={`draft-funding-${id}`} warnings={draftAmountWarnings(draft, state, today())} fundingIssue={fundingIssue} language={resolveLanguage(state.settings.language)} />
             {needsReview.length > 0 && <small className="r-ai-draft-review">Cần xem lại: {needsReview.join(", ")}</small>}
             {draft.needsReview.includes("wallet") && !messages.some((item) => item.walletChoiceDraftIds?.includes(id)) && <label className="r-ai-draft-details">
               {{ en: "Payment wallet", vi: "Ví thanh toán", zh: "付款钱包" }[resolveLanguage(state.settings.language)]}
@@ -2225,7 +2231,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
             <div className="r-two-options"><button type="button" className="r-secondary" disabled={committing || uncertainDraftIds.includes(id)} onClick={() => setEditingDraftId(id)}>Chỉnh sửa</button><button type="button" className="r-primary" disabled={(!valid && !uncertainDraftIds.includes(id)) || committing} onClick={() => confirmDrafts([id])}>{uncertainDraftIds.includes(id) ? { vi: "Kiểm tra lưu lại", en: "Check save again", zh: "重新检查保存" }[resolveLanguage(state.settings.language)] : "Xác nhận"}</button></div>
             {uncertainDraftIds.includes(id) && <small role="status">{workspaceSaveErrorMessage(null, resolveLanguage(state.settings.language))}</small>}
             {needsReview.length > 0 && <button type="button" className="r-ai-clarify-button" onClick={() => { setClarifyingDraftId(id); setFocusedDraftId(id); setText(""); }}>Trả lời để bổ sung thông tin</button>}
-            {!valid && <small className="r-ai-draft-review">Hãy bổ sung các thông tin còn thiếu trước khi xác nhận.</small>}
+            {!valid && !fundingIssue && <small className="r-ai-draft-review">Hãy bổ sung các thông tin còn thiếu trước khi xác nhận.</small>}
           </article>;
         })}
       </div>)}

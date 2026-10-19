@@ -7,7 +7,8 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { draftAmountWarnings } from "../src/lib/draft-amount-warnings.ts";
 import * as format from "../src/lib/scenario-format.ts";
-import { createTimeoutTransactionDraft, editDraftById, removeDraftById, validateAndCommitDrafts, validateDraftForState } from "../src/lib/transaction-drafts.ts";
+import * as funding from "../src/lib/transaction-funding.ts";
+import { createTimeoutTransactionDraft, editDraftById, readyDrafts, removeDraftById, validateAndCommitDrafts, validateDraftForState } from "../src/lib/transaction-drafts.ts";
 import { resolveUniqueCurrencyWallet } from "../src/lib/transaction-currency.ts";
 
 const today = "2026-10-19";
@@ -38,11 +39,12 @@ test("10 million yuan preserves CNY and warns from actual balance even without c
   assert.deepEqual(warnings(parsed, s), [{ kind: "exceeds_balance", referenceAmount: 10_000, currency: "CNY", category: null }]);
   assert.deepEqual(s, before);
   const saved = validateAndCommitDrafts(s, [parsed]);
-  assert.deepEqual(saved.committed, [parsed.id]);
-  assert.equal(saved.state.transactions.at(-1).amount, 10_000_000);
-  assert.equal(saved.state.transactions.at(-1).wallet, "cny");
-  assert.equal(saved.state.wallets.find(wallet => wallet.id === saved.state.transactions.at(-1).wallet).currency, "CNY");
-  assert.deepEqual(validateAndCommitDrafts(saved.state, [parsed]).committed, []);
+  assert.deepEqual(saved.committed, []); assert.equal(saved.state, s);
+  const corrected = editDraftById([parsed], parsed.id, { amount: 10 }, s)[0];
+  const accepted = validateAndCommitDrafts(s, [corrected]);
+  assert.equal(accepted.state.transactions.at(-1).amount, 10);
+  assert.equal(accepted.state.transactions.at(-1).wallet, "cny");
+  assert.deepEqual(validateAndCommitDrafts(accepted.state, [corrected]).committed, []);
   assert.deepEqual(warnings(draft({ wallet: "cny", currency: "CNY", amount: 10 }), s), [], "VND history must not become a CNY price assumption");
 });
 
@@ -91,11 +93,13 @@ test("edits recompute, cancellation changes no data, and confirmation saves the 
   assert.deepEqual(warnings(edited, s), []);
   assert.deepEqual(removeDraftById([d], d.id), []); assert.deepEqual(s, before);
   const result = validateAndCommitDrafts(s, [d]);
-  assert.deepEqual(result.committed, [d.id]);
-  assert.equal(result.state.transactions.at(-1).amount, 10_000_000);
-  assert.equal(result.state.transactions.at(-1).wallet, "vnd");
-  assert.deepEqual(warnings(d, result.state), []);
-  assert.deepEqual(validateAndCommitDrafts(result.state, [d]).committed, []);
+  assert.deepEqual(result.committed, []); assert.equal(result.state, s);
+  const accepted = validateAndCommitDrafts(s, [edited]);
+  assert.deepEqual(accepted.committed, [d.id]);
+  assert.equal(accepted.state.transactions.at(-1).amount, 25_000);
+  assert.equal(accepted.state.transactions.at(-1).wallet, "vnd");
+  assert.deepEqual(warnings(edited, accepted.state), []);
+  assert.deepEqual(validateAndCommitDrafts(accepted.state, [edited]).committed, []);
 });
 
 test("CNY precision and even-sample median are respected; missing/invalid amounts are left to validation", () => {
@@ -107,12 +111,41 @@ test("CNY precision and even-sample median are respected; missing/invalid amount
 test("warning UI renders localized evidence, escapes user categories, and never replaces confirmation controls", () => {
   const require = createRequire(import.meta.url), module = { exports: {} };
   const code = ts.transpileModule(readFileSync("src/components/sites/rolly/replica/DraftAmountWarnings.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
-  new Function("require", "module", "exports", code)(id => id.includes("scenario-format") ? format : id.endsWith(".module.css") ? { default: { warning: "warning" } } : require(id), module, module.exports);
+  new Function("require", "module", "exports", code)(id => id.includes("scenario-format") ? format : id.includes("transaction-funding") ? funding : id.endsWith(".module.css") ? { default: { warning: "warning", blocked: "blocked" } } : require(id), module, module.exports);
   for (const language of ["vi", "en", "zh"]) {
     const html = renderToStaticMarkup(React.createElement(module.exports.DraftAmountWarnings, { language, warnings: [{ kind: "unusually_high", category: "<script>bad</script>", currency: "CNY", referenceAmount: 10 }] }));
     assert.match(html, /role="status"/); assert.match(html, /CNY/); assert.doesNotMatch(html, /<script>|disabled|Gemini/);
   }
   assert.equal(renderToStaticMarkup(React.createElement(module.exports.DraftAmountWarnings, { language: "vi", warnings: [] })), "");
   const source = readFileSync("src/components/sites/rolly/replica/Transactions.tsx", "utf8");
-  assert.match(source, /<DraftAmountWarnings warnings=\{draftAmountWarnings\(draft, state, today\(\)\)\}/);
+  assert.match(source, /warnings=\{draftAmountWarnings\(draft, state, today\(\)\)\} fundingIssue=\{fundingIssue\}/);
+  const blocked = renderToStaticMarkup(React.createElement(module.exports.DraftAmountWarnings, { language: "vi", warnings: [], fundingIssue: { kind: "INSUFFICIENT_FUNDS", available: 9_069_378, shortfall: 90_930_622, currency: "VND", credit: false } }));
+  assert.match(blocked, /90\.930\.622 VND/); assert.doesNotMatch(blocked, /vẫn có thể xác nhận/);
+});
+
+test("the actual chat confirmation button is disabled for insufficient funds, including a credit-typed wallet", () => {
+  const path = "src/components/sites/rolly/replica/Transactions.tsx", source = readFileSync(path, "utf8");
+  const ast = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let fundingDeclaration, validDeclaration, button;
+  function visit(node) {
+    if (ts.isVariableStatement(node)) {
+      const text = node.getText(ast);
+      if (text.startsWith("const fundingIssue = draftFundingIssues([draft]")) fundingDeclaration = text;
+      if (text.startsWith("const valid = readyDrafts([draft]")) validDeclaration = text;
+    }
+    if (ts.isJsxElement(node) && node.openingElement.tagName.getText(ast) === "button" && node.openingElement.attributes.getText(ast).includes("confirmDrafts([id])")) button = node.getText(ast);
+    ts.forEachChild(node, visit);
+  }
+  visit(ast); assert.ok(fundingDeclaration && validDeclaration && button);
+  // Execute the declarations and JSX from the real chat card, not a duplicate
+  // test implementation of its disabled condition.
+  const code = ts.transpileModule(`export function ActualConfirm({draft,state,committing=false,uncertainDraftIds=[]}) { const id=draft.id; const confirmDrafts=()=>{}; ${fundingDeclaration} ${validDeclaration} return (${button}); }`, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const module = { exports: {} }, require = createRequire(import.meta.url);
+  new Function("require", "module", "exports", "draftFundingIssues", "readyDrafts", "resolveLanguage", "today", code)(require, module, module.exports, funding.draftFundingIssues, readyDrafts, () => "vi", () => today);
+  const s = state(); s.settings = { language: "Tiếng Việt" }; s.wallets[0].type = "credit"; s.wallets[0].limit = 10_000_000;
+  const render = d => renderToStaticMarkup(React.createElement(module.exports.ActualConfirm, { state: s, draft: d }));
+  assert.match(render(draft({ amount: 100_000_000 })), /disabled=""/);
+  assert.doesNotMatch(render(draft({ amount: 25_000 })), /disabled=""/);
+  s.wallets[0].type = "cash";
+  assert.match(render(draft({ amount: 100_000_000 })), /disabled=""/);
 });

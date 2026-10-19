@@ -6,7 +6,7 @@ import { answerFinancialQuery, asksForAllWalletBalances, resolveFinancialFollowu
 import { modelHistory } from "../src/lib/chat-local-plan.ts";
 
 const state = () => ({
-  wallets: [{ id: "cash", currency: "VND" }, { id: "usd", currency: "USD" }, { id: "old", currency: "VND", archived: true }],
+  wallets: [{ id: "cash", currency: "VND", initial: 10_000_000 }, { id: "usd", currency: "USD", initial: 100_000 }, { id: "old", currency: "VND", initial: 0, archived: true }],
   categories: ["Thức ăn & Đồ uống", "Mua sắm", "Lương"],
   categoryMeta: { "Thức ăn & Đồ uống": { type: "expense" }, "Mua sắm": { type: "expense" }, "Lương": { type: "income" } },
   transactions: [],
@@ -66,7 +66,7 @@ test("a staged medical category closes stale choices and requires only a compati
   assert.equal(saved.state.categories.filter(name => name === "Y tế").length, 1);
   assert.equal(saved.state.transactions[0].category, "Y tế");
   assert.equal(saved.state.transactions[0].wallet, "cash"); assert.equal(saved.state.transactions[0].amount, 129_600);
-  assert.equal(saved.state.transactions[0].date, "2019-10-16");
+  assert.equal(saved.state.transactions[0].date.slice(0, 10), "2019-10-16");
   assert.deepEqual(validateAndCommitDrafts(saved.state, [selected]).committed, []);
 });
 
@@ -252,7 +252,7 @@ test("binds each explicit amount to its draft and asks for review when counts do
 
 test("multiple wallets in the same currency remain an unresolved required choice", () => {
   const app = state();
-  app.wallets.push({ id: "bank-vnd", currency: "VND" });
+  app.wallets.push({ id: "bank-vnd", currency: "VND", initial: 1_000_000 });
   const unresolved = validateDraftForState(draft({ wallet: null, currency: "VND" }), app);
   assert.equal(unresolved.wallet, null);
   assert.equal(unresolved.currency, "VND");

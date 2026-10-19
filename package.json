@@ -53,7 +53,7 @@
     "test:safety:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-safety-postgres.mjs",
     "test:onboarding": "node --test scripts/verify-onboarding.cjs scripts/verify-onboarding-form.cjs",
     "test:auth:postgres": "node --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-auth-postgres.mjs",
-    "test:transaction-ai": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-transaction-ai.mjs scripts/verify-draft-amount-warnings.mjs",
+    "test:transaction-ai": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-transaction-ai.mjs scripts/verify-draft-amount-warnings.mjs scripts/verify-transaction-funding.mjs",
     "test:conversation": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-conversation.mjs scripts/verify-assistant-route.mjs scripts/verify-obligation-context.mjs scripts/verify-assistant-responses.mjs scripts/verify-planning-deletion.mjs scripts/verify-planning-actions.mjs scripts/verify-settings-and-natural-language.mjs",
     "test:chat-plan": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-chat-spending-plan.mjs scripts/verify-chat-spending-plan-ui.mjs",
     "test:production-chat": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-production-chat.mjs",

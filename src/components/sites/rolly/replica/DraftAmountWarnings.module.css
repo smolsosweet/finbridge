@@ -12,3 +12,4 @@
 .warning strong { display: block; }
 .warning p { margin: 3px 0 0; color: inherit; }
 .warning > div + div { margin-top: 6px; }
+.blocked { border-color: #d89494; background: #fff4f4; color: #922b2b; }

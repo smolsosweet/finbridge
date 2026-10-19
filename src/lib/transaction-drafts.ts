@@ -1,10 +1,12 @@
-interface DraftWallet { id: string; currency: string; archived?: boolean; }
+import { draftFundingIssues } from "./transaction-funding";
+import type { Transaction } from "../components/sites/rolly/replica/store";
+interface DraftWallet { id: string; currency: string; archived?: boolean; initial?: number; type?: string; limit?: number; }
 interface DraftState {
   wallets: DraftWallet[];
   categories: string[];
   categoryMeta: Record<string, { type: string; icon?: string; children?: string[]; archived?: boolean } | undefined>;
   walletCategories?: Record<string, string[]>;
-  transactions: Array<{ id: string }>;
+  transactions: Array<{ id: string } & Partial<Transaction>>;
 }
 
 export type DraftType = "expense" | "income";
@@ -352,6 +354,7 @@ export function readyDrafts(drafts: TransactionDraft[], state: DraftState): Tran
 }
 
 export function validateAndCommitDrafts<T extends DraftState>(state: T, drafts: TransactionDraft[]): { state: T; committed: string[] } {
+  if (draftFundingIssues(drafts, state).length) return { state, committed: [] };
   const known = new Set(state.transactions.map((transaction) => transaction.id));
   const committed: string[] = [];
   const transactions: Array<{ id: string; title: string; amount: number; type: DraftType; category: string; date: string; wallet: string; note: string }> = [];

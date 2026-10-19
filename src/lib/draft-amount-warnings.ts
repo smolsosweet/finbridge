@@ -1,7 +1,8 @@
 import type { AppState } from "../components/sites/rolly/replica/store";
 import type { TransactionDraft } from "./transaction-drafts";
 import { currencyScale } from "../components/sites/rolly/replica/planningModel";
-import { trackedBalance, validOutlookDate } from "./financial-outlook";
+import { validOutlookDate } from "./financial-outlook";
+import { availableTransactionFunds } from "./transaction-funding";
 
 export interface DraftAmountWarning {
   kind: "unusually_high" | "unusually_low" | "exceeds_balance";
@@ -53,10 +54,10 @@ export function draftAmountWarnings(
     });
   }
   if (draft.type === "expense") {
-    const balance = trackedBalance(state, wallet.id, asOf);
-    if (balance.complete && draft.amount > balance.amount) warnings.push({
+    const available = availableTransactionFunds(state, wallet.id, asOf);
+    if (available !== null && draft.amount > available) warnings.push({
       kind: "exceeds_balance", currency: wallet.currency,
-      referenceAmount: balance.amount, category: null,
+      referenceAmount: available, category: null,
     });
   }
   return warnings;
