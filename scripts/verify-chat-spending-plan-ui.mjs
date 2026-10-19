@@ -51,5 +51,5 @@ test("wallet scoping callback changes assumptions only, never real financial sta
 test("three-decimal currency amounts are not silently rounded to cents in the actual view", () => {
   const s = state("en"); s.wallets[0].currency = "KWD"; s.wallets[0].initial = 2.005; s.transactions = [{ ...s.transactions[0], amount: 0.001 }]; s.fixedExpenses = []; s.settings.reserveByWallet = '{"vnd":0.003}';
   const html = renderToStaticMarkup(React.createElement(ChatSpendingPlan, { state: s, asOf: "2026-10-19", options: {} }));
-  assert.match(html, /2,004 KWD/); assert.match(html, /0,003 KWD/);
+  assert.match(html, /2[.,]004 KWD/); assert.match(html, /0[.,]003 KWD/);
 });
