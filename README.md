@@ -23,6 +23,10 @@ Existing account-owned browser records are offered for a one-time explicit impor
 
 Email needs a configured Brevo HTTPS or SMTP sender. Local outbox mode is development-only. Secrets belong in ignored environment files or hosting settings.
 
+All Gemini calls use [shared PostgreSQL AI quotas](docs/AI_QUOTAS.md). Set the required global budgets from the actual AI Studio project limits and migrate the quota schema before deploying. Unconfigured quotas block AI calls; manual entry remains available.
+
+See [AI upload/browser security](docs/AI_INPUT_SECURITY.md), [judge account provisioning](docs/DEMO_ACCOUNTS.md), [email scheduler setup](docs/safety/SCHEDULER.md) and the [release checklist (Vietnamese)](docs/RELEASE_CHECKLIST_VI.md). The demo uses Gemini Free; only synthetic data should be submitted to AI. Account closure disables access and retains financial history; there is no automatic financial purge schedule.
+
 Forwarded-IP trust in auth rate limiting remains open before public deployment. See [auth acceptance](docs/auth/AUTH_FLOW_ACCEPTANCE_2026-10-14.md). Local tests do not establish production security or provider availability.
 
 ## Local setup

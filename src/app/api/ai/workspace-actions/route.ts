@@ -1,7 +1,11 @@
+import { readAiJson } from "@/lib/ai-request";
+import { AI_JSON_BYTES } from "@/lib/ai-limits";
 import { createHash } from "node:crypto";
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { ThinkingLevel } from "@google/genai";
 import { z } from "zod";
-import { getSession } from "@/lib/auth-session";
+import { requireAiSession } from "@/lib/ai-access";
+import { createQuotaGemini } from "@/lib/ai-quota-gemini";
+import { aiQuotaErrorResponse } from "@/lib/ai-quota";
 import { database } from "@/lib/database";
 import { workspaceRepository } from "@/lib/workspace-repository";
 import { workspaceSchema } from "@/lib/workspace-model";
@@ -29,18 +33,13 @@ function stableActionId(batch: string, index: number) {
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
 }
 export async function POST(request: Request) {
-  const expectedOrigin = process.env.BETTER_AUTH_URL ? new URL(process.env.BETTER_AUTH_URL).origin : new URL(request.url).origin;
-  const url = new URL(request.url);
-  const demo = process.env.NODE_ENV === "development" && process.env.FINBRIDGE_DEMO_MODE === "true" && ["localhost", "127.0.0.1"].includes(url.hostname) && request.headers.get("origin") === url.origin;
   const respond = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
-  if (!demo && request.headers.get("origin") !== expectedOrigin) return respond({ error: "INVALID_ORIGIN" }, 403);
-  const session = demo ? null : await getSession();
-  if (!demo && !session) return respond({ error: "UNAUTHENTICATED" }, 401);
+  const session = await requireAiSession(request);
+  if (session instanceof Response) return session;
   if (session && request.headers.get("x-finbridge-workspace-owner") !== session.user.id) return respond({ error: "ACCOUNT_CHANGED" }, 409);
-  if (Number(request.headers.get("content-length") || 0) > 600_000) return respond({ error: "PAYLOAD_TOO_LARGE" }, 413);
-  let raw: unknown;
-  try { const body = await request.text(); if (body.length > 600_000) return respond({ error: "PAYLOAD_TOO_LARGE" }, 413); raw = JSON.parse(body); }
-  catch { return respond({ error: "INVALID_REQUEST" }, 400); }
+  const body = await readAiJson(request, AI_JSON_BYTES);
+  if (body instanceof Response) return body;
+  const raw = body.value;
   const parsed = inputSchema.safeParse(raw);
   if (!parsed.success) return respond({ error: "INVALID_REQUEST" }, 400);
   const input = parsed.data, t = workspaceActionCopy[input.language];
@@ -83,7 +82,7 @@ export async function POST(request: Request) {
       const key = process.env.GEMINI_API_KEY;
       if (!key) return respond({ error: "AI_NOT_CONFIGURED", message: t.unavailable }, 503);
       const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite";
-      const ai = new GoogleGenAI({ apiKey: key, httpOptions: { retryOptions: { attempts: 1 } } });
+      const ai = createQuotaGemini(key, session.user.id, "workspace-actions");
       const result = await ai.models.generateContent({ model,
         contents: [
           "You are Finn's financial workspace creation planner. You ONLY propose new manually tracked wallets, budgets and fixed expense schedules. You NEVER save, transfer/pay money, delete data or claim an operation succeeded. Output JSON matching the schema.",
@@ -138,6 +137,8 @@ export async function POST(request: Request) {
     const inspection = inspectWorkspaceProposal(state, proposal.data, input.language);
     return respond({ mode: "manage", ...inspection, reply: inspection.question ? [inspection.error, inspection.question.text].filter(Boolean).join("\n") : inspection.error || t.ready });
   } catch (error) {
+    const quotaResponse = aiQuotaErrorResponse(error, request);
+    if (quotaResponse) return quotaResponse;
     const status = error && typeof error === "object" && "status" in error ? Number(error.status) : null;
     const timeout = error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name);
     console.error("[FinBridge AI] workspace creation unavailable", { status, name: error instanceof Error ? error.name : "UnknownError" });

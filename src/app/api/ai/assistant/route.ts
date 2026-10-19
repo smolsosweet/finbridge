@@ -1,6 +1,10 @@
-import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
+import { readAiJson } from "@/lib/ai-request";
+import { AI_JSON_BYTES } from "@/lib/ai-limits";
+import { ThinkingLevel, Type } from "@google/genai";
 import { z } from "zod";
-import { getSession } from "@/lib/auth-session";
+import { requireAiSession } from "@/lib/ai-access";
+import { createQuotaGemini } from "@/lib/ai-quota-gemini";
+import { aiQuotaErrorResponse } from "@/lib/ai-quota";
 import { database } from "@/lib/database";
 import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 import { answerFinancialQuery, asksForAllWalletBalances, resolveFinancialFollowup, type FinancialAction } from "@/lib/financial-chat";
@@ -23,6 +27,7 @@ import { detectRelativeOrder } from "@/lib/transaction-deletion";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 40;
 
 const pendingDraftSchema = z.object({
   id: z.string().min(1).max(100), title: z.string().min(1).max(160), amount: z.number().positive().nullable(),
@@ -150,28 +155,15 @@ function inferRelativeDeletionDate(message: string, today: string): string | nul
   return date.toISOString().slice(0, 10);
 }
 
-function isLocalDemoRequest(request: Request) {
-  if (process.env.NODE_ENV !== "development" || process.env.FINBRIDGE_DEMO_MODE !== "true") return false;
-  const host = request.headers.get("host")?.split(":")[0];
-  const origin = request.headers.get("origin");
-  if (host !== "localhost" && host !== "127.0.0.1") return false;
-  try { return !!origin && new URL(origin).host === request.headers.get("host"); }
-  catch { return false; }
-}
-
 export async function POST(request: Request) {
-  const origin = request.headers.get("origin");
-  const expectedOrigin = process.env.BETTER_AUTH_URL ? new URL(process.env.BETTER_AUTH_URL).origin : new URL(request.url).origin;
-  if (origin !== expectedOrigin && !isLocalDemoRequest(request)) return Response.json({ error: "INVALID_ORIGIN", message: "Hãy tải lại trang rồi thử lại." }, { status: 403 });
-  const localDemo = isLocalDemoRequest(request);
-  const session = localDemo ? null : await getSession();
-  if (!localDemo && !session) return Response.json({ error: "UNAUTHENTICATED", message: "Hãy đăng nhập để dùng FinBridge AI." }, { status: 401 });
+  const session = await requireAiSession(request);
+  if (session instanceof Response) return session;
   if (session && request.headers.get("x-finbridge-workspace-owner") !== session.user.id) return Response.json({ error: "ACCOUNT_CHANGED", message: "Tài khoản đã thay đổi. Hãy tải lại trang." }, { status: 409 });
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED", message: "Trợ lý hiện chưa sẵn sàng. Vui lòng thử lại sau." }, { status: 503 });
-  let raw: unknown;
-  try { raw = await request.json(); }
-  catch { return Response.json({ error: "INVALID_REQUEST", message: "Tin nhắn không hợp lệ." }, { status: 400 }); }
+  const body = await readAiJson(request, AI_JSON_BYTES);
+  if (body instanceof Response) return body;
+  const raw = body.value;
   const parsed = requestSchema.safeParse(raw);
   if (!parsed.success) return Response.json({ error: "INVALID_REQUEST", message: "Thông tin ví hoặc ngữ cảnh chat không hợp lệ." }, { status: 400 });
   const input = parsed.data;
@@ -189,7 +181,10 @@ export async function POST(request: Request) {
     } catch { return Response.json({ error: "FINANCIAL_DATA_UNAVAILABLE", message: "Chưa đọc được dữ liệu tài khoản. Hãy tải lại trang rồi thử lại." }, { status: 503 }); }
   }
   const allowedWallets = new Set(input.wallets.map((wallet) => wallet.id));
-  const deletionState = authorizedWorkspace || (localDemo && input.planningContext ? { ...input.planningContext, wallets: input.wallets, transactions: [], categories: input.categories.map(c => c.name), categoryMeta: {}, settings: {}, recurring: [], rules: [] } as unknown as AppState : null);
+  // AI routes require a verified session and always use the persisted workspace.
+  // Do not retain the legacy local-demo bypass here: it would circumvent the
+  // shared authentication and quota boundary.
+  const deletionState = authorizedWorkspace;
   const allowedCategories = new Set(input.categories.filter(c => !c.archived).map((category) => `${category.type}:${category.name}`));
 
   const themeRequested = isSettingsThemeMessage(input.message);
@@ -296,7 +291,7 @@ export async function POST(request: Request) {
   const thinkingLevel = model.startsWith("gemini-3.") ? (/flash-lite$/.test(model) ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW) : undefined;
   const startedAt = Date.now();
   try {
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { retryOptions: { attempts: 1 } } });
+    const ai = createQuotaGemini(apiKey, session.user.id, "assistant");
     const result = await ai.models.generateContent({
       model,
       contents: [
@@ -549,6 +544,8 @@ export async function POST(request: Request) {
         relativeOrder: detectRelativeOrder(input.message) || (value.deletionSearchTerm ? detectRelativeOrder(value.deletionSearchTerm) : null) },
     });
   } catch (error) {
+    const quotaResponse = aiQuotaErrorResponse(error, request);
+    if (quotaResponse) return quotaResponse;
     const status = error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : null;
     const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
     console.error("[FinBridge AI] assistant failed", { durationMs: Date.now() - startedAt, status, name: error instanceof Error ? error.name : "UnknownError" });

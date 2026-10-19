@@ -1,4 +1,5 @@
 "use client";
+import { aiQuotaClientMessage } from "@/lib/ai-quota";
 
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
@@ -18,6 +19,7 @@ import { resolveSpendingPlanAdjustment, spendingPlanAdjustmentSchema, spendingPl
 import { ChatSpendingPlan } from "./ChatSpendingPlan";
 import { FinancialChatAnswer } from "./FinancialChatAnswer";
 import { prepareReceiptImage } from "@/lib/receipt-image";
+import { AI_AUDIO_BYTES, AI_RECORDING_SECONDS } from "@/lib/ai-limits";
 import { definitelyRejectedWorkspace, workspaceSaveErrorMessage } from "@/lib/workspace-payload";
 import { pendingDraftInterruption, pendingDraftReminder, rollbackRejectedDrafts, shouldBlockNewDraft } from "@/lib/pending-draft-policy";
 import { asksForCalculationExplanation, scenarioCalculationExplanation } from "@/lib/scenario-explanation";
@@ -553,6 +555,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   const recorder = useRef<MediaRecorder | null>(null);
   const recorderStream = useRef<MediaStream | null>(null);
   const audioChunks = useRef<Blob[]>([]);
+  const recordingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const messagesRef = useRef<HTMLDivElement>(null);
   const aiRequestLock = useRef(false);
@@ -565,6 +568,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   const lastSubmission = useRef<{ owner: string | null; message: string; batchId: string; failed: boolean } | null>(null);
   const close = () => { recorder.current?.stop(); setListening(false); setModal(""); };
   useEffect(() => () => {
+    if (recordingTimer.current) clearTimeout(recordingTimer.current);
     const activeRecorder = recorder.current;
     if (activeRecorder && activeRecorder.state !== "inactive") {
       activeRecorder.onstop = null;
@@ -1021,7 +1025,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       await flushWorkspaceForAnalysis();
       if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return true;
       const snapshot = getWorkspaceState();
-      const response = await fetch("/api/ai/workspace-actions", { method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": owner || "" },
+      const response = await fetch("/api/ai/workspace-actions", { method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": owner || "", "x-finbridge-language": language },
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
         body: JSON.stringify({ batchId, message, language, today: today(), pending, history: modelHistory(messages).slice(-8), ...(choice ? { choice } : {}),
           ...(workspacePersistence() === "browser" ? { context: { wallets: snapshot.wallets, goals: snapshot.goals, fixedExpenses: snapshot.fixedExpenses || [], categories: snapshot.categories, categoryMeta: snapshot.categoryMeta, ...(snapshot.walletCategories ? { walletCategories: snapshot.walletCategories } : {}) } } : {}) }),
@@ -1030,6 +1034,8 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return true;
       const result = raw && typeof raw === "object" ? raw as { mode?: unknown; proposal?: unknown; reply?: unknown; message?: unknown } : null;
       if (!response.ok || !result) {
+        const quotaMessage = aiQuotaClientMessage(raw, language);
+        if (quotaMessage) { validationMessage = quotaMessage; throw new Error(quotaMessage); }
         if (response.status === 422 && typeof result?.message === "string") validationMessage = result.message;
         throw new Error(result?.message === t.invalid ? t.invalid : t.unavailable);
       }
@@ -1371,7 +1377,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       const response = await fetch("/api/ai/assistant", {
         signal: AbortSignal.any([AbortSignal.timeout(30_000), requestController.signal]),
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": submissionOwner || "" },
+        headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": submissionOwner || "", "x-finbridge-language": resolveLanguage(state.settings.language) },
         body: JSON.stringify({
           batchId,
           message,
@@ -1498,9 +1504,9 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         const embedded = result as { scenarioResponse?: NormalizedPlannerResponse | null; calculations?: ScenarioResult[] | null; baselines?: ScenarioResult[] | null; presentation?: unknown };
         let raw: unknown = embedded.scenarioResponse ? { ...embedded.scenarioResponse, calculations: embedded.calculations } : null;
         if (!raw) {
-          const response = await fetch("/api/ai/scenario-planner", { method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": submissionOwner || "" }, body: JSON.stringify(input), signal: AbortSignal.any([AbortSignal.timeout(35_000), requestController.signal]) });
+          const response = await fetch("/api/ai/scenario-planner", { method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": submissionOwner || "", "x-finbridge-language": input.preferredLanguage }, body: JSON.stringify(input), signal: AbortSignal.any([AbortSignal.timeout(35_000), requestController.signal]) });
           raw = await response.json().catch(() => null);
-          if (!response.ok) throw new Error(serviceCopy.unavailable);
+          if (!response.ok) throw new Error(aiQuotaClientMessage(raw, input.preferredLanguage) || serviceCopy.unavailable);
         }
         if (workspaceOwner() !== submissionOwner || conversationGeneration.current !== submissionGeneration) return;
         const plan = embedded.scenarioResponse || normalizePlannerResponse(raw, input);
@@ -1715,7 +1721,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
       const response = await fetch("/api/ai/receipt-drafts", {
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(65_000)]), method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-finbridge-language": resolveLanguage(state.settings.language) },
         body: JSON.stringify({
           imageDataUrl, today: today(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           defaultWalletId: wallet || state.wallets.find((item) => !item.archived)?.id || "",
@@ -2000,11 +2006,11 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     aiRequestLock.current = true;
     setTranscribing(true);
     try {
-      if (blob.size > 5 * 1024 * 1024) throw new Error("Bản ghi quá dài. Hãy nói ngắn hơn rồi thử lại.");
+      if (blob.size > AI_AUDIO_BYTES) throw new Error(resolveLanguage(state.settings.language) === "vi" ? "Bản ghi quá lớn. Hãy nói ngắn hơn hoặc nhập bằng tay." : resolveLanguage(state.settings.language) === "zh" ? "录音过大。请缩短录音或手动输入。" : "Recording is too large. Record a shorter message or type it.");
       const bytes = new Uint8Array(await blob.arrayBuffer());
       let binary = "";
       for (let offset = 0; offset < bytes.length; offset += 0x8000) binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
-      const response = await fetch("/api/ai/speech-transcription", { signal: AbortSignal.timeout(20_000), method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mimeType: blob.type || "audio/webm", audioBase64: btoa(binary) }) });
+      const response = await fetch("/api/ai/speech-transcription", { signal: AbortSignal.timeout(20_000), method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-language": resolveLanguage(state.settings.language) }, body: JSON.stringify({ mimeType: blob.type || "audio/webm", audioBase64: btoa(binary) }) });
       const result = await response.json() as { text?: string; message?: string };
       if (!response.ok || !result.text?.trim()) throw new Error(result.message || "Chưa nhận diện được lời nói. Hãy thử lại.");
       setText(result.text.trim());
@@ -2024,11 +2030,13 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       recorderStream.current = stream;
       audioChunks.current = [];
       const mimeType = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find((type) => MediaRecorder.isTypeSupported(type));
-      const activeRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const activeRecorder = new MediaRecorder(stream, { ...(mimeType ? { mimeType } : {}), audioBitsPerSecond: 64_000 });
       recorder.current = activeRecorder;
       activeRecorder.ondataavailable = (event) => { if (event.data.size) audioChunks.current.push(event.data); };
       activeRecorder.onerror = () => setVoiceError("Có lỗi khi ghi âm. Hãy kiểm tra micro rồi thử lại.");
       activeRecorder.onstop = () => {
+        if (recordingTimer.current) clearTimeout(recordingTimer.current);
+        recordingTimer.current = null;
         const audio = new Blob(audioChunks.current, { type: activeRecorder.mimeType });
         recorderStream.current?.getTracks().forEach((track) => track.stop());
         recorderStream.current = null;
@@ -2038,6 +2046,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         else setVoiceError("Chưa ghi được âm thanh. Hãy thử nói lại.");
       };
       activeRecorder.start();
+      recordingTimer.current = setTimeout(() => { if (activeRecorder.state !== "inactive") activeRecorder.stop(); }, AI_RECORDING_SECONDS * 1000);
       setListening(true);
       setVoiceError("");
     } catch (error) {
