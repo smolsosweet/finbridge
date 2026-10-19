@@ -594,6 +594,40 @@ html:has(.r-chat-page){scrollbar-gutter:auto}
 .fb-fixed-amount-main b{font-size:20px;font-weight:700;color:var(--r-text);overflow-wrap:anywhere}
 .fb-status-pill{font-size:11px;font-weight:600;padding:4px 9px;border-radius:7px;background:var(--r-bg);color:var(--r-muted);border:1px solid var(--r-line)}
 .fb-status-pill.is-active{background:var(--r-mint);color:var(--r-teal);border-color:rgba(20,125,120,.25)}
+.fb-heading-badges{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.fb-payment-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:4px 9px;border-radius:7px;white-space:nowrap;line-height:1.3}
+.fb-payment-pill.is-paid,.fb-payment-pill.is-completed{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
+.fb-payment-pill.is-overdue{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+.fb-payment-pill.is-due-today{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa}
+.fb-payment-pill.is-upcoming{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.fb-payment-pill.is-due-soon{background:#f5f3ff;color:#6d28d9;border:1px solid #ddd6fe}
+.fb-payment-pill.is-paused{background:var(--r-bg);color:var(--r-muted);border:1px solid var(--r-line)}
+
+.fb-fixed-payment-status-box{display:flex;flex-direction:column;gap:5px;padding:10px 13px;border-radius:11px;font-size:12px;line-height:1.5;margin:8px 0 4px;transition:all .15s ease}
+.fb-fixed-payment-status-box.is-paid,.fb-fixed-payment-status-box.is-completed{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}
+.fb-fixed-payment-status-box.is-overdue{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+.fb-fixed-payment-status-box.is-due-today{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412}
+.fb-fixed-payment-status-box.is-upcoming,.fb-fixed-payment-status-box.is-due-soon{background:#f8fafc;border:1px solid #e2e8f0;color:#334155}
+.fb-fixed-payment-status-box.is-paused{background:#f8fafc;border:1px solid #e2e8f0;color:#64748b}
+
+.fb-fixed-status-main-row{display:flex;align-items:center;gap:7px;font-weight:600}
+.fb-fixed-status-indicator{display:flex;align-items:center;flex-shrink:0}
+.fb-fixed-status-primary{overflow-wrap:anywhere}
+.fb-fixed-status-next-row{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#475569;padding-left:22px}
+
+.r-dark .fb-payment-pill.is-paid{background:#064e3b;color:#a7f3d0;border-color:#047857}
+.r-dark .fb-payment-pill.is-overdue{background:#7f1d1d;color:#fecaca;border-color:#b91c1c}
+.r-dark .fb-payment-pill.is-due-today{background:#7c2d12;color:#fed7aa;border-color:#c2410c}
+.r-dark .fb-payment-pill.is-upcoming{background:#1e3a8a;color:#bfdbfe;border-color:#2563eb}
+.r-dark .fb-payment-pill.is-due-soon{background:#4c1d95;color:#ddd6fe;border-color:#6d28d9}
+.r-dark .fb-fixed-payment-status-box.is-paid{background:#052e16;border-color:#14532d;color:#86efac}
+.r-dark .fb-fixed-payment-status-box.is-paid .fb-fixed-status-next-row{color:#bbf7d0}
+.r-dark .fb-fixed-payment-status-box.is-overdue{background:#450a0a;border-color:#7f1d1d;color:#fca5a5}
+.r-dark .fb-fixed-payment-status-box.is-overdue .fb-fixed-status-next-row{color:#fecaca}
+.r-dark .fb-fixed-payment-status-box.is-due-today{background:#431407;border-color:#7c2d12;color:#fdba74}
+.r-dark .fb-fixed-payment-status-box.is-due-today .fb-fixed-status-next-row{color:#fed7aa}
+.r-dark .fb-fixed-payment-status-box.is-upcoming,.r-dark .fb-fixed-payment-status-box.is-due-soon{background:#1e293b;border-color:#334155;color:#cbd5e1}
+.r-dark .fb-fixed-payment-status-box.is-upcoming .fb-fixed-status-next-row{color:#94a3b8}
 .fb-fixed-meta{display:flex;flex-wrap:wrap;gap:8px;margin:0}
 .fb-fixed-meta span{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:5px 8px;border-radius:7px;background:var(--r-bg);color:var(--r-muted);border:1px solid var(--r-line)}
 .fb-budget-card .fb-planning-card-actions,.fb-fixed-card .fb-planning-card-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:auto}

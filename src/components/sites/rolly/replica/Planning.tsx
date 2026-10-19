@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { ArrowDownRight, ArrowRight, CalendarDays, Plus, ReceiptText, Wallet, Trash2 } from "lucide-react";
+import { ArrowDownRight, ArrowRight, CalendarDays, Plus, ReceiptText, Wallet, Trash2, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { FinBridgeHeader } from "./FinBridgeHeader";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
@@ -11,7 +11,7 @@ import { localDateKey } from "./chartWeek";
 import { budgetSummary, plannedOccurrences, validBudget, validFixedExpense } from "./planningModel";
 import { flushWorkspace, updateState, useAppState, type FixedExpense, type Goal } from "./store";
 import { addBudgetCategory, expenseCategoriesForWallet } from "@/lib/budget-categories";
-import { nextExpenseDue, unpaidOccurrences } from "@/lib/fixed-expense-payments";
+import { nextExpenseDue, unpaidOccurrences, fixedExpensePaymentInsight, type FixedExpensePaymentInsight } from "@/lib/fixed-expense-payments";
 import { FixedExpenseActions } from "@/components/payments/FixedExpenseActions";
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 import { useFinancialDate } from "./useFinancialDate";
@@ -45,6 +45,17 @@ const COPY = {
     delete: "Xóa", deleteBudgetConfirm: "Xóa ngân sách này? Các khoản chi cố định vẫn được giữ và sẽ bỏ liên kết ngân sách.", deleteFixedConfirm: "Xóa khoản chi cố định này?", resetChat: "Xóa hội thoại", resetChatConfirm: "Xóa toàn bộ hội thoại mô phỏng này?",
     dueThisPeriod: "Đến hạn kỳ này", firstDue: "Ngày bắt đầu",
     details: "Chi tiết", budgetDetails: "Chi tiết ngân sách", fixedDetails: "Chi tiết khoản chi cố định",
+    statusPaid: "Đã thanh toán", statusUnpaid: "Chưa thanh toán", statusOverdue: "Quá hạn", statusDueToday: "Đến hạn hôm nay",
+    statusUpcoming: "Chưa đến hạn", statusCompleted: "Đã thanh toán xong", nextPayment: "Lần thanh toán tiếp theo",
+    dueTodayText: "Khoản chi đến hạn hôm nay",
+    overdueDaysText: (days: number) => `quá hạn ${days} ngày`,
+    daysLeftText: (days: number) => days === 1 ? "ngày mai" : `sau ${days} ngày`,
+    daysAgoText: (days: number) => days === 1 ? "hôm qua" : `${days} ngày trước`,
+    lastPaidText: (date: string) => `Đã thanh toán kỳ ${date}`,
+    unpaidPeriodText: (date: string) => `Chưa thanh toán kỳ ${date}`,
+    unpaidCountText: (count: number) => `${count} kỳ chưa thanh toán`,
+    noUpcomingText: "Khoản chi một lần đã hoàn tất",
+    totalAmount: "Tổng",
   },
   en: {
     title: "Budget & Expense", intro: "Track budget limits and upcoming fixed expenses.",
@@ -72,6 +83,17 @@ const COPY = {
     delete: "Delete", deleteBudgetConfirm: "Delete this budget? Linked fixed expenses will be kept without a budget link.", deleteFixedConfirm: "Delete this fixed expense?", resetChat: "Reset conversation", resetChatConfirm: "Delete this scenario conversation?",
     dueThisPeriod: "Due this period", firstDue: "Starts",
     details: "Details", budgetDetails: "Budget details", fixedDetails: "Fixed expense details",
+    statusPaid: "Paid", statusUnpaid: "Unpaid", statusOverdue: "Overdue", statusDueToday: "Due today",
+    statusUpcoming: "Upcoming", statusCompleted: "Completed", nextPayment: "Next payment",
+    dueTodayText: "Payment due today",
+    overdueDaysText: (days: number) => `${days} day${days > 1 ? "s" : ""} overdue`,
+    daysLeftText: (days: number) => days === 1 ? "tomorrow" : `in ${days} day${days > 1 ? "s" : ""}`,
+    daysAgoText: (days: number) => `${days} day${days > 1 ? "s" : ""} ago`,
+    lastPaidText: (date: string) => `Paid for ${date}`,
+    unpaidPeriodText: (date: string) => `Unpaid for ${date}`,
+    unpaidCountText: (count: number) => `${count} unpaid periods`,
+    noUpcomingText: "One-off expense is completed",
+    totalAmount: "Total",
   },
   zh: {
     title: "支出计划", intro: "跟踪预算限额和即将到期的固定支出。",
@@ -99,6 +121,17 @@ const COPY = {
     delete: "删除", deleteBudgetConfirm: "删除此预算？关联的固定支出将保留并取消预算关联。", deleteFixedConfirm: "删除此固定支出？", resetChat: "清除对话", resetChatConfirm: "清除此情景对话？",
     dueThisPeriod: "本期到期", firstDue: "开始日期",
     details: "详情", budgetDetails: "预算详情", fixedDetails: "固定支出详情",
+    statusPaid: "已付", statusUnpaid: "未付", statusOverdue: "已逾期", statusDueToday: "今日到期",
+    statusUpcoming: "未到期", statusCompleted: "已完成", nextPayment: "下次付款",
+    dueTodayText: "今日到期应付",
+    overdueDaysText: (days: number) => `逾期 ${days} 天`,
+    daysLeftText: (days: number) => days === 1 ? "明天" : `${days}天后`,
+    daysAgoText: (days: number) => days === 1 ? "昨天" : `${days}天前`,
+    lastPaidText: (date: string) => `已支付 ${date} 期`,
+    unpaidPeriodText: (date: string) => `未支付 ${date} 期`,
+    unpaidCountText: (count: number) => `${count} 期尚未支付`,
+    noUpcomingText: "单次支出已结清",
+    totalAmount: "合计",
   },
 };
 
@@ -182,6 +215,88 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const walletName = (id: string) => { const item = state.wallets.find((wallet) => wallet.id === id); return item?.name === "." ? t.mainWallet : item?.name || t.emptyWallet; };
   const format = (value: number, currency: string) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value) + " " + currency;
   const formatDate = (key: string) => new Intl.DateTimeFormat(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-GB", { dateStyle: "medium" }).format(new Date(key + "T12:00:00"));
+
+  const getPaymentStatusDisplay = (expense: FixedExpense, insight: FixedExpensePaymentInsight, currency: string) => {
+    if (!expense.active || insight.status === "paused") {
+      return {
+        badgeClass: "is-paused",
+        badgeLabel: t.paused,
+        icon: <Clock size={12} />,
+        primaryText: lang === "vi" ? "Khoản chi đang tạm dừng" : lang === "zh" ? "此固定支出已暂停" : "This fixed expense is paused",
+        nextPaymentText: insight.nextDueDate ? `${t.nextPayment}: ${formatDate(insight.nextDueDate)}` : null,
+      };
+    }
+
+    if (insight.status === "completed") {
+      return {
+        badgeClass: "is-completed",
+        badgeLabel: t.statusCompleted,
+        icon: <CheckCircle2 size={12} />,
+        primaryText: t.noUpcomingText,
+        nextPaymentText: null,
+      };
+    }
+
+    if (insight.status === "paid") {
+      const nextText = insight.nextDueDate
+        ? `${t.nextPayment}: ${formatDate(insight.nextDueDate)} (${t.daysLeftText(insight.daysUntilNext ?? 0)})`
+        : t.noUpcomingText;
+      const primary = insight.lastPaidDate
+        ? t.lastPaidText(formatDate(insight.lastPaidDate))
+        : (lang === "vi" ? "Đã thanh toán đầy đủ các kỳ" : lang === "zh" ? "各期均已支付" : "All periods paid up to date");
+      return {
+        badgeClass: "is-paid",
+        badgeLabel: t.statusPaid,
+        icon: <CheckCircle2 size={12} />,
+        primaryText: primary,
+        nextPaymentText: nextText,
+      };
+    }
+
+    if (insight.status === "due-today") {
+      const todayDue = insight.overdueDates[0] || today;
+      const nextText = insight.nextDueDate
+        ? `${t.nextPayment}: ${formatDate(insight.nextDueDate)} (${t.daysLeftText(insight.daysUntilNext ?? 0)})`
+        : null;
+      return {
+        badgeClass: "is-due-today",
+        badgeLabel: t.statusDueToday,
+        icon: <Clock size={12} />,
+        primaryText: `${t.dueTodayText}: ${formatDate(todayDue)} · ${format(expense.amount, currency)}`,
+        nextPaymentText: nextText,
+      };
+    }
+
+    if (insight.status === "overdue") {
+      const count = insight.overdueDates.length;
+      const daysOverdue = insight.daysOverdue;
+      const badgeLabel = `${t.statusOverdue} (${t.overdueDaysText(daysOverdue)})`;
+      const primary = count === 1
+        ? `${t.unpaidPeriodText(formatDate(insight.overdueDates[0]))} (${t.overdueDaysText(daysOverdue)}) · ${format(expense.amount, currency)}`
+        : `${t.unpaidCountText(count)} (${insight.overdueDates.slice(0, 2).map(formatDate).join(", ")}${count > 2 ? "…" : ""}) · ${t.totalAmount}: ${format(expense.amount * count, currency)}`;
+      const nextText = insight.nextDueDate
+        ? `${t.nextPayment}: ${formatDate(insight.nextDueDate)} (${t.daysLeftText(insight.daysUntilNext ?? 0)})`
+        : null;
+      return {
+        badgeClass: "is-overdue",
+        badgeLabel,
+        icon: <AlertCircle size={12} />,
+        primaryText: primary,
+        nextPaymentText: nextText,
+      };
+    }
+
+    const daysUntil = insight.daysUntilNext ?? 0;
+    const nextDate = insight.nextDueDate || expense.dueDate;
+    const primary = `${t.nextPayment}: ${formatDate(nextDate)} (${t.daysLeftText(daysUntil)})`;
+    return {
+      badgeClass: "is-upcoming",
+      badgeLabel: t.statusUpcoming,
+      icon: <Clock size={12} />,
+      primaryText: primary,
+      nextPaymentText: null,
+    };
+  };
   const open = (type: "budget" | "fixed", parent?: string, expense?: FixedExpense, targetBudget?: Goal) => {
     setAddingCategory(false); setNewCategory(""); setCategoryError("");
     setError("");
@@ -361,6 +476,8 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
             const currency = parent?.currency || state.wallets.find((wallet) => wallet.id === expense.walletId)?.currency || "";
             const unpaid = expense.active ? unpaidOccurrences(state, expense, expense.dueDate, unpaidHorizon) : [];
             const nextDue = expense.active ? nextExpenseDue(state, expense, today) : null;
+            const insight = fixedExpensePaymentInsight(state, expense, today);
+            const statusDisplay = getPaymentStatusDisplay(expense, insight, currency);
             return <article id={`fixed-${expense.id}`} className="fb-fixed-card" key={expense.id}>
               <div className="fb-planning-card-heading">
                 <span className="fb-planning-icon"><ArrowDownRight size={18} /></span>
@@ -372,7 +489,13 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
                     <span className="fb-card-tag">{parent?.category || expense.category}</span>
                   </div>
                 </div>
-                <span className={`fb-status-pill ${expense.active ? "is-active" : ""}`}>{expense.active ? t.active : t.paused}</span>
+                <div className="fb-heading-badges">
+                  <span className={`fb-payment-pill ${statusDisplay.badgeClass}`} title={statusDisplay.primaryText}>
+                    {statusDisplay.icon}
+                    <span>{statusDisplay.badgeLabel}</span>
+                  </span>
+                  <span className={`fb-status-pill ${expense.active ? "is-active" : ""}`}>{expense.active ? t.active : t.paused}</span>
+                </div>
                 <button type="button" className="fb-planning-delete" aria-label={`${t.delete}: ${expense.title}`} title={t.delete} onClick={() => deleteFixed(expense.id)}><Trash2 size={16} /></button>
               </div>
               <div className="fb-fixed-compact-row">
@@ -385,10 +508,25 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
                   <span><CalendarDays size={12} />{nextDue ? `${formatDate(nextDue)} · ${occurrenceStatusCopy[lang][fixedExpenseOccurrence(state, expense, nextDue, today).status]}` : !expense.active ? t.paused : (lang === "vi" ? "Không còn kỳ chưa thanh toán" : lang === "zh" ? "没有未付款期次" : "No unpaid occurrences remain")}</span>
                 </div>
               </div>
-              {unpaid.length > 0 && <p className="fb-fixed-unpaid-summary">
-                {lang === "vi" ? `${unpaid.length} kỳ chưa ghi nhận đã trả đến ${formatDate(unpaidHorizon)}` : lang === "zh" ? `截至${formatDate(unpaidHorizon)}有${unpaid.length}期尚未记录付款` : `${unpaid.length} unpaid periods through ${formatDate(unpaidHorizon)}`}
-                {` · ${unpaid.slice(0, 3).map(formatDate).join(" / ")}${unpaid.length > 3 ? " …" : ""} · ${format(expense.amount * unpaid.length, currency)}`}
-              </p>}
+              <div
+                className={`fb-fixed-payment-status-box is-${insight.status}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => setDetailsExpense(expense)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailsExpense(expense); } }}
+                title={t.details}
+              >
+                <div className="fb-fixed-status-main-row">
+                  <span className="fb-fixed-status-indicator">{statusDisplay.icon}</span>
+                  <span className="fb-fixed-status-primary">{statusDisplay.primaryText}</span>
+                </div>
+                {statusDisplay.nextPaymentText && (
+                  <div className="fb-fixed-status-next-row">
+                    <CalendarDays size={12} />
+                    <span>{statusDisplay.nextPaymentText}</span>
+                  </div>
+                )}
+              </div>
               <div className="fb-planning-card-actions">
                 <button type="button" onClick={() => setDetailsExpense(expense)}>{t.details}</button>
                 <button type="button" disabled={!!expense.budgetId && !parent} onClick={() => open("fixed", parent?.id, expense)}>{t.edit}</button>
@@ -504,11 +642,17 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
       const window = parent ? budgetSummary(state, parent, today) : undefined;
       const due = window ? plannedOccurrences(detailsExpense, window.start, window.end) : [];
       const currency = parent?.currency || state.wallets.find((wallet) => wallet.id === detailsExpense.walletId)?.currency || "";
+      const insight = fixedExpensePaymentInsight(state, detailsExpense, today);
+      const statusDisplay = getPaymentStatusDisplay(detailsExpense, insight, currency);
       return (
         <Modal title={`${detailsExpense.title} · ${t.fixedDetails}`} onClose={() => setDetailsExpense(null)}>
           <div className="fb-details-modal-content">
             <div className="fb-details-modal-header">
               <div className="fb-details-modal-badges">
+                <span className={`fb-payment-pill ${statusDisplay.badgeClass}`}>
+                  {statusDisplay.icon}
+                  <span>{statusDisplay.badgeLabel}</span>
+                </span>
                 <span className={`fb-status-pill ${detailsExpense.active ? "is-active" : ""}`}>{detailsExpense.active ? t.active : t.paused}</span>
                 <span className="fb-badge fb-badge-currency">{currency}</span>
                 <span className="fb-badge fb-badge-type">{walletName(parent?.wallet || detailsExpense.walletId || "")}</span>
@@ -521,6 +665,19 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
                 <span className="fb-fixed-amount-label">{t.amount}</span>
                 <b>{format(detailsExpense.amount, currency)}</b>
               </div>
+            </div>
+
+            <div className={`fb-fixed-payment-status-box is-${insight.status}`}>
+              <div className="fb-fixed-status-main-row">
+                <span className="fb-fixed-status-indicator">{statusDisplay.icon}</span>
+                <span className="fb-fixed-status-primary">{statusDisplay.primaryText}</span>
+              </div>
+              {statusDisplay.nextPaymentText && (
+                <div className="fb-fixed-status-next-row">
+                  <CalendarDays size={12} />
+                  <span>{statusDisplay.nextPaymentText}</span>
+                </div>
+              )}
             </div>
 
             <div className="fb-details-stats-grid">

@@ -86,3 +86,103 @@ export function validateFixedPaymentChanges(previous: AppState | null, next: App
     if (!expense?.active || !original || original.archived || !source || source.archived || source.currency!==original.currency || tx.category!==expense.category || !plannedOccurrences(expense,tx.fixedExpenseDueDate!,tx.fixedExpenseDueDate!).length) throw new Error("INVALID_BILL_PAYMENT");
   }
 }
+
+export interface FixedExpensePaymentInsight {
+  status: "paid" | "overdue" | "due-today" | "upcoming" | "completed" | "paused";
+  overdueDates: string[];
+  daysOverdue: number;
+  lastPaidDate: string | null;
+  nextDueDate: string | null;
+  daysUntilNext: number | null;
+}
+
+export function fixedExpensePaymentInsight(state: AppState, expense: FixedExpense, asOf: string): FixedExpensePaymentInsight {
+  if (!expense.active) {
+    return {
+      status: "paused",
+      overdueDates: [],
+      daysOverdue: 0,
+      lastPaidDate: null,
+      nextDueDate: null,
+      daysUntilNext: null,
+    };
+  }
+
+  const paidDueDates = new Set(
+    state.transactions
+      .filter(t => t.type === "expense" && t.paymentConfirmation === "user" && t.fixedExpenseId === expense.id)
+      .map(t => t.fixedExpenseDueDate)
+  );
+
+  const calcDaysDiff = (d1: string, d2: string) => {
+    const t1 = new Date(d1 + "T12:00:00Z").getTime();
+    const t2 = new Date(d2 + "T12:00:00Z").getTime();
+    return Math.round((t1 - t2) / (1000 * 60 * 60 * 24));
+  };
+
+  if (expense.recurrence === "once" && paidDueDates.has(expense.dueDate)) {
+    return {
+      status: "completed",
+      overdueDates: [],
+      daysOverdue: 0,
+      lastPaidDate: expense.dueDate,
+      nextDueDate: null,
+      daysUntilNext: null,
+    };
+  }
+
+  const pastOccurrences = plannedOccurrences(expense, expense.dueDate, asOf);
+  const overdueDates = pastOccurrences.filter(d => !paidDueDates.has(d));
+  const paidOccurrences = pastOccurrences.filter(d => paidDueDates.has(d));
+  const lastPaidDate = paidOccurrences.length > 0 ? paidOccurrences[paidOccurrences.length - 1] : null;
+
+  const horizonYear = Number(asOf.slice(0, 4)) + 2;
+  const futureOccurrences = plannedOccurrences(expense, asOf, `${horizonYear}-12-31`).filter(d => d > asOf);
+  const nextFutureDue = futureOccurrences.find(d => !paidDueDates.has(d)) || null;
+  const daysUntilNext = nextFutureDue ? calcDaysDiff(nextFutureDue, asOf) : null;
+
+  if (overdueDates.length > 0) {
+    const earliestOverdue = overdueDates[0];
+    const daysOverdue = Math.max(0, calcDaysDiff(asOf, earliestOverdue));
+    if (overdueDates.length === 1 && earliestOverdue === asOf) {
+      return {
+        status: "due-today",
+        overdueDates,
+        daysOverdue: 0,
+        lastPaidDate,
+        nextDueDate: nextFutureDue,
+        daysUntilNext,
+      };
+    }
+    return {
+      status: "overdue",
+      overdueDates,
+      daysOverdue,
+      lastPaidDate,
+      nextDueDate: nextFutureDue,
+      daysUntilNext,
+    };
+  }
+
+  if (pastOccurrences.length > 0 || lastPaidDate) {
+    return {
+      status: "paid",
+      overdueDates: [],
+      daysOverdue: 0,
+      lastPaidDate,
+      nextDueDate: nextFutureDue,
+      daysUntilNext,
+    };
+  }
+
+  const daysUntilFirst = Math.max(0, calcDaysDiff(expense.dueDate, asOf));
+  return {
+    status: "upcoming",
+    overdueDates: [],
+    daysOverdue: 0,
+    lastPaidDate: null,
+    nextDueDate: expense.dueDate,
+    daysUntilNext: daysUntilFirst,
+  };
+}
+

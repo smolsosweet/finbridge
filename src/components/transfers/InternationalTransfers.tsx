@@ -112,7 +112,18 @@ export function InternationalTransfers({ navigate }: { navigate: (path: string) 
       </summary>
       <div className={styles.sandboxBody}>
         <p className={styles.sandboxNotice}>{t.disclaimer}</p>
-        {transfersDisabled && <p className={styles.warning} role="status">{REFERENCE_COPY[lang].disabled}</p>}
+        {transfersDisabled && (
+          <div className={styles.warning} role="status">
+            <p>{REFERENCE_COPY[lang].disabled}</p>
+            <small style={{ display: "block", marginTop: 5, fontSize: "11px", opacity: 0.9 }}>
+              {lang === "vi"
+                ? "💡 Hướng dẫn: Thêm biến môi trường FINBRIDGE_ENABLE_TRANSFER_SANDBOX=true trên Vercel Dashboard (Settings → Environment Variables) để mở toàn bộ tính năng chuyển thử."
+                : lang === "zh"
+                ? "💡 说明：在 Vercel Dashboard（Settings → Environment Variables）中添加 FINBRIDGE_ENABLE_TRANSFER_SANDBOX=true 即可开启全部测试汇款流程。"
+                : "💡 Tip: Add environment variable FINBRIDGE_ENABLE_TRANSFER_SANDBOX=true in Vercel Dashboard (Settings → Environment Variables) to enable full test transfers."}
+            </small>
+          </div>
+        )}
     {errorBanner}
     {loading && !doc && <p role="status">{t.loading}</p>}
     {doc && <>

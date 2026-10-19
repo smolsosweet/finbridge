@@ -139,43 +139,48 @@ export function TransferReference({ owner, lang }: { owner: string; lang: AppLan
     <header><div><h2>{t.title}</h2><p>{t.subtitle}</p></div><button type="button" disabled={loading || saving || !!pending} onClick={() => void load()}><RefreshCw size={15}/>{t.refresh}</button></header>
     {loading && !document && <p role="status">{t.loading}</p>}
     {error && <p role="alert" className={styles.warning}>{errorText}</p>}
-    <form onSubmit={e => { e.preventDefault(); submit(); }} className={styles.form}>
-      <div className={styles.directionGroup}>
-        {direction === "from_foreign" ? (
-          <>
-            <label className={styles.directionField}>
-              <span>{t.currency} ({t.from})</span>
-              <select value={currency} disabled={saving || !!pending} onChange={e => { setCurrency(e.target.value as ReferenceCurrency); setError(""); }}>
-                {REFERENCE_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </label>
+    <form onSubmit={e => { e.preventDefault(); submit(); }} className={styles.formGrid}>
+      {direction === "from_foreign" ? (
+        <>
+          <label className={`${styles.field} ${styles.fromField}`}>
+            <span>{t.currency} ({t.from})</span>
+            <select value={currency} disabled={saving || !!pending} onChange={e => { setCurrency(e.target.value as ReferenceCurrency); setError(""); }}>
+              {REFERENCE_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+          <div className={styles.swapCol}>
+            <span className={styles.labelPlaceholder} aria-hidden="true">&nbsp;</span>
             <button type="button" className={styles.swapBtn} onClick={toggleDirection} title={t.swap} aria-label={t.swap}>
               <ArrowLeftRight size={16} />
             </button>
-            <div className={styles.directionField}>
-              <span>{t.to}</span>
-              <div className={styles.currencyBadge}>VND</div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className={styles.directionField}>
-              <span>{t.from}</span>
-              <div className={styles.currencyBadge}>VND</div>
-            </div>
+          </div>
+          <div className={`${styles.field} ${styles.toField}`}>
+            <span>{t.to}</span>
+            <div className={styles.currencyBadge}>VND</div>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className={`${styles.field} ${styles.fromField}`}>
+            <span>{t.from}</span>
+            <div className={styles.currencyBadge}>VND</div>
+          </div>
+          <div className={styles.swapCol}>
+            <span className={styles.labelPlaceholder} aria-hidden="true">&nbsp;</span>
             <button type="button" className={styles.swapBtn} onClick={toggleDirection} title={t.swap} aria-label={t.swap}>
               <ArrowLeftRight size={16} />
             </button>
-            <label className={styles.directionField}>
-              <span>{t.currency} ({t.to})</span>
-              <select value={currency} disabled={saving || !!pending} onChange={e => { setCurrency(e.target.value as ReferenceCurrency); setError(""); }}>
-                {REFERENCE_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </label>
-          </>
-        )}
-      </div>
-      <label>
+          </div>
+          <label className={`${styles.field} ${styles.toField}`}>
+            <span>{t.currency} ({t.to})</span>
+            <select value={currency} disabled={saving || !!pending} onChange={e => { setCurrency(e.target.value as ReferenceCurrency); setError(""); }}>
+              {REFERENCE_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </label>
+        </>
+      )}
+
+      <label className={`${styles.field} ${styles.amountField}`}>
         <span>{direction === "from_foreign" ? `${t.amount} · ${currency}` : `${t.vndAmount} · VND`}</span>
         <input
           inputMode="decimal"
@@ -188,8 +193,18 @@ export function TransferReference({ owner, lang }: { owner: string; lang: AppLan
         />
         {liveConvertedText && <span className={styles.livePreview} aria-live="polite">{liveConvertedText}</span>}
       </label>
-      <button type="submit" disabled={!usable || loading || saving || !!pending}>{t.calculate}</button>
-      {pending && <button type="button" disabled={saving} onClick={() => void save(pending)}>{t.retry}</button>}
+
+      <div className={styles.submitCol}>
+        <span className={styles.labelPlaceholder} aria-hidden="true">&nbsp;</span>
+        <button type="submit" disabled={!usable || loading || saving || !!pending}>{t.calculate}</button>
+      </div>
+
+      {pending && (
+        <div className={styles.retryCol}>
+          <span className={styles.labelPlaceholder} aria-hidden="true">&nbsp;</span>
+          <button type="button" disabled={saving} onClick={() => void save(pending)}>{t.retry}</button>
+        </div>
+      )}
     </form>
     {reference ? (
       <div className={styles.rate}>
