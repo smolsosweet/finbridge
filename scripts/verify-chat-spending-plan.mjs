@@ -8,6 +8,42 @@ const state = () => ({ wallets: [{ id: "vnd", name: "Cash", currency: "VND", ini
 const bill = (id, amount, dueDate, extra = {}) => ({ id, title: id, amount, category: "Food", walletId: "vnd", budgetId: "", dueDate, recurrence: "once", active: true, ...extra });
 const tx = (id, amount, date, extra = {}) => ({ id, title: id, amount, date, wallet: "vnd", type: "expense", category: "Food", note: "", ...extra });
 
+// Synthetic regression fixtures reproduce the supplied totals, not database rows.
+test("observed local totals reconcile across sequential bills, budget capacity and month-end forecast", () => {
+  const s = state(); s.wallets[0].initial = 10000000;
+  s.transactions = Array.from({ length: 10 }, (_, i) => tx(`expense-${i}`, i < 9 ? 1000 : 886622, "2026-10-19"));
+  const b = { id: "budget", kind: "budget", title: "October", amount: 7000000, currency: "VND", date: "2026-10-01", cycle: "monthly", category: "", wallet: "vnd" };
+  s.goals = [b];
+  s.fixedExpenses = [bill("internet", 239000, "2026-10-17", { budgetId: b.id, recurrence: "monthly" }), bill("rent", 3000000, "2026-10-18", { budgetId: b.id, recurrence: "monthly" }), bill("parking", 147000, "2026-10-20", { budgetId: b.id, recurrence: "monthly" })];
+  const before = structuredClone(s), p = calculateSpendingPlan(s, "2026-10-19"), w = p.wallets[0];
+  assert.equal(p.remainingDays, 12); assert.equal(w.balance, 9104378); assert.equal(w.transactionCount, 10);
+  assert.equal(w.committed, 3386000);
+  assert.deepEqual(w.pending.map(bill => bill.after), [8865378, 5865378, 5718378]);
+  assert.equal(w.budgets[0].actual, 895622); assert.equal(w.budgets[0].afterBills, 2718378); assert.equal(w.budgets[0].dailyLimit, 226531);
+  assert.equal(w.flexibleForecast, 565656); assert.equal(w.projected, 5152722);
+  assert.equal(w.spendable, null); assert.equal(w.dailyLimit, null); assert.equal(w.projectedAfterReserve, null);
+  assert.deepEqual(s, before);
+});
+
+test("observed production totals stay isolated by currency; budget window filtering is explicit", () => {
+  const s = state(); s.wallets[0].initial = 10000000;
+  s.wallets.push({ id: "cny", name: "Alipay", currency: "CNY", initial: 10000, type: "cash" });
+  s.transactions = [tx("a", 100000, "2026-10-19"), tx("b", 100000, "2026-10-19"), tx("c", 117244, "2026-10-19")];
+  s.settings.reserveByWallet = '{"vnd":3000000,"cny":300}';
+  const b = { id: "budget", kind: "budget", title: "October", amount: 6000000, currency: "VND", date: "2026-10-20", cycle: "monthly", category: "", wallet: "vnd" };
+  s.goals = [b]; s.fixedExpenses = [bill("internet", 239000, "2026-10-20", { budgetId: b.id })];
+  const p = calculateSpendingPlan(s, "2026-10-19"), [vnd, cny] = p.wallets;
+  assert.equal(vnd.balance, 9682756); assert.equal(vnd.spendable, 6443756); assert.equal(vnd.dailyLimit, 536979);
+  assert.equal(vnd.flexibleForecast, 200365); assert.equal(vnd.projected, 9243391);
+  assert.equal(vnd.budgets[0].actual, 0); assert.equal(vnd.budgets[0].afterBills, 5761000);
+  b.date = "2026-10-01";
+  const matching = calculateSpendingPlan(s, "2026-10-19").wallets[0];
+  assert.equal(matching.budgets[0].actual, 317244); assert.equal(matching.budgets[0].afterBills, 5443756);
+  assert.equal(matching.projected, vnd.projected, "budget commitment calculations must not deduct bills a second time from wallet cash");
+  assert.equal(cny.balance, 10000); assert.equal(cny.spendable, 9700); assert.equal(cny.dailyLimit, 808.33);
+  assert.equal(cny.flexibleForecast, null); assert.equal(cny.projected, null);
+});
+
 test("successive bills deduct cumulatively from the same wallet", () => {
   const s = state(); s.fixedExpenses = [bill("one", 200000, "2026-10-20"), bill("two", 300000, "2026-10-22")];
   assert.deepEqual(financialOutlook(s, "2026-10-19").expenses.map(e => e.after), [800000, 500000]);

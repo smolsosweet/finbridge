@@ -8,6 +8,7 @@ import { updateState, useAppState, today } from "./store";
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 import { Modal } from "./Ui";
 import styles from "./FinancialOutlook.module.css";
+import { useFinancialDate } from "./useFinancialDate";
 
 const COPY = {
   vi: { title: "Cảnh báo tài chính", empty: "Chưa có cảnh báo cần xử lý.", reserve: "Chỉnh mức dự phòng", save: "Lưu mức dự phòng", priority: "Ưu tiên", high: "Cần chú ý", medium: "Theo dõi", low: "Thông tin", problem: "Vấn đề", figures: "Thông tin & thời điểm", cause: "Lý do phát hiện", action: "Gợi ý hành động", assumptions: "Cơ sở tính toán", actual: "Thực tế", forecast: "Dự báo", schedule: "Lịch dự kiến", handled: "Đã xử lý", read: "Đã đọc", unread: "Chưa đọc", markRead: "Đánh dấu đã đọc", note: "Cảnh báo được tính từ dữ liệu đã lưu. Dự báo chỉ gồm giả định nêu trong từng cảnh báo; không thực hiện thanh toán.", invalid: "Mức dự phòng phải là số không âm hợp lệ.", details: "Mở kế hoạch", openBudget: "Xem & điều chỉnh ngân sách", openFixed: "Xem khoản chi cố định", openWallet: "Quản lý ví & nạp tiền" },
@@ -27,16 +28,11 @@ export function FinancialOutlook({ editable = false, compact = false, notificati
   const state = useAppState();
   const lang: Language = /中文|zh/i.test(String(state.settings.language)) ? "zh" : /Tiếng Việt|vi/i.test(String(state.settings.language)) ? "vi" : "en";
   const t = COPY[lang], homeCopy = HOME_COPY[lang];
-  const [asOf, setAsOf] = useState(today);
+  const asOf = useFinancialDate(today(), String(state.settings.timeZone || "") || undefined);
   const [aiNotes, setAiNotes] = useState<Record<string, AiNote>>({});
   const attemptedIds = useRef(new Set<string>());
   const [editing, setEditing] = useState(false), [draft, setDraft] = useState<Record<string, string>>({}), [error, setError] = useState("");
   const [selectedAlert, setSelectedAlert] = useState<FinancialAlert | null>(null);
-  useEffect(() => {
-    const refresh = () => setAsOf(today());
-    const timer = window.setInterval(refresh, 60000); window.addEventListener("focus", refresh);
-    return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); };
-  }, []);
   const dismissedRaw = String(state.settings.dismissedFinancialAlerts || "[]");
   const alerts = useMemo(() => detectProactiveAlerts(state, asOfDate || asOf, readDismissedAlertIds(dismissedRaw), notifications), [state, asOf, asOfDate, dismissedRaw, notifications]);
   const handledIds = new Set(readDismissedAlertIds(dismissedRaw));

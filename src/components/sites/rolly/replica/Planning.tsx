@@ -8,12 +8,14 @@ import { CalendarLedgerModal } from "./CalendarLedgerModal";
 import { SETUP_COPY } from "@/lib/setup-copy";
 import { Modal, FinBridgeDropdown } from "./Ui";
 import { localDateKey } from "./chartWeek";
-import { budgetSummary, currencyScale, plannedOccurrences, validBudget, validFixedExpense } from "./planningModel";
+import { budgetSummary, plannedOccurrences, validBudget, validFixedExpense } from "./planningModel";
 import { flushWorkspace, updateState, useAppState, type FixedExpense, type Goal } from "./store";
 import { addBudgetCategory, expenseCategoriesForWallet } from "@/lib/budget-categories";
 import { nextExpenseDue, unpaidOccurrences } from "@/lib/fixed-expense-payments";
 import { FixedExpenseActions } from "@/components/payments/FixedExpenseActions";
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
+import { useFinancialDate } from "./useFinancialDate";
+import { fixedExpenseOccurrence, occurrenceStatusCopy } from "@/lib/fixed-expense-payments";
 
 
 const COPY = {
@@ -107,7 +109,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const params = useSearchParams();
   const language = String(state.settings.language || "").toLowerCase();
   const lang = /zh|chinese|trung|中文/.test(language) ? "zh" : /en|english|anh/.test(language) ? "en" : "vi";
-  const t = COPY[lang], today = localDateKey(new Date());
+  const t = COPY[lang], today = useFinancialDate(localDateKey(new Date()), String(state.settings.timeZone || "") || undefined);
   const horizon = new Date(today + "T12:00:00Z"); horizon.setUTCDate(horizon.getUTCDate() + 30);
   const unpaidHorizon = horizon.toISOString().slice(0, 10);
   const budgets = state.goals.filter((item) => item.kind === "budget");
@@ -356,10 +358,9 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
         <div className="fb-fixed-list">
           {!filteredFixed.length ? <div className="fb-planning-empty"><ReceiptText size={30} /><h2>{t.emptyFixed}</h2><p>{t.emptyFixedHint}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("fixed", parentFilter === "all" ? undefined : parentFilter)}><Plus size={17} />{t.addFixed}</button></div> : sortedFixed.slice(0, visibleFixedCount).map((expense) => {
             const parent = budgets.find((item) => item.id === expense.budgetId);
-            const window = parent ? budgetSummary(state, parent, today) : undefined;
-            const due = window ? plannedOccurrences(expense, window.start, window.end) : [];
             const currency = parent?.currency || state.wallets.find((wallet) => wallet.id === expense.walletId)?.currency || "";
             const unpaid = expense.active ? unpaidOccurrences(state, expense, expense.dueDate, unpaidHorizon) : [];
+            const nextDue = expense.active ? nextExpenseDue(state, expense, today) : null;
             return <article id={`fixed-${expense.id}`} className="fb-fixed-card" key={expense.id}>
               <div className="fb-planning-card-heading">
                 <span className="fb-planning-icon"><ArrowDownRight size={18} /></span>
@@ -381,7 +382,7 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
                 </div>
                 <div className="fb-fixed-compact-meta">
                   <span>{expense.recurrence === "monthly" ? `${repeatMonths}: ${expense.intervalMonths || 1}` : t[expense.recurrence]}</span>
-                  <span><CalendarDays size={12} />{due.length > 0 ? `${t.dueThisPeriod}: ${due.map(formatDate).join(" · ")}` : `${t.firstDue}: ${formatDate(expense.dueDate)}`}</span>
+                  <span><CalendarDays size={12} />{nextDue ? `${formatDate(nextDue)} · ${occurrenceStatusCopy[lang][fixedExpenseOccurrence(state, expense, nextDue, today).status]}` : !expense.active ? t.paused : (lang === "vi" ? "Không còn kỳ chưa thanh toán" : lang === "zh" ? "没有未付款期次" : "No unpaid occurrences remain")}</span>
                 </div>
               </div>
               {unpaid.length > 0 && <p className="fb-fixed-unpaid-summary">

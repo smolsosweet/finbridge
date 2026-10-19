@@ -9,6 +9,7 @@ import { safetyLanguage, type SafetyEvent } from "@/lib/safety-model";
 import { flushWorkspace, today, updateState, useAppState } from "./store";
 import { FinancialOutlook } from "./FinancialOutlook";
 import styles from "./NotificationCenter.module.css";
+import { useFinancialDate } from "./useFinancialDate";
 
 const copy = {
   vi: { title: "Thông báo", empty: "Bạn chưa có thông báo.", noUnread: "Bạn đã đọc hết thông báo.", all: "Tất cả", unread: "Chưa đọc", read: "Đã đọc", markAll: "Đánh dấu tất cả đã đọc", markRead: "Đánh dấu đã đọc", close: "Đóng thông báo", open: "Mở thông báo", financial: "Nhắc nhở tài chính", safety: "Cảnh báo theo ngưỡng đã đặt", settings: "Cài đặt cảnh báo", history: "Xem lịch sử cảnh báo", value: "Giá trị khi cảnh báo", threshold: "Ngưỡng đã chạm", recordedAt: "Ghi nhận lúc", period: "Kỳ theo dõi", snapshot: "Đây là số liệu tại thời điểm gửi cảnh báo.", go: "Xem mục liên quan", readNote: "Đã đọc không có nghĩa đã xử lý hoặc đã thanh toán.", error: "Chưa cập nhật được một số thông báo. Vui lòng thử lại.", loadError: "Chưa tải được cảnh báo theo ngưỡng. Số chưa đọc có thể chưa đầy đủ.", retry: "Thử lại", loading: "Đang tải cảnh báo…", filters: "Lọc thông báo" },
@@ -25,17 +26,11 @@ export function NotificationCenter({ navigate, floating = false }: { navigate: (
   const readLock = useRef(false);
   const root = useRef<HTMLDivElement>(null), trigger = useRef<HTMLButtonElement>(null), closeButton = useRef<HTMLButtonElement>(null);
   const panelId = useId();
-  const [asOf, setAsOf] = useState(today);
+  const asOf = useFinancialDate(today(), String(state.settings.timeZone || "") || undefined);
   useEffect(() => {
     const showAll = () => { setSourceFilter("all"); setUnreadOnly(false); setOpen(true); };
     window.addEventListener(NOTIFICATION_CENTER_OPEN_EVENT, showAll);
     return () => window.removeEventListener(NOTIFICATION_CENTER_OPEN_EVENT, showAll);
-  }, []);
-  useEffect(() => {
-    const refresh = () => setAsOf(today());
-    const timer = window.setInterval(refresh, 60000);
-    window.addEventListener("focus", refresh);
-    return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); };
   }, []);
   const alerts = useMemo(() => detectProactiveAlerts(state, asOf, [], true), [state, asOf]);
   const feed = useMemo(() => buildNotificationFeed(alerts, state.settings.readFinancialAlertIds, state.settings.dismissedFinancialAlerts), [alerts, state.settings.readFinancialAlertIds, state.settings.dismissedFinancialAlerts]);

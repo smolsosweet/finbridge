@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { applyDraftAmountCorrection, categoryResolutionDraftIds, createTimeoutTransactionDraft, editDraftById, formatTransactionMoney, inferDraftCategory, isNewTransactionMessage, isValidDraftCategoryName, matchDraftCategoryAnswer, parseDraftAmountCorrection, parseTransactionAmounts, readyDrafts, reconcileTransactionDraftAmounts, removeDraftById, requestedDraftCategory, similarDraftCategories, validateAndCommitDrafts, validateDraftForState } from "../src/lib/transaction-drafts.ts";
+import { applyDraftAmountCorrection, categoryResolutionDraftIds, createTimeoutTransactionDraft, editDraftById, formatTransactionMoney, hasCompatibleDraftWallet, inferDraftCategory, isNewTransactionMessage, isValidDraftCategoryName, matchDraftCategoryAnswer, normalizeCurrency, parseDraftAmountCorrection, parseTransactionAmounts, readyDrafts, reconcileTransactionDraftAmounts, removeDraftById, requestedDraftCategory, similarDraftCategories, unavailableWalletReply, validateAndCommitDrafts, validateDraftForState } from "../src/lib/transaction-drafts.ts";
 import { inferTransactionCurrency, resolveExplicitWallet, resolveUniqueCurrencyWallet } from "../src/lib/transaction-currency.ts";
 import { answerFinancialQuery, asksForAllWalletBalances, resolveFinancialFollowup } from "../src/lib/financial-chat.ts";
 import { modelHistory } from "../src/lib/chat-local-plan.ts";
@@ -415,4 +415,81 @@ test("spending answers count actual expenses only, format each language and resp
   app.settings.language = "中文";
   answer = answerFinancialQuery(query, app, "vnd", "2026-10-18");
   assert.match(answer, /827,000 VND/); assert.match(answer, /8 笔支出/);
+});
+
+test("regression: preserves explicit CNY (nhân dân tệ, tệ, RMB) across amounts, titles, drafts, and rejects incompatible wallets", () => {
+  const app = state();
+
+  // 1. "10 triệu nhân dân tệ" -> 10,000,000 in CNY
+  const parsedCnyMillion = parseTransactionAmounts("ăn sáng 10 triệu nhân dân tệ");
+  assert.deepEqual(parsedCnyMillion, [{ amount: 10_000_000, currency: "CNY" }]);
+  assert.equal(inferTransactionCurrency("ăn sáng 10 triệu nhân dân tệ"), "CNY");
+
+  // 2. "ăn sáng 50 tệ" -> CNY preserved
+  const parsedTe = parseTransactionAmounts("ăn sáng 50 tệ");
+  assert.deepEqual(parsedTe, [{ amount: 50, currency: "CNY" }]);
+  assert.equal(inferTransactionCurrency("ăn sáng 50 tệ"), "CNY");
+
+  // 3. "ăn sáng 100 RMB" -> CNY preserved
+  const parsedRmb = parseTransactionAmounts("ăn sáng 100 RMB");
+  assert.deepEqual(parsedRmb, [{ amount: 100, currency: "CNY" }]);
+  assert.equal(inferTransactionCurrency("ăn sáng 100 RMB"), "CNY");
+
+  // Title cleaning strips the amount and currency cleanly
+  const timeoutCny = createTimeoutTransactionDraft("ăn sáng 10 triệu nhân dân tệ", "timeout-cny", "2026-10-19", app);
+  assert.equal(timeoutCny?.title, "ăn sáng");
+  assert.equal(timeoutCny?.amount, 10_000_000);
+  assert.equal(timeoutCny?.currency, "CNY");
+
+  // 4. Explicit CNY cannot use a VND wallet silently
+  const vndWallets = [{ id: "vietinbank", name: "VietinBank", currency: "VND" }];
+  const invalidVndAssignment = validateDraftForState(draft({ id: "cny-1", amount: 10_000_000, currency: "CNY", wallet: "vietinbank" }), { ...app, wallets: vndWallets });
+  assert.equal(invalidVndAssignment.wallet, null, "conflicting wallet is unassigned");
+  assert.equal(invalidVndAssignment.currency, "CNY", "CNY currency is preserved");
+  assert.ok(invalidVndAssignment.needsReview.includes("wallet"));
+  assert.deepEqual(validateAndCommitDrafts({ ...app, wallets: vndWallets }, [invalidVndAssignment]).committed, []);
+
+  // 5. If no compatible wallet exists, prompts with unavailableWalletReply or needsReview: ["wallet"]
+  assert.equal(hasCompatibleDraftWallet({ currency: "CNY" }, vndWallets), false);
+  const replyVi = unavailableWalletReply(["CNY"], "vi");
+  assert.equal(replyVi, "Chưa có ví CNY đang hoạt động. Bạn hãy tạo ví phù hợp rồi gửi lại giao dịch nhé.");
+  const replyEn = unavailableWalletReply(["CNY"], "en");
+  assert.equal(replyEn, "There is no active CNY wallet. Create a matching wallet, then send the transaction again.");
+
+  // 6. Missing currency still uses default policy (e.g. "ăn sáng 25k" -> VND)
+  const parsedVnd = parseTransactionAmounts("ăn sáng 25k");
+  assert.deepEqual(parsedVnd, [{ amount: 25_000, currency: "VND" }]);
+  assert.equal(inferTransactionCurrency("ăn sáng 25k"), "VND");
+  const uniqueWallet = resolveUniqueCurrencyWallet("ăn sáng 25k", [{ id: "v1", currency: "VND" }]);
+  assert.equal(uniqueWallet.walletId, "v1");
+  assert.equal(uniqueWallet.currency, "VND");
+
+  // 7. Previous conversation about CNY does not override explicit currency (e.g., explicit VND)
+  assert.deepEqual(parseTransactionAmounts("ăn trưa 50k"), [{ amount: 50_000, currency: "VND" }]);
+  assert.equal(inferTransactionCurrency("ăn trưa 50k"), "VND");
+  assert.deepEqual(parseTransactionAmounts("ăn trưa 50k VND"), [{ amount: 50_000, currency: "VND" }]);
+  assert.equal(inferTransactionCurrency("ăn trưa 50k VND"), "VND");
+
+  // 8. Existing VND slang continues to work
+  assert.deepEqual(parseTransactionAmounts("chi 1,5 triệu"), [{ amount: 1_500_000, currency: "VND" }]);
+  assert.deepEqual(parseTransactionAmounts("mua áo 350k"), [{ amount: 350_000, currency: "VND" }]);
+  assert.deepEqual(parseTransactionAmounts("ăn sáng 10000đ"), [{ amount: 10_000, currency: "VND" }]);
+  assert.deepEqual(parseTransactionAmounts("đóng học phí 2 tr"), [{ amount: 2_000_000, currency: "VND" }]);
+
+  // 9. Title and amount are separated in draft summary display
+  const title = "ăn sáng";
+  const formattedMoney = formatTransactionMoney(10_000_000, "CNY");
+  assert.equal(formattedMoney, "10,000,000.00 CNY");
+  const summaryText = `${title} ${formattedMoney}`;
+  assert.equal(summaryText, "ăn sáng 10,000,000.00 CNY");
+  assert.doesNotMatch(summaryText, /ăn sáng10/);
+
+  // 10. Draft creation does not commit transactions before confirmation
+  const freshApp = state();
+  assert.equal(freshApp.transactions.length, 0);
+  const unconfirmedDraft = validateDraftForState(draft({ id: "draft-pending", currency: "CNY", wallet: null }), freshApp);
+  assert.equal(freshApp.transactions.length, 0, "draft validation does not write transactions");
+  const commitResult = validateAndCommitDrafts(freshApp, [unconfirmedDraft]);
+  assert.equal(commitResult.committed.length, 0, "unready draft is not committed");
+  assert.equal(freshApp.transactions.length, 0, "state remains untouched");
 });

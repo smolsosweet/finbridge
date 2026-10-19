@@ -10,10 +10,13 @@ import { readTransferImage } from "@/lib/read-transfer-image";
 import { currencyScale, plannedOccurrences } from "@/components/sites/rolly/replica/planningModel";
 import { BILL_PAYMENT_COPY } from "@/lib/bill-payment-copy";
 import styles from "./FixedExpenseActions.module.css";
+import { useFinancialDate } from "@/components/sites/rolly/replica/useFinancialDate";
+import { fixedExpenseOccurrence, occurrenceStatusCopy } from "@/lib/fixed-expense-payments";
 
 const blank: BankRecipient = {bankBin:"",accountNumber:"",accountName:"",reference:""};
 export function FixedExpenseActions({ expense, lang, navigate }: { expense: FixedExpense; lang: "en" | "vi" | "zh"; navigate: (path:string)=>void }) {
-  const state=useAppState(), t=BILL_PAYMENT_COPY[lang], wallet=expenseWallet(state,expense), asOf=today();
+  const state=useAppState(), t=BILL_PAYMENT_COPY[lang], wallet=expenseWallet(state,expense);
+  const asOf=useFinancialDate(today(), String(state.settings.timeZone || "") || undefined);
   const [mode,setMode]=useState<""|"record"|"transfer">(""), [chosenDue,setChosenDue]=useState(""), [paidOn,setPaidOn]=useState(asOf), [amount,setAmount]=useState(String(expense.amount)), [source,setSource]=useState(wallet?.id||""), [note,setNote]=useState("");
   const [recipient,setRecipient]=useState<BankRecipient>(blank),[app,setApp]=useState(""),[catalog,setCatalog]=useState<BankCatalog|null>(null),[catalogAttempt,setCatalogAttempt]=useState(0),[catalogError,setCatalogError]=useState(false);
   const [busy,setBusy]=useState(false),[reading,setReading]=useState(false),[reviewed,setReviewed]=useState(false),[handoff,setHandoff]=useState(false),[qr,setQr]=useState(""),[error,setError]=useState(""),[message,setMessage]=useState(""),[mismatch,setMismatch]=useState(false),[retryRecord,setRetryRecord]=useState(false);
@@ -23,7 +26,7 @@ export function FixedExpenseActions({ expense, lang, navigate }: { expense: Fixe
   const currency=wallet?.currency||"", format=(n:number)=>new Intl.NumberFormat("en-US",{style:"currency",currency:currency||"USD"}).format(n);
   const bank=catalog?.banks.find(b=>b.bin===recipient.bankBin), bankApp=catalog?.apps.find(a=>a.id===app);
   const validRecipient=bankRecipientSchema.safeParse(recipient).success, transferAmount=Number(amount), validTransfer=!!due && plannedOccurrences(expense,due,due).length>0 && validRecipient && Number.isSafeInteger(transferAmount)&&transferAmount>0&&transferAmount<=1e12;
-  const lastPayment=state.transactions.filter(tx=>tx.fixedExpenseId===expense.id).sort((a,b)=>b.date.localeCompare(a.date))[0];
+  const lastPayment=state.transactions.filter(tx=>tx.fixedExpenseId===expense.id&&tx.type==="expense"&&tx.paymentConfirmation==="user"&&tx.date.slice(0,10)<=asOf).sort((a,b)=>b.date.localeCompare(a.date))[0];
   function open(next:"record"|"transfer") { setChosenDue(due||expense.dueDate);setPaidOn(asOf);setAmount(String(expense.amount));setSource(wallet?.id||"");setNote("");setRecipient(expense.paymentRecipient||blank);setApp(expense.paymentRecipient?.preferredApp||"");setReviewed(false);setHandoff(false);setMismatch(false);setError("");setMessage("");setRetryRecord(false);setExistingId("");setQr("");setMode(next); }
   function close() { if (busy||reading) return;scanVersion.current++;setMode(""); }
   function changeRecipient(value:BankRecipient) {setRecipient(value);setReviewed(false);setQr("");setMessage("");}
@@ -66,8 +69,8 @@ export function FixedExpenseActions({ expense, lang, navigate }: { expense: Fixe
   async function copy(value:string) {try{await navigator.clipboard.writeText(value);setMessage(t.copied);}catch{setError(t.clipboardError);}}
   return <div className={styles.root}>
     {payment&&suggestedDue&&suggestedDue!==due&&expense.recurrence!=="once"&&<button type="button" className={styles.next} onClick={()=>setChosenDue(suggestedDue)}>{lang==="vi"?"Kỳ tiếp theo":lang==="zh"?"下一期":"Next occurrence"}: {suggestedDue}</button>}
-    {due&&<p className={styles.occurrence}>{t.upcoming}: <b>{due}</b>{payment&&<span className={styles.paid}><CheckCircle2 size={15}/>{t.paid}</span>}</p>}
-    {lastPayment&&<p className={styles.last}>{t.recorded} {lastPayment.fixedExpenseDueDate} · {format(lastPayment.amount)}<small>{t.selfReport}</small></p>}
+    {due&&<p className={styles.occurrence}>{t.due}: <b>{due}</b> · {occurrenceStatusCopy[lang][fixedExpenseOccurrence(state,expense,due,asOf).status]}{payment&&<span className={styles.paid}><CheckCircle2 size={15}/>{t.paid}</span>}</p>}
+    {lastPayment&&<p className={styles.last}>{occurrenceStatusCopy[lang].paid}: {lastPayment.fixedExpenseDueDate} · {format(lastPayment.amount)}<small>{t.recorded}: {lastPayment.date.slice(0,10)} · {t.selfReport}</small></p>}
     <div className={styles.actions}><button type="button" disabled={!expense.active||!due||!!payment||!wallet||!!wallet.archived} onClick={()=>open("record")}><CheckCircle2 size={16}/>{t.paid}</button><button type="button" disabled={!expense.active||!due||!!payment||!wallet||!!wallet.archived} onClick={()=>open("transfer")}><ScanLine size={16}/>{t.pay}</button></div>
     {mode&&<Modal title={mode==="record"?t.record:t.transfer} onClose={close} closeLabel={t.close + ": " + (mode==="record"?t.record:t.transfer)}><div className={styles.dialog}>
       <div className={styles.summary}><b>{expense.title}</b><span>{t.planned}: {format(expense.amount)}</span></div>

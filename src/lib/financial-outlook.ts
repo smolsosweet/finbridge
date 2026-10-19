@@ -1,7 +1,7 @@
 import type { AppState, Goal } from "@/components/sites/rolly/replica/store";
 import { budgetSummary, currencyScale } from "../components/sites/rolly/replica/planningModel";
 import { validFixedExpense } from "../components/sites/rolly/replica/planningModel";
-import { nextExpenseDue, fixedExpensePayment, unpaidOccurrences, expenseWallet } from "./fixed-expense-payments";
+import { nextExpenseDue, fixedExpensePayment, unpaidOccurrences, expenseWallet, fixedExpenseOccurrence, nextScheduledExpenseDue, type ExpenseOccurrenceStatus } from "./fixed-expense-payments";
 import { z } from "zod";
 const days = (a: string, b: string) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400000);
 export function validOutlookDate(value: string) {
@@ -73,10 +73,11 @@ export function financialOutlook(state: AppState, asOf: string) {
     if (!wallet || (expense.budgetId && !budget) || (budget && wallet.currency !== budget.currency)) return [];
     const due = nextExpenseDue(state, expense, asOf); if (!due || due > end || fixedExpensePayment(state, expense.id, due)) return [];
     const balance = trackedBalance(state, wallet.id, asOf);
+    const occurrence = fixedExpenseOccurrence(state, expense, due, asOf);
     const scale = currencyScale(wallet.currency);
     const after = (Math.round(balance.amount * scale) - Math.round(expense.amount * scale)) / scale;
     return [{ expense, wallet, due, daysUntil: days(asOf, due), balance, after, reserve: reserves[wallet.id] || 0,
-      belowReserve: balance.complete && after < (reserves[wallet.id] || 0), remind: days(asOf, due) <= (expense.reminderDays ?? 3) }];
+      belowReserve: balance.complete && after < (reserves[wallet.id] || 0), remind: occurrence.reminderActive, status: occurrence.status }];
   }).sort((a, b) => a.due.localeCompare(b.due) || a.expense.id.localeCompare(b.expense.id));
   const running = new Map<string, number>();
   for (const item of expenses) {
@@ -129,7 +130,7 @@ export function calculateSpendingPlan(state: AppState, asOf: string, rawOptions:
     const incomeUnits = transactions.filter(t => t.wallet === wallet.id && t.type === "income").reduce((sum, t) => sum + units(t.amount), 0);
     const expenseUnits = transactions.filter(t => t.wallet === wallet.id && t.type === "expense").reduce((sum, t) => sum + units(t.amount), 0);
     const transferUnits = transactions.filter(t => t.type === "transfer").reduce((sum, t) => sum - (t.wallet === wallet.id ? units(t.amount) : 0) + (t.targetWallet === wallet.id && state.wallets.find(w => w.id === t.wallet)?.currency === wallet.currency ? units(t.amount) : 0), 0);
-    const pending: Array<{ id: string; title: string; date: string; amount: number; budgetId: string; category: string; overdue: boolean; before: number | null; after: number | null }> = [];
+    const pending: Array<{ id: string; title: string; date: string; amount: number; budgetId: string; category: string; status: ExpenseOccurrenceStatus; overdue: boolean; before: number | null; after: number | null }> = [];
     const seenBills = new Set<string>();
     for (const expense of state.fixedExpenses || []) {
       if (!expense.active || expenseWallet(state, expense)?.id !== wallet.id) continue;
@@ -137,7 +138,8 @@ export function calculateSpendingPlan(state: AppState, asOf: string, rawOptions:
       seenBills.add(expense.id);
       if (!validFixedExpense(state, expense)) { issues.push("invalid-bill"); continue; }
       for (const due of unpaidOccurrences(ledger, expense, expense.dueDate, end)) {
-        pending.push({ id: `${expense.id}:${due}`, title: expense.title, date: due, amount: expense.amount, budgetId: expense.budgetId, category: expense.category, overdue: due < asOf, before: null, after: null });
+        const occurrence = fixedExpenseOccurrence(ledger, expense, due, asOf);
+        pending.push({ id: occurrence.id, title: expense.title, date: due, amount: expense.amount, budgetId: expense.budgetId, category: expense.category, status: occurrence.status, overdue: occurrence.status === "overdue", before: null, after: null });
       }
     }
     // Distinct confirmed payments for the same occurrence are inconsistent;
@@ -187,9 +189,19 @@ export function calculateSpendingPlan(state: AppState, asOf: string, rawOptions:
       const futureDays = days(asOf, summary.end < end ? summary.end : end);
       return { id: budget.id, title: budget.title, currency: budget.currency, category: budget.category, limit: budget.amount, actual: summary.matchingCurrency && complete ? summary.actual : null, start: summary.start, end: summary.end, through: summary.end < end ? summary.end : end, afterBills: complete ? afterBills : null, dailyLimit: complete && afterBills !== null && futureDays > 0 && summary.start <= asOf ? Math.max(0, Math.floor(units(afterBills) / futureDays)) / scale : null };
     });
+    const paidIds = new Set<string>();
+    const paidPeriods = transactions.flatMap(payment => {
+      if (!isFixedPayment(payment) || payment.type !== "expense" || !payment.fixedExpenseDueDate || payment.fixedExpenseDueDate > end || (payment.fixedExpenseDueDate < start && payment.date.slice(0, 10) < start)) return [];
+      const expense = state.fixedExpenses?.find(e => e.id === payment.fixedExpenseId);
+      if (!expense || expenseWallet(state, expense)?.id !== wallet.id || state.wallets.find(w => w.id === payment.wallet)?.currency !== wallet.currency) return [];
+      const id = `${expense.id}:${payment.fixedExpenseDueDate}`;
+      if (paidIds.has(id)) return [];
+      paidIds.add(id);
+      return [{ id, title: expense.title, due: payment.fixedExpenseDueDate, paidOn: payment.date.slice(0, 10), amount: payment.amount, paymentWalletId: payment.wallet, nextDue: nextScheduledExpenseDue(expense, payment.fixedExpenseDueDate) }];
+    }).sort((a, b) => b.due.localeCompare(a.due));
     return { walletId: wallet.id, name: wallet.name, currency: wallet.currency, complete, issues: [...new Set(issues)], balance: complete ? balance.amount : null,
       balanceInputs: { initial: wallet.initial, income: incomeUnits / scale, expenses: expenseUnits / scale, transfers: transferUnits / scale },
-      actualSpent: complete ? actualUnits / scale : null, transactionCount: actual.length, reserve, pending, committed: committedUnits / scale, spendable,
+      actualSpent: complete ? actualUnits / scale : null, transactionCount: actual.length, reserve, pending, paidPeriods, committed: committedUnits / scale, spendable,
       dailyLimit: spendable !== null && remainingDays > 0 ? Math.max(0, Math.floor(units(spendable) / remainingDays)) / scale : null,
       afterBills: complete ? running / scale : null, forecastAvailable, flexibleForecast: forecastAvailable ? forecastUnits / scale : null,
       projected: forecastAvailable ? (running - forecastUnits) / scale : null,

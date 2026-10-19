@@ -43,6 +43,14 @@ Chạy `npm run auth:migrate` để bổ sung schema. Database local đã đư�
 
 ## Kiểm tra
 
+### Vòng đời từng kỳ và thời gian
+
+- Mỗi kỳ có định danh `expenseId:YYYY-MM-DD`; thanh toán và nhắc hạn được phân giải theo đúng ngày đến hạn đó. Đọc hoặc xử lý cảnh báo kỳ trước không xử lý kỳ mới. Kỳ kế tiếp được tính từ lịch đã lưu, không tạo thêm bản ghi tài chính.
+- `fixedExpenseOccurrence()` phân biệt chưa đến hạn, sắp đến hạn (trong `reminderDays`), đến hạn hôm nay, quá hạn và đã thanh toán. Giữ nguyên `reminderDays=0`; khi chưa có cấu hình, vẫn dùng quy ước cũ là ba ngày, không ghi giá trị mặc định vào dữ liệu.
+- Kế hoạch trừ mọi kỳ chưa trả đến cuối tháng, gồm kỳ quá hạn. Các kỳ có liên kết thanh toán xác nhận chỉ xuất hiện trong lịch sử đã trả, không bị trừ tiếp. Việc tính/hiển thị kỳ mới không tự đánh dấu thanh toán.
+- Planning, thẻ kế hoạch, hộp thoại thanh toán và chuông dùng chung đồng hồ khi đang mở web: kiểm tra ngày mỗi 30 giây và khi cửa sổ nhận focus/tab hiển thị lại. Dùng múi giờ workspace nếu có, nếu không dùng múi giờ thiết bị; múi giờ không hợp lệ được xử lý an toàn bằng UTC.
+- Đây không phải cơ chế gửi nhắc hóa đơn khi đóng web. Worker `/api/internal/safety` hiện phục vụ quy tắc ngưỡng ngân sách/dự phòng, cần scheduler bên ngoài và cấu hình email phù hợp (xem `docs/safety/SAFETY_ALERTS.md`). Repository không cấu hình sẵn scheduler cho nhắc hóa đơn; không cam kết email/push nền cho chức năng này.
+
 - `npm run test:bill-payments`: QR/CRC, mã hỏng/không hỗ trợ, URL an toàn, ghi nhận/ghi lặp, liên kết giao dịch có sẵn và loại khoản đã trả khỏi dự báo.
 - `npm run test:bill-payments:postgres`: lưu/sửa người nhận, isolation, xác nhận đồng thời, unique constraint, dữ liệu giả mạo, xóa mềm và giữ lịch sử.
 - `node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/verify-bill-payments-ui.mjs`: trình duyệt đăng nhập vào database test riêng, dùng QR và người nhận tổng hợp; kiểm tra đọc QR, sửa/lưu/tải lại, loại app có/không điền sẵn, không ghi chi khi chỉ mở app, retry khi lưu lỗi, liên kết giao dịch, EN/VI/ZH và hộp thoại 390px.

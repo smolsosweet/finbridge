@@ -17,11 +17,14 @@ function detectCurrencyCues(message: string): Set<string> {
   const normalized = normalizeCurrencyText(message);
   const detected = new Set<string>();
 
-  if (/(?:\$|\busd\b|\bdollars?\b|\bdo\s+la\b|\b\d[\d.,]*\s*do\b)/i.test(normalized)) detected.add("USD");
-  if (/(?:\bcny\b|\brmb\b|\byuan\b|\brenminbi\b|\bnhan\s+dan\s+te\b|\b\d[\d.,]*\s*te\b)/i.test(normalized)) detected.add("CNY");
-  const explicitForeignCurrencyAfterShorthand = /\b\d[\d.,]*\s*(?:k|nghin|ngan|trieu|tr)\s*(?:usd|dollars?|dollar|do\s*la|do|cny|rmb|yuan|te)\b/i.test(normalized);
+  if (/(?:\$|\busd\b|\bdollars?\b|\bdo\s+la\b|\b\d[\d.,]*\s*do\b|\bmy\s+kim\b|\bdo\s+my\b|\b美元\b)/i.test(normalized)) detected.add("USD");
+  if (/(?:\bcny\b|\brmb\b|\byuan\b|\brenminbi\b|\bnhan\s+dan\s+te\b|\b\d[\d.,]*\s*te\b|\b\d[\d.,]*\s*nhan\s*dan\s*te\b|\b元\b|\b人民币\b)/i.test(normalized)) detected.add("CNY");
+
+  const foreignShorthandPattern = /\b\d[\d.,]*\s*(?:k|nghin|ngan|trieu|tr|million|m)\s*(?:usd|dollars?|dollar|do\s*la|do|my\s*kim|cny|rmb|yuan|renminbi|nhan\s*dan\s*te|te|元|人民币|美元)\b/gi;
+  const withoutForeignShorthands = normalized.replace(foreignShorthandPattern, " ");
+
   if (/(?:\bvnd\b|\bdong\b|₫)/i.test(normalized)
-    || (!explicitForeignCurrencyAfterShorthand && /\b\d[\d.,]*\s*(?:k|nghin|ngan|trieu|tr)\b/i.test(normalized))) detected.add("VND");
+    || /\b\d[\d.,]*\s*(?:k|nghin|ngan|trieu|tr)\b/i.test(withoutForeignShorthands)) detected.add("VND");
 
   return detected;
 }

@@ -3,7 +3,14 @@ import { parseTransactionAmounts } from "./transaction-drafts";
 
 const normalize = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase().replace(/\s+/g, " ").trim();
 type FieldReply = { patch: Partial<WorkspaceAction> } | { error: "INVALID_NUMBER" | "CURRENCY_MISMATCH"; currency?: string; expectedCurrency?: string };
-const currencies: Record<string, string> = { "$": "USD", usd: "USD", dollar: "USD", dollars: "USD", do: "USD", "do la": "USD", vnd: "VND", dong: "VND", d: "VND", "₫": "VND", cny: "CNY", rmb: "CNY", yuan: "CNY", te: "CNY", "元": "CNY", "人民币": "CNY", "美元": "USD", "€": "EUR", "£": "GBP" };
+const currencies: Record<string, string> = {
+  "$": "USD", usd: "USD", dollar: "USD", dollars: "USD", do: "USD", "do la": "USD", "my kim": "USD", "do my": "USD", "美元": "USD",
+  vnd: "VND", dong: "VND", d: "VND", "₫": "VND", "tien viet": "VND",
+  cny: "CNY", rmb: "CNY", yuan: "CNY", te: "CNY", "nhan dan te": "CNY", renminbi: "CNY", "元": "CNY", "人民币": "CNY",
+  "€": "EUR", eur: "EUR", euro: "EUR", "tien au": "EUR",
+  "£": "GBP", gbp: "GBP", pound: "GBP", pounds: "GBP", "bang anh": "GBP", bang: "GBP",
+  "¥": "JPY", jpy: "JPY", yen: "JPY", "tien nhat": "JPY", "日元": "JPY",
+};
 const multipliers: Record<string, number> = { k: 1000, nghin: 1000, ngan: 1000, thousand: 1000, trieu: 1e6, tr: 1e6, m: 1e6, million: 1e6, ty: 1e9, billion: 1e9, "千": 1000, "万": 1e4, "百万": 1e6 };
 
 /** Bind an unambiguous short answer to the *current* question only. Longer,
@@ -21,10 +28,14 @@ export function resolveWorkspaceFieldReply(message: string, question: ActionQues
   const numericText = text
     .replace(/^(?:(?:so tien|ngan sach|han muc|so du(?: ban dau)?|amount|budget|opening balance|credit limit|金额|预算|初始余额)\s*(?:la|is|:|：|是)?\s*)/u, "")
     .replace(/\s+(?:nhe|nha|a|please)$/u, "");
-  const match = numericText.match(/^(\$|€|£|[a-z]{3}|人民币)?\s*([+-]?\d[\d.,]*)(?:\s*(k|nghin|ngan|trieu|tr|m|million|thousand|ty|billion|百万|万|千))?(?:\s*(\$|€|£|[a-z]{3}|dollars?|do la|do|dong|d|₫|rmb|yuan|te|元|美元|人民币))?$/u);
+  const match = numericText.match(/^(\$|€|£|¥|[a-z]{3}|人民币|元|美元)?\s*([+-]?\d[\d.,]*)(?:\s*(k|nghin|ngan|trieu|tr|m|million|thousand|ty|billion|百万|万|千))?(?:\s*(nhan\s+dan\s+te|renminbi|bang\s+anh|my\s+kim|do\s+la|dollars?|dong|euro?|pound|pounds|bang|yuan|rmb|vnd|cny|usd|eur|gbp|jpy|yen|te|do|d|₫|\$|€|£|¥|[a-z]{3}|元|美元|人民币))?$/u);
   if (!match) return null;
   const [, prefix, raw, unit, suffix] = match;
-  const code = (value: string | undefined) => value ? currencies[value] || (Intl.supportedValuesOf("currency").includes(value.toUpperCase()) ? value.toUpperCase() : null) : null;
+  const code = (value: string | undefined) => {
+    if (!value) return null;
+    const clean = value.replace(/\s+/g, " ").trim();
+    return currencies[clean] || (Intl.supportedValuesOf("currency").includes(clean.toUpperCase()) ? clean.toUpperCase() : null);
+  };
   const before = code(prefix), after = code(suffix);
   if ((prefix && !before) || (suffix && !after) || (before && after && before !== after)) return { error: "INVALID_NUMBER" };
   const inferred = unit && /^(?:k|nghin|ngan|trieu|tr|ty)$/.test(unit) ? "VND" : null;

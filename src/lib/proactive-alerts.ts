@@ -1,6 +1,6 @@
 import type { AppState, FixedExpense, Wallet } from "../components/sites/rolly/replica/store";
 import { budgetSummary, currencyScale } from "../components/sites/rolly/replica/planningModel";
-import { unpaidOccurrences } from "./fixed-expense-payments";
+import { fixedExpenseOccurrence, unpaidOccurrences } from "./fixed-expense-payments";
 import { budgetPace, trackedBalance } from "./financial-outlook";
 
 export type FinancialAlertPriority = "high" | "medium" | "low";
@@ -134,7 +134,7 @@ export function detectProactiveAlerts(state: AppState, asOf: string, dismissedId
         figures: `Số dư hiện tại ${formatMoney(balance.amount, wallet.currency, language)} · thiếu dự kiến ${formatMoney(shortfall, wallet.currency, language)} sau khoản đến hạn ${crossing.at(-1)?.due}.`,
         when: crossing.at(-1)?.due || asOf, cause: crossing.map((item) => {
           const date = new Intl.DateTimeFormat(locale, { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "UTC" }).format(new Date(item.due + "T12:00:00Z"));
-          const status = item.due < asOf ? (locale === "en-US" ? "overdue, not recorded as paid" : locale === "zh-CN" ? "已逾期，尚未记录付款" : "quá hạn, chưa ghi nhận đã trả") : (locale === "en-US" ? "upcoming, not recorded as paid" : locale === "zh-CN" ? "即将到期，尚未记录付款" : "sắp đến hạn, chưa ghi nhận đã trả");
+          const status = item.due < asOf ? (locale === "en-US" ? "overdue, not recorded as paid" : locale === "zh-CN" ? "已逾期，尚未记录付款" : "quá hạn, chưa ghi nhận đã trả") : item.due === asOf ? (locale === "en-US" ? "due today, not recorded as paid" : locale === "zh-CN" ? "今天到期，尚未记录付款" : "đến hạn hôm nay, chưa ghi nhận đã trả") : (locale === "en-US" ? "upcoming, not recorded as paid" : locale === "zh-CN" ? "即将到期，尚未记录付款" : "sắp đến hạn, chưa ghi nhận đã trả");
           return `${item.expense.title} · ${date} · ${formatMoney(item.expense.amount, wallet.currency, language)} · ${status}`;
         }).join("\n"),
         priority: "high", suggestedAction: "Kiểm tra các khoản đến hạn, cân nhắc dời khoản chưa bắt buộc hoặc bổ sung tiền vào ví.",
@@ -145,9 +145,9 @@ export function detectProactiveAlerts(state: AppState, asOf: string, dismissedId
 
   for (const items of dueByWallet.values()) {
     for (const { expense, wallet, due } of items) {
-      const days = daysBetween(asOf, due), reminderDays = expense.reminderDays ?? 3;
-      if (days > reminderDays || shortfallDueIds.has(`${expense.id}:${due}`)) continue;
-      add({ id: `fixed-due:${expense.id}:${due}`, kind: "fixed-due", problem: days < 0 ? `Khoản cố định “${expense.title}” đã quá hạn.` : `Khoản cố định “${expense.title}” sắp đến hạn.`,
+      const occurrence = fixedExpenseOccurrence(state, expense, due, asOf), days = occurrence.daysUntil;
+      if (!occurrence.reminderActive || shortfallDueIds.has(occurrence.id)) continue;
+      add({ id: `fixed-due:${occurrence.id}`, kind: "fixed-due", problem: days < 0 ? `Khoản cố định “${expense.title}” đã quá hạn.` : days === 0 ? `Khoản cố định “${expense.title}” đến hạn hôm nay.` : `Khoản cố định “${expense.title}” sắp đến hạn.`,
         figures: `${formatMoney(expense.amount, wallet.currency, language)} · ví ${walletName(wallet, language)} · ${days < 0 ? `quá hạn ${-days} ngày` : `còn ${days} ngày`}.`, when: due,
         cause: `Lịch ${expense.recurrence} đã lưu cho khoản này.`, priority: days <= 1 ? "high" : "medium",
         suggestedAction: "Kiểm tra số dư ví và đánh dấu khoản này đã thanh toán trong dữ liệu sau khi trả.",
@@ -196,7 +196,7 @@ function localizeAlert(alert: FinancialAlert, state: AppState, asOf: string, lan
   if (alert.kind === "fixed-due" && bill) {
     const days = daysBetween(asOf, alert.when);
     return { ...common,
-      problem: days < 0 ? say(`Fixed expense “${bill.title}” is overdue.`, `固定支出“${bill.title}”已逾期。`) : say(`Fixed expense “${bill.title}” is due ${alert.when}.`, `固定支出“${bill.title}”于 ${alert.when} 到期。`),
+      problem: days < 0 ? say(`Fixed expense “${bill.title}” is overdue.`, `固定支出“${bill.title}”已逾期。`) : days === 0 ? say(`Fixed expense “${bill.title}” is due today.`, `固定支出“${bill.title}”今天到期。`) : say(`Fixed expense “${bill.title}” is due ${alert.when}.`, `固定支出“${bill.title}”于 ${alert.when} 到期。`),
       figures: `${money(alert.amount)} · ${name} · ${days < 0 ? say(`${-days} days overdue`, `已逾期 ${-days} 天`) : say(`${days} days remaining`, `剩余 ${days} 天`)}`,
       cause: say("This bill has an unpaid occurrence in its saved schedule.", "此账单的已保存计划中有一笔未付费用。"),
       suggestedAction: say("After paying, use Mark as paid or link the recorded expense.", "付款后使用“已支付”或关联已有支出。"),

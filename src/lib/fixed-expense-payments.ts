@@ -8,6 +8,29 @@ export function expenseWallet(state: AppState, expense: FixedExpense) {
 export function fixedExpensePayment(state: AppState, expenseId: string, dueDate: string) {
   return occurrencePayment(state, expenseId, dueDate);
 }
+export type ExpenseOccurrenceStatus = "not-due" | "due-soon" | "due-today" | "overdue" | "paid";
+export const occurrenceStatusCopy = {
+  vi: { "not-due": "Chưa đến hạn", "due-soon": "Sắp đến hạn", "due-today": "Đến hạn hôm nay", overdue: "Quá hạn", paid: "Đã thanh toán" },
+  en: { "not-due": "Not due yet", "due-soon": "Due soon", "due-today": "Due today", overdue: "Overdue", paid: "Paid" },
+  zh: { "not-due": "尚未到期", "due-soon": "即将到期", "due-today": "今天到期", overdue: "已逾期", paid: "已支付" },
+} as const;
+/** Occurrence identity and payment are per due date, never per recurring plan. */
+export function fixedExpenseOccurrence(state: Pick<AppState, "transactions">, expense: FixedExpense, due: string, asOf: string) {
+  const daysUntil = Math.round((Date.parse(due + "T12:00:00Z") - Date.parse(asOf + "T12:00:00Z")) / 86400000);
+  const payment = occurrencePayment(state, expense.id, due);
+  const paid = !!payment && payment.date.slice(0, 10) <= asOf;
+  // Three days is the existing application fallback; an explicit zero stays zero.
+  const reminderDays = expense.reminderDays ?? 3;
+  const status: ExpenseOccurrenceStatus = paid ? "paid" : daysUntil < 0 ? "overdue" : daysUntil === 0 ? "due-today" : daysUntil <= reminderDays ? "due-soon" : "not-due";
+  return { id: `${expense.id}:${due}`, due, status, daysUntil, reminderDays, reminderActive: !paid && daysUntil <= reminderDays, payment: paid ? payment : undefined };
+}
+export function nextScheduledExpenseDue(expense: FixedExpense, afterDue: string) {
+  if (expense.recurrence === "once" || !expense.active) return null;
+  const start = new Date(afterDue + "T12:00:00Z");
+  if (!Number.isFinite(start.getTime())) return null;
+  start.setUTCDate(start.getUTCDate() + 1);
+  return plannedOccurrences(expense, start.toISOString().slice(0, 10), `${start.getUTCFullYear() + 2}-12-31`)[0] || null;
+}
 export function unpaidOccurrences(state: AppState, expense: FixedExpense, start: string, end: string) {
   const result: string[] = [];
   const paid = new Set(state.transactions.filter(t => t.type === "expense" && t.paymentConfirmation === "user" && t.fixedExpenseId === expense.id).map(t => t.fixedExpenseDueDate));

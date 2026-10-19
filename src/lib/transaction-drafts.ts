@@ -29,15 +29,36 @@ export function hasCompatibleDraftWallet(draft: Pick<TransactionDraft, "currency
   return wallets.some(wallet => !wallet.archived && (!draft.currency || wallet.currency.toUpperCase() === draft.currency.toUpperCase()));
 }
 
+export function unavailableWalletReply(currencies: Array<string | null>, language: "vi" | "en" | "zh" = "vi"): string {
+  const codes = [...new Set(currencies.filter((value): value is string => !!value).map(value => value.toUpperCase()))].join(", ");
+  return {
+    vi: codes ? `Chưa có ví ${codes} đang hoạt động. Bạn hãy tạo ví phù hợp rồi gửi lại giao dịch nhé.` : "Chưa có ví đang hoạt động. Bạn hãy tạo ví rồi gửi lại giao dịch nhé.",
+    en: codes ? `There is no active ${codes} wallet. Create a matching wallet, then send the transaction again.` : "There is no active wallet. Create a wallet, then send the transaction again.",
+    zh: codes ? `暂无可用的 ${codes} 钱包。请先创建对应钱包，再重新发送交易。` : "暂无可用钱包。请先创建钱包，再重新发送交易。",
+  }[language];
+}
+
+export function normalizeCurrency(unit: string | null | undefined): string | null {
+  if (!unit) return null;
+  const norm = unit.toLocaleLowerCase("vi").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/\s+/g, " ").trim();
+  if (/^(cny|rmb|yuan|renminbi|te|nhan dan te|元|人民币)$/.test(norm)) return "CNY";
+  if (/^(usd|dollars?|dollar|do la|do|\$|my kim|do my|usdt|美元)$/.test(norm)) return "USD";
+  if (/^(eur|euro|€|tien au|ou yuan|欧)$/.test(norm)) return "EUR";
+  if (/^(gbp|pound|pounds|£|bang anh|bang|ying bang|镑)$/.test(norm)) return "GBP";
+  if (/^(jpy|yen|¥|tien nhat|ri yuan|日元)$/.test(norm)) return "JPY";
+  if (/^(vnd|dong|₫|d|tien viet|vnđ)$/.test(norm)) return "VND";
+  return null;
+}
+
 /** Parse only amounts with an explicit shorthand or currency marker. */
 export function parseTransactionAmounts(message: string): ParsedTransactionAmount[] {
-  const pattern = /(?:\$\s*(\d[\d.,]*)|\b(\d[\d.,]*)\s*(k|nghìn|ngàn|nghin|ngan|triệu|trieu|tr|million|m|usd|dollars?|dollar|đô\s*la|đô|cny|rmb|yuan|tệ|te|vnd|đồng|dong|₫|đ|\$))/giu;
+  const pattern = /(?:\$\s*(\d[\d.,]*)|\b(\d[\d.,]*)\s*(k|nghìn|ngàn|nghin|ngan|triệu|trieu|tr|million|m|nhân\s+dân\s+tệ|nhan\s+dan\s+te|renminbi|bảng\s+anh|bang\s+anh|đô\s*la|do\s*la|đô\s*mỹ|do\s*my|mỹ\s*kim|my\s*kim|tiền\s*việt|tien\s*viet|usd|dollars?|dollar|đô|do|cny|rmb|yuan|tệ|te|eur|euro|gbp|pound|pounds|bảng|bang|jpy|yen|yên|vnd|đồng|dong|₫|đ|\$|€|£|¥|元|人民币|美元))/giu;
   const amounts: ParsedTransactionAmount[] = [];
   for (const match of message.matchAll(pattern)) {
     const raw = match[1] || match[2];
     const unit = (match[3] || (match[1] ? "usd" : "")).toLocaleLowerCase("vi").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
-    const trailingCurrency = message.slice((match.index || 0) + match[0].length).match(/^\s*(usd|dollars?|dollar|đô\s*la|đô|cny|rmb|yuan|tệ|te|vnd|đồng|dong|₫|đ)(?=\s|$|[.,!?])/iu)?.[1];
-    const currencyUnit = (trailingCurrency || unit).toLocaleLowerCase("vi").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
+    const trailingCurrency = message.slice((match.index || 0) + match[0].length).match(/^\s*(nhân\s+dân\s+tệ|nhan\s+dan\s+te|renminbi|bảng\s+anh|bang\s+anh|đô\s*la|do\s*la|đô\s*mỹ|do\s*my|mỹ\s*kim|my\s*kim|tiền\s*việt|tien\s*viet|usd|dollars?|dollar|đô|do|cny|rmb|yuan|tệ|te|eur|euro|gbp|pound|pounds|bảng|bang|jpy|yen|yên|vnd|đồng|dong|₫|đ|\$|€|£|¥|元|人民币|美元)(?=\s|$|[.,!?])/iu)?.[1];
+    const currencyUnit = trailingCurrency || unit;
     const normalized = raw.includes(".") && raw.includes(",")
       ? raw.replace(/[.,](?=\d{3}(?:\D|$))/g, "").replace(",", ".")
       : /^[\d]{1,3}(?:[.,]\d{3})+$/.test(raw) ? raw.replace(/[.,]/g, "") : raw.replace(",", ".");
@@ -45,9 +66,8 @@ export function parseTransactionAmounts(message: string): ParsedTransactionAmoun
     const multiplier = /^(k|nghin|ngan)$/.test(unit) ? 1_000 : /^(trieu|tr|million|m)$/.test(unit) ? 1_000_000 : 1;
     const amount = Math.round(numeric * multiplier * 100) / 100;
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000_000) continue;
-    const currency = /^(usd|dollars?|dollar|do\s*la|do|\$)$/.test(currencyUnit) ? "USD"
-      : /^(cny|rmb|yuan|te)$/.test(currencyUnit) ? "CNY"
-        : /^(k|nghin|ngan|trieu|tr|vnd|dong|₫|d)$/.test(currencyUnit) ? "VND" : null;
+    const currency = normalizeCurrency(currencyUnit)
+      || (/^(k|nghin|ngan|trieu|tr|million|m)$/.test(unit) ? "VND" : null);
     amounts.push({ amount, currency });
   }
   return amounts;
@@ -75,7 +95,7 @@ export function parseDraftAmountCorrection(message: string): ParsedTransactionAm
   // A fast amount-only edit must not swallow a changed description or date.
   // Leave meaningful remaining words to the contextual model and full patch.
   const rest = normalized
-    .replace(/\$\s*\d[\d.,]*|\b\d[\d.,]*\s*(?:k|nghin|ngan|trieu|tr|million|m|usd|dollars?|do\s*la|do|cny|rmb|yuan|te|vnd|dong|₫|đ|\$)(?:\s*(?:usd|dollars?|do\s*la|do|cny|rmb|yuan|te|vnd|dong|₫|đ))?/g, " ")
+    .replace(/\$\s*\d[\d.,]*|\b\d[\d.,]*\s*(?:k|nghin|ngan|trieu|tr|million|m|nhan\s+dan\s+te|renminbi|bang\s+anh|my\s+kim|do\s+la|usd|dollars?|dollar|do|cny|rmb|yuan|te|eur|euro|gbp|pound|pounds|bang|jpy|yen|vnd|dong|₫|đ|\$|€|£|¥|元|人民币|美元)(?:\s*(?:nhan\s+dan\s+te|renminbi|bang\s+anh|my\s+kim|do\s+la|usd|dollars?|dollar|do|cny|rmb|yuan|te|eur|euro|gbp|pound|pounds|bang|jpy|yen|vnd|dong|₫|đ|\$|€|£|¥|元|人民币|美元))?/g, " ")
     .replace(/\b(?:i meant|y toi|dinh noi|make that|change it to|so tien|toi|minh|nham|sai|actually|correction|i|la|thanh)\b/g, " ")
     .replace(/[\s,.:;!]+/g, "");
   return rest ? null : amounts[0];
@@ -118,7 +138,7 @@ export function createTimeoutTransactionDraft(message: string, batchId: string, 
   }
   const category = inferDraftCategory(message, type, state);
   const title = message.trim()
-    .replace(/\b\d[\d.,]*\s*(?:k|nghìn|ngàn|triệu|tr|đồng|vnd|₫|đ)\b/gi, " ")
+    .replace(/(?:\$\s*\d[\d.,]*|\b\d[\d.,]*\s*(?:k|nghìn|ngàn|nghin|ngan|triệu|trieu|tr|million|m|nhân\s+dân\s+tệ|nhan\s+dan\s+te|renminbi|bảng\s+anh|bang\s+anh|đô\s*la|do\s*la|đô\s*mỹ|do\s*my|mỹ\s*kim|my\s*kim|usd|dollars?|dollar|đô|do|cny|rmb|yuan|tệ|te|eur|euro|gbp|pound|pounds|bảng|bang|jpy|yen|yên|vnd|đồng|dong|₫|đ|\$|€|£|¥|元|人民币|美元)(?:\s*(?:nhân\s+dân\s+tệ|nhan\s+dan\s+te|renminbi|bảng\s+anh|bang\s+anh|đô\s*la|do\s*la|đô\s*mỹ|do\s*my|mỹ\s*kim|my\s*kim|usd|dollars?|dollar|đô|do|cny|rmb|yuan|tệ|te|eur|euro|gbp|pound|pounds|bảng|bang|jpy|yen|yên|vnd|đồng|dong|₫|đ|\$|€|£|¥|元|人民币|美元))?)/giu, " ")
     .replace(/\b(?:hôm nay|hôm qua|yesterday|today|hết)\b/gi, " ")
     .replace(/\s+/g, " ").trim();
   const draft: TransactionDraft = {
@@ -136,7 +156,8 @@ export function normalizeVietnameseMessage(value: string): string {
 export function isNewTransactionMessage(message: string): boolean {
   const value = normalizeVietnameseMessage(message);
   if (/^(danh muc|loai giao dich|ngay|so tien|vi|tien te)\b/.test(value)) return false;
-  return /\b(an|uong|mua|dong|nop|nhan|tra|di xe|bat xe|do xang|gui|thanh toan|chuyen khoan|kham benh|ve xe)\b/.test(value) || /\d[\d.,]*\s*(k|nghin|ngan|trieu|dong|vnd|₫|đ)\b/.test(value);
+  return /\b(an|uong|mua|dong|nop|nhan|tra|di xe|bat xe|do xang|gui|thanh toan|chuyen khoan|kham benh|ve xe)\b/.test(value)
+    || /\d[\d.,]*\s*(k|nghin|ngan|trieu|tr|million|m|dong|vnd|₫|đ|te|nhan\s*dan\s*te|cny|rmb|yuan|usd|do|euro?|gbp|bang|yen)\b/.test(value);
 }
 
 export function resolveDraftCategory(message: string, type: DraftType | null, state: Pick<DraftState, "categories" | "categoryMeta">): { category: string | null; candidates: string[]; confidence: "confident" | "ambiguous" | "unknown"; recognized: boolean } {

@@ -20,7 +20,7 @@ import { prepareReceiptImage } from "@/lib/receipt-image";
 import { definitelyRejectedWorkspace, workspaceSaveErrorMessage } from "@/lib/workspace-payload";
 import { pendingDraftInterruption, pendingDraftReminder, rollbackRejectedDrafts, shouldBlockNewDraft } from "@/lib/pending-draft-policy";
 import { asksForCalculationExplanation, scenarioCalculationExplanation } from "@/lib/scenario-explanation";
-import { hasCompatibleDraftWallet } from "@/lib/transaction-drafts";
+import { hasCompatibleDraftWallet, unavailableWalletReply } from "@/lib/transaction-drafts";
 import { WorkspaceActionCard } from "./WorkspaceActionCard";
 import { applyWorkspaceProposal, inspectWorkspaceProposal, isWorkspaceCreationRequest, workspaceActionCopy, workspaceProposalSchema, type ActionField, type WorkspaceProposal } from "@/lib/workspace-actions";
 import { calculateScenario, normalizePlannerResponse, scenarioContext, type ScenarioResult } from "@/lib/scenario-planner";
@@ -31,15 +31,6 @@ import { findTransactionsForDeletion, type TransactionDeletionCriteria } from "@
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 
 const lockedDeletionConfirmations = new Set<string>();
-
-function unavailableWalletReply(currencies: Array<string | null>, language: AppLanguage): string {
-  const codes = [...new Set(currencies.filter((value): value is string => !!value).map(value => value.toUpperCase()))].join(", ");
-  return {
-    vi: codes ? `Chưa có ví ${codes} đang hoạt động. Bạn hãy tạo ví phù hợp rồi gửi lại giao dịch nhé.` : "Chưa có ví đang hoạt động. Bạn hãy tạo ví rồi gửi lại giao dịch nhé.",
-    en: codes ? `There is no active ${codes} wallet. Create a matching wallet, then send the transaction again.` : "There is no active wallet. Create a wallet, then send the transaction again.",
-    zh: codes ? `暂无可用的 ${codes} 钱包。请先创建对应钱包，再重新发送交易。` : "暂无可用钱包。请先创建钱包，再重新发送交易。",
-  }[language];
-}
 const CATEGORY_FLOW_COPY = {
   en: { choose: "Choose a category", income: "Income", expense: "Expense", transaction: "Transaction", newCategory: "Create a new category", name: "New category name", placeholder: "Enter a category name", create: "Create and attach to draft", cancel: "Cancel", invalid: "Use 1–100 letters, numbers, spaces, or basic punctuation.", wrongType: "That name is already used for the other transaction type.", similar: "A similar category already exists", existing: "Similar categories already exist", selected: "Selected", temporary: "Temporary category", draftOnly: "Draft only", savedOnConfirm: "A new category is saved only when you confirm the transaction. Removing the draft discards it.", updated: "Category set to", notSaved: "Draft not saved yet", noOptions: "No existing category is available for this transaction type.", categoryPrompt: "Choose a category below or create a new one.", pendingCategory: "New category", stillDraft: "is attached to the draft only. It will be saved when you confirm.", saving: "Saving transaction…", processing: "Processing…", askTarget: "Which transaction needs a category?" },
   vi: { choose: "Chọn danh mục phù hợp", income: "Khoản thu", expense: "Khoản chi", transaction: "Giao dịch", newCategory: "Tạo danh mục mới", name: "Tên danh mục mới", placeholder: "Nhập tên danh mục", create: "Tạo và gắn vào bản nháp", cancel: "Hủy", invalid: "Tên danh mục không hợp lệ. Dùng chữ, số, dấu cách và dấu câu cơ bản (tối đa 100 ký tự).", wrongType: "Tên này đã được dùng cho loại giao dịch khác.", similar: "Có danh mục gần giống đã tồn tại", existing: "Danh mục gần giống đã có", selected: "Đang chọn", temporary: "Danh mục mới", draftOnly: "Chỉ trong bản nháp", savedOnConfirm: "Danh mục mới chỉ được lưu cùng giao dịch khi bạn xác nhận; bỏ bản nháp sẽ hủy danh mục đó.", updated: "Đã chọn danh mục", notSaved: "Bản nháp chưa được lưu", noOptions: "Chưa có danh mục phù hợp cho loại giao dịch này.", categoryPrompt: "Chọn danh mục có sẵn bên dưới hoặc tạo danh mục mới.", pendingCategory: "Danh mục", stillDraft: "đã được gắn tạm vào bản nháp. Danh mục mới chỉ được lưu khi bạn xác nhận giao dịch.", saving: "Đang lưu giao dịch…", processing: "Đang xử lý yêu cầu…", askTarget: "Bạn muốn chọn danh mục cho giao dịch nào?" },
@@ -822,6 +813,36 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (conversationGeneration.current === generation && workspaceOwner() === owner) { setBusy(false); aiRequestLock.current = false; activeChatRequest.current = null; }
     }
   }
+
+  function handleCreateWorkspaceCategory(name: string, operationId: string): string | null {
+    const trimmed = name.trim();
+    if (!trimmed || !isValidDraftCategoryName(trimmed)) {
+      return categoryFlowCopy.invalid;
+    }
+    const existing = state.categories.find(c => normalizeVietnameseMessage(c) === normalizeVietnameseMessage(trimmed));
+    if (existing) {
+      if (state.categoryMeta[existing]?.archived) return categoryCommandCopy.unavailable;
+      if ((state.categoryMeta[existing]?.type || "expense") !== "expense") return categoryFlowCopy.wrongType;
+      void requestWorkspaceCreation(existing, { operationId, field: "category", value: existing });
+      return null;
+    }
+    try {
+      const op = prepareCategoryOperation(state, {
+        operation: "create_category",
+        sources: [],
+        target: trimmed,
+        type: "expense",
+      }, crypto.randomUUID());
+      updateState(s => applyCategoryOperation(s, op));
+      void requestWorkspaceCreation(trimmed, { operationId, field: "category", value: trimmed });
+      return null;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg === "CATEGORY_EXISTS") return categoryFlowCopy.similar;
+      if (msg === "INVALID_CATEGORY_NAME") return categoryFlowCopy.invalid;
+      return categoryFlowCopy.invalid;
+    }
+  }
   async function send(value: string, requestedDraftId?: string) {
     const message = value.trim();
     if (!message || busy || aiRequestLock.current || committing || categoryBusy || deletingId) return;
@@ -1589,7 +1610,8 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           const parsed = workspaceProposalSchema.safeParse(message.workspaceProposal);
           return parsed.success ? <WorkspaceActionCard proposal={parsed.data} state={state} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
             onConfirm={() => void confirmWorkspaceProposal(parsed.data.id)} onCancel={() => cancelWorkspaceProposal(parsed.data.id)}
-            onAnswer={(choice, label) => void requestWorkspaceCreation(label, choice)} /> : null;
+            onAnswer={(choice, label) => void requestWorkspaceCreation(label, choice)}
+            onCreateCategory={handleCreateWorkspaceCategory} /> : null;
         })()}
         {message.categoryList && <div className="r-ai-category-options" role="group" aria-label={categoryFlowCopy.choose}>
           {message.categoryList.filter(name => state.categories.includes(name) && !state.categoryMeta[name]?.archived).map(name => <button type="button" key={name} aria-pressed={referencedCategories.includes(name)} className={referencedCategories.includes(name) ? "selected" : ""} disabled={busy} onClick={() => setReferencedCategories(previous => previous.includes(name) ? previous.filter(n => n !== name) : [...previous, name].slice(-20))}>{state.categoryMeta[name]?.icon || "❓"} {name}</button>)}
@@ -1673,7 +1695,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           const similar = similarDraftCategories(newCategoryName, options);
           const chooseType = { en: "Is this an expense or income?", vi: "Đây là khoản chi hay khoản thu?", zh: "这是支出还是收入？" }[resolveLanguage(state.settings.language)];
           return <section className="r-ai-category-choice" key={id} aria-label={`${categoryFlowCopy.choose}: ${pending.title}`} aria-busy={busy || committing}>
-            <div className="r-ai-category-choice-heading"><b>{pending.title || categoryFlowCopy.transaction}</b><strong>{pending.amount !== null && pending.currency ? formatTransactionMoney(pending.amount, pending.currency) : "—"}</strong></div>
+            <div className="r-ai-category-choice-heading"><b>{pending.title || categoryFlowCopy.transaction}</b>{" "}<strong>{pending.amount !== null && pending.currency ? formatTransactionMoney(pending.amount, pending.currency) : "—"}</strong></div>
             <small>{pending.type ? `${pending.type === "income" ? categoryFlowCopy.income : categoryFlowCopy.expense} · ${categoryFlowCopy.choose}` : chooseType}</small>
             {(busy || committing) && <small role="status">{committing ? categoryFlowCopy.saving : categoryFlowCopy.processing}</small>}
             {!pending.type && <div className="r-ai-category-options" role="group" aria-label={chooseType}>
@@ -1683,16 +1705,17 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
             {pending.type && <>
             <div className="r-ai-category-options" role="group" aria-label={`Danh mục ${pending.type === "income" ? "thu nhập" : "chi phí"}`}>
               {options.map((name) => <button type="button" key={name} aria-pressed={pending.category === name} className={pending.category === name ? "selected" : ""} disabled={busy || committing} onClick={() => selectDraftCategory(id, name)}>{state.categoryMeta[name]?.icon || "❓"} {name}</button>)}
-              {!options.length && <span>{categoryFlowCopy.noOptions}</span>}
+              {categoryFormDraftId !== id && <button type="button" style={{ borderStyle: "dashed", borderColor: "var(--r-teal, #12b8c4)", color: "var(--r-teal, #12b8c4)", fontWeight: 500 }} disabled={busy || committing} onClick={() => openCategoryCreation(id)}>{workspaceActionCopy[resolveLanguage(state.settings.language)].addCategory}</button>}
+              {!options.length && categoryFormDraftId !== id && <span>{categoryFlowCopy.noOptions}</span>}
             </div>
             {pending.category && <small role="status">{categoryFlowCopy.selected}: {pending.category} · {categoryFlowCopy.notSaved}</small>}
             {pending.newCategory && <small role="status">{categoryFlowCopy.temporary}: “{pending.newCategory.name}” · {categoryFlowCopy.draftOnly}</small>}
-            {categoryFormDraftId === id ? <div className="r-ai-category-create">
+            {categoryFormDraftId === id && <div className="r-ai-category-create">
               <label htmlFor={`new-chat-category-${id}`}>{categoryFlowCopy.name} · {pending.type === "income" ? categoryFlowCopy.income : categoryFlowCopy.expense}</label>
               <div className="r-ai-category-create-controls"><input id={`new-chat-category-${id}`} autoComplete="off" maxLength={100} value={newCategoryName} onChange={(event) => { setNewCategoryName(event.target.value); setCategoryError(""); }} placeholder={categoryFlowCopy.placeholder} disabled={busy || committing} /><button type="button" className="r-primary" disabled={!newCategoryName.trim() || busy || committing} onClick={() => stageChatCategory(id)}>{categoryFlowCopy.create}</button><button type="button" className="r-secondary" disabled={busy || committing} onClick={() => { setCategoryFormDraftId(null); setNewCategoryName(""); setCategoryError(""); }}>{categoryFlowCopy.cancel}</button></div>
               {categoryError && <small role="alert">{categoryError}</small>}
               {similar.length > 0 && <div className="r-ai-category-suggestions"><span>{categoryFlowCopy.similar}:</span>{similar.slice(0, 3).map((name) => <button type="button" key={name} disabled={busy || committing} onClick={() => { selectDraftCategory(id, name); setCategoryFormDraftId(null); setCategoryError(""); }}>{name}</button>)}</div>}
-            </div> : <button type="button" className="r-ai-clarify-button" disabled={busy || committing} onClick={() => openCategoryCreation(id)}>＋ {categoryFlowCopy.newCategory}</button>}
+            </div>}
             <small className="r-ai-category-note">{categoryFlowCopy.savedOnConfirm}</small>
             </>}
           </section>;
@@ -1709,7 +1732,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           return <article key={id} className="r-chat-record r-ai-draft-card">
             <div className="r-ai-draft-heading"><small>Bản nháp · {draft.type === "income" ? "Thu nhập" : draft.type === "expense" ? "Chi phí" : "Chưa rõ loại"}</small><button type="button" className="r-icon-button" aria-label="Bỏ bản nháp" disabled={committing || uncertainDraftIds.includes(id)} onClick={() => removeDraft(id)}><X size={16} /></button></div>
             {receiptImageUrls[id] && <div className="r-ai-receipt-thumb" role="img" aria-label="Ảnh hóa đơn đính kèm bản nháp" style={{ backgroundImage: `url("${receiptImageUrls[id]}")` }} />}
-            <div className="r-ai-draft-summary"><b>{draft.title.trim() || "Chưa có mô tả"}</b><strong>{draft.amount !== null && draft.currency ? formatTransactionMoney(draft.amount, draft.currency) : "Chưa rõ số tiền/tiền tệ"}</strong></div>
+            <div className="r-ai-draft-summary"><b>{draft.title.trim() || "Chưa có mô tả"}</b>{" "}<strong>{draft.amount !== null && draft.currency ? formatTransactionMoney(draft.amount, draft.currency) : "Chưa rõ số tiền/tiền tệ"}</strong></div>
             <p className="r-ai-draft-details">{draft.category || draft.newCategory?.name || "Chưa chọn danh mục"} · {draft.date || "Chưa rõ ngày"} · {draftWallet ? `${draftWallet.name} (${draftWallet.currency})` : draft.currency ? `Chưa chọn ví · ${draft.currency}` : "Chưa chọn ví/tiền tệ"}</p>
             {needsReview.length > 0 && <small className="r-ai-draft-review">Cần xem lại: {needsReview.join(", ")}</small>}
             {draft.needsReview.includes("wallet") && !messages.some((item) => item.walletChoiceDraftIds?.includes(id)) && <label className="r-ai-draft-details">
