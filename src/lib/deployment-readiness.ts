@@ -1,4 +1,5 @@
 import { readAiQuotaConfig } from "./ai-quota";
+import { DEFAULT_GEMINI_MODEL } from "./gemini-config";
 
 export function deploymentReadiness(env: NodeJS.ProcessEnv, production = true) {
   const checks: Array<{ check: string; ok: boolean }> = [];
@@ -24,6 +25,6 @@ export function deploymentReadiness(env: NodeJS.ProcessEnv, production = true) {
   try { readAiQuotaConfig(env); } catch { quotaConfigured = false; }
   check("shared AI quota values valid", quotaConfigured);
   if (env.SAFETY_EMAIL_ENABLED === "true") check("safety email worker secret configured", (env.SAFETY_CRON_SECRET?.length || 0) >= 32);
-  const model = env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite";
+  const model = env.GEMINI_TRANSACTION_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
   return { ready: checks.every(c => c.ok), checks, models: { text: model, audio: env.GEMINI_AUDIO_MODEL?.trim() || model }, manualChecks: ["Verify model RPM/TPM/RPD and Free/Paid project in AI Studio", "New mailbox receives verification and signs in", "Preview and production deployment SHA match intended release", "Scheduler and opted-in Brevo delivery if email alerts enabled", "Demo accounts can sign in from an external network", "Confirm third-party UI/asset permissions"] };
 }

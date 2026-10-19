@@ -1,3 +1,4 @@
+import { traceAiRequest, type AiRequestTiming } from "@/lib/ai-request-timing";
 import { readAiJson } from "@/lib/ai-request";
 import { AI_JSON_BYTES } from "@/lib/ai-limits";
 import { createHash } from "node:crypto";
@@ -33,8 +34,12 @@ function stableActionId(batch: string, index: number) {
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
 }
 export async function POST(request: Request) {
+  return traceAiRequest("workspace-actions", timing => handleRequest(request, timing));
+}
+
+async function handleRequest(request: Request, timing: AiRequestTiming) {
   const respond = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
-  const session = await requireAiSession(request);
+  const session = await timing.measure("auth", () => requireAiSession(request));
   if (session instanceof Response) return session;
   if (session && request.headers.get("x-finbridge-workspace-owner") !== session.user.id) return respond({ error: "ACCOUNT_CHANGED" }, 409);
   const body = await readAiJson(request, AI_JSON_BYTES);
@@ -44,7 +49,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return respond({ error: "INVALID_REQUEST" }, 400);
   const input = parsed.data, t = workspaceActionCopy[input.language];
   try {
-    const state = session ? (await workspaceRepository(database()).read(session.user.id)).data
+    const state = session ? (await timing.measure("workspace", () => workspaceRepository(database(), timing).read(session.user.id))).data
       : input.context ? { ...input.context, transactions: [], recurring: [], rules: [], settings: { language: input.language } } as AppState : null;
     if (!state) return respond({ error: "WORKSPACE_UNAVAILABLE", message: t.unavailable }, 503);
     const pending = input.pending && ["collecting", "review", "failed"].includes(input.pending.status) && !input.pending.applied ? input.pending : null;
@@ -81,9 +86,9 @@ export async function POST(request: Request) {
     } else {
       const key = process.env.GEMINI_API_KEY;
       if (!key) return respond({ error: "AI_NOT_CONFIGURED", message: t.unavailable }, 503);
-      const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite";
+      const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.5-flash-lite";
       const ai = createQuotaGemini(key, session.user.id, "workspace-actions");
-      const result = await ai.models.generateContent({ model,
+      const result = await timing.measure("model", () => ai.models.generateContent({ model,
         contents: [
           "You are Finn's financial workspace creation planner. You ONLY propose new manually tracked wallets, budgets and fixed expense schedules. You NEVER save, transfer/pay money, delete data or claim an operation succeeded. Output JSON matching the schema.",
           "Use mode=manage for creation or answering/editing a pending creation. Use mode=unrelated for Q&A, recorded transactions, category commands, or hypothetical simulations. Use mode=cancel only when the user explicitly cancels the pending creation. Multiple requested objects may be proposed (max six).",
@@ -97,7 +102,7 @@ export async function POST(request: Request) {
         config: { responseMimeType: "application/json", responseJsonSchema: z.toJSONSchema(outputSchema), temperature: 0.1, maxOutputTokens: 1600,
           ...(model.startsWith("gemini-3.") ? { thinkingConfig: { thinkingLevel: /flash-lite$/.test(model) ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW } } : {}),
           abortSignal: AbortSignal.any([request.signal, AbortSignal.timeout(getGeminiTimeoutMs("GEMINI_CHAT_TIMEOUT_MS", 20_000, 25_000))]) },
-      });
+      }));
       const decoded = outputSchema.safeParse(JSON.parse(result.text || "null"));
       if (!decoded.success) return respond({ error: "INVALID_AI_RESPONSE", message: t.unavailable }, 502);
       if (decoded.data.mode !== "manage") return respond({ mode: decoded.data.mode });

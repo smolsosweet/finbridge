@@ -36,7 +36,7 @@ test("a chat-only change must not rewrite all unrelated financial tables", async
   const previous = workspaceFixture(), next = structuredClone(previous), calls = [];
   next.transactionChat.messages.push({ role: "user", text: "hello" });
   await writeFinanceTables({ query: async (sql, params) => { calls.push({ sql, params }); return { rows: [] }; } }, "synthetic", next, previous);
-  assert.equal(calls.length, 2); assert.ok(calls.every(call => call.sql.includes("finbridge_chat_messages")));
+  assert.equal(calls.length, 1); assert.ok(calls.every(call => call.sql.includes("finbridge_chat_messages")));
 });
 
 test("wire snapshot removes only redundant chat images; the canonical receipt and all facts are preserved", async () => {
@@ -138,14 +138,14 @@ test("unchanged finance tables are untouched; actual monetary edits still write 
   const client = { query: async sql => { calls.push(sql); return { rows: [] }; } };
   await writeFinanceTables(client, "owner", next, before); assert.equal(calls.length, 0);
   next.transactions[0].amount += 1; await writeFinanceTables(client, "owner", next, before);
-  assert.equal(calls.length, 2); assert.ok(calls.every(sql => sql.includes("finbridge_transactions")));
+  assert.equal(calls.length, 1); assert.ok(calls.every(sql => sql.includes("finbridge_transactions")));
 });
 
 test("optional undefined fields from SQL hydration do not turn a chat edit into a financial rewrite", async () => {
   const previous = workspaceFixture(); previous.fixedExpenses[0].paymentRecipient = undefined;
   const next = JSON.parse(JSON.stringify(previous)), calls = []; next.transactionChat.messages.push({ role: "user", text: "Hi" });
   await writeFinanceTables({ query: async sql => { calls.push(sql); return { rows: [] }; } }, "owner", next, previous);
-  assert.equal(calls.length, 2); assert.ok(calls.every(sql => sql.includes("finbridge_chat_messages")));
+  assert.equal(calls.length, 1); assert.ok(calls.every(sql => sql.includes("finbridge_chat_messages")));
 });
 
 test("a later rejection cannot erase uncertainty about a previous timed-out commit", async () => {

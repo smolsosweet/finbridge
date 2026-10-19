@@ -50,7 +50,7 @@ test.beforeEach(() => {
 });
 const common = { today: "2026-10-21", timeZone: "UTC", defaultWalletId: "wallet", wallets: state.wallets.map(({ id, name, currency }) => ({ id, name, currency })), categories: [{ name: "Dining", type: "expense" }] };
 const inputs = {
-  assistant: { ...common, defaultWalletId: undefined, batchId: "00000000-0000-4000-8000-000000000001", message: "hello", selectedWalletId: null, history: [] },
+  assistant: { ...common, defaultWalletId: undefined, batchId: "00000000-0000-4000-8000-000000000001", message: "Explain compound interest", selectedWalletId: null, history: [] },
   "transaction-drafts": { ...common, batchId: "00000000-0000-4000-8000-000000000002", message: "spent ten dollars" },
   "receipt-drafts": { ...common, imageDataUrl: "data:image/png;base64," + "A".repeat(120) },
   "speech-transcription": { mimeType: "audio/webm", audioBase64: "A".repeat(120) },

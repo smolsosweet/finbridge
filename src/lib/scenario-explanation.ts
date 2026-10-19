@@ -16,6 +16,7 @@ export function scenarioCalculationExplanation(result: ScenarioResult, scenario:
   }[lang];
   const money = (value: number, currency: string) => formatScenarioMoney(value, currency, lang);
   return [labels.heading, ...result.wallets.map(wallet => {
+    if (wallet.balanceComplete === false) return `${wallets.find(item => item.id === wallet.walletId)?.name || wallet.walletId}: ${labels.missing}`;
     const estimate = result.estimatedSpending.find(item => item.walletId === wallet.walletId && item.currency === wallet.currency);
     const c = wallet.components;
     const terms: Array<{ label: string; amount: number; sign: 1 | -1 }> = [];
@@ -35,6 +36,7 @@ export function scenarioCalculationExplanation(result: ScenarioResult, scenario:
       ...(estimate ? [`• ${labels.pace}: ≈ ${money(estimate.dailyAverage, wallet.currency)} (${estimate.days} ${labels.days})`] : []),
       ...terms.map(item => `• ${item.label}${item.label === labels.bills && billDetails ? ` · ${billDetails}` : item.label === labels.expense && purchases ? ` · ${purchases}` : ""}: **${money(item.amount, wallet.currency)}**`),
       `${labels.end}${scenario.horizonEnd ? ` (${formatScenarioDate(scenario.horizonEnd, lang)})` : ""}:\n${money(wallet.balanceNow, wallet.currency)}${terms.map(item => ` ${item.sign === 1 ? "+" : "−"} ${money(item.amount, wallet.currency)}`).join("")} = **${money(wallet.projectedBalance, wallet.currency)}**`,
+      ...(wallet.protectedReserve != null && wallet.availableAfterReserve != null ? [({ vi: `Tiền dự phòng ${money(wallet.protectedReserve, wallet.currency)} vẫn nằm trong số dư; phần còn có thể dùng: ${money(wallet.projectedBalance, wallet.currency)} − ${money(wallet.protectedReserve, wallet.currency)} = **${money(wallet.availableAfterReserve, wallet.currency)}**. Không trừ như một khoản thanh toán.`, en: `The ${money(wallet.protectedReserve, wallet.currency)} reserve remains in the balance. Spendable cash: ${money(wallet.projectedBalance, wallet.currency)} − ${money(wallet.protectedReserve, wallet.currency)} = **${money(wallet.availableAfterReserve, wallet.currency)}**. It is not a payment.`, zh: `${money(wallet.protectedReserve, wallet.currency)} 备用金仍在余额中。可用资金：${money(wallet.projectedBalance, wallet.currency)} − ${money(wallet.protectedReserve, wallet.currency)} = **${money(wallet.availableAfterReserve, wallet.currency)}**，不计为付款。` }[lang])] : []),
     ].join("\n");
   }), result.unavailableEstimates.length ? labels.missing : result.estimatedSpending.length ? labels.note : ""].filter(Boolean).join("\n\n");
 }

@@ -1,3 +1,4 @@
+import { traceAiRequest, type AiRequestTiming } from "@/lib/ai-request-timing";
 import { readAiJson } from "@/lib/ai-request";
 import { AI_JSON_BYTES } from "@/lib/ai-limits";
 import { ThinkingLevel } from "@google/genai";
@@ -37,7 +38,11 @@ const requestSchema = z.object({
 }).strict();
 
 export async function POST(request: Request) {
-  const session = await requireAiSession(request);
+  return traceAiRequest("scenario-planner", timing => handleRequest(request, timing));
+}
+
+async function handleRequest(request: Request, timing: AiRequestTiming) {
+  const session = await timing.measure("auth", () => requireAiSession(request));
   if (session instanceof Response) return session;
 
   const body = await readAiJson(request, AI_JSON_BYTES);
@@ -54,14 +59,14 @@ export async function POST(request: Request) {
     const ownerHeader = request.headers.get("x-finbridge-workspace-owner");
     if (ownerHeader && ownerHeader !== session.user.id) return Response.json({ error: "ACCOUNT_CHANGED", message: "Please reload the page after changing accounts." }, { status: 409 });
     try {
-      workspace = (await workspaceRepository(database()).read(session.user.id)).data;
+      workspace = (await timing.measure("workspace", () => workspaceRepository(database(), timing).read(session.user.id))).data;
       if (!workspace) throw new Error("WORKSPACE_UNAVAILABLE");
       input.context = scenarioContext(workspace);
     } catch { return Response.json({ error: "FINANCIAL_DATA_UNAVAILABLE", message: "Chưa đọc được dữ liệu tài chính. Hãy tải lại trang rồi thử lại." }, { status: 503 }); }
   }
   const respondPlan = (plan: ReturnType<typeof normalizePlannerResponse>) => Response.json({
     ...plan,
-    ...(workspace ? { calculations: plan.scenarios.map(scenario => calculateScenario(workspace!, scenario, input.today)) } : {}),
+    ...(workspace ? { calculations: plan.scenarios.map(scenario => timing.measureSync("calculation", () => calculateScenario(workspace!, scenario, input.today))) } : {}),
   });
 
   const preParsed = parseVietnameseFinancialExpressions(input.message, input.today, input.context);
@@ -73,14 +78,14 @@ export async function POST(request: Request) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     // If Gemini is not configured, fall back to deterministic parsing when possible
-    const fallback = normalizePlannerResponse(null, input);
+    const fallback = timing.measureSync("calculation", () => normalizePlannerResponse(null, input));
     if (fallback.scenarios.length || fallback.query || fallback.intent === "clarification") {
       return respondPlan(fallback);
     }
     return Response.json({ error: "AI_NOT_CONFIGURED", message: "The assistant is not available yet. Please try again later." }, { status: 503 });
   }
 
-  const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite";
+  const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.5-flash-lite";
   const timeoutMs = getGeminiTimeoutMs("GEMINI_SCENARIO_TIMEOUT_MS", 20_000, 30_000);
   const started = Date.now();
 
@@ -139,7 +144,7 @@ export async function POST(request: Request) {
       `}`,
     ].join("\n");
 
-    const result = await ai.models.generateContent({
+    const result = await timing.measure("model", () => ai.models.generateContent({
       model,
       contents: promptInstructions,
       config: {
@@ -149,7 +154,7 @@ export async function POST(request: Request) {
         ...(model.startsWith("gemini-3.") ? { thinkingConfig: { thinkingLevel: /flash-lite$/.test(model) ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW } } : {}),
         abortSignal: AbortSignal.any([AbortSignal.timeout(timeoutMs), request.signal]),
       },
-    });
+    }));
 
     let decoded: unknown = null;
     try {
@@ -160,7 +165,7 @@ export async function POST(request: Request) {
       decoded = null;
     }
 
-    const normalized = normalizePlannerResponse(decoded, input);
+    const normalized = timing.measureSync("calculation", () => normalizePlannerResponse(decoded, input));
     return respondPlan(normalized);
   } catch (error) {
     const quotaResponse = aiQuotaErrorResponse(error, request);
@@ -171,7 +176,7 @@ export async function POST(request: Request) {
     console.error(`[FinBridge AI] scenario planner failed ${JSON.stringify({ durationMs: Date.now() - started, status, name: errorName, code: providerCode(error) })}`);
 
     // Resilient fallback: If Gemini fails, check if request can be deterministically calculated
-    const fallback = normalizePlannerResponse(null, input);
+    const fallback = timing.measureSync("calculation", () => normalizePlannerResponse(null, input));
     if (fallback.scenarios.length || fallback.query || fallback.intent === "clarification") {
       return respondPlan(fallback);
     }

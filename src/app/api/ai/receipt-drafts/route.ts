@@ -1,3 +1,4 @@
+import { traceAiRequest, type AiRequestTiming } from "@/lib/ai-request-timing";
 import { readAiJson } from "@/lib/ai-request";
 import { AI_RECEIPT_JSON_BYTES } from "@/lib/ai-limits";
 import { AI_IMAGE_DATA_URL_LENGTH } from "@/lib/ai-limits";
@@ -57,7 +58,11 @@ function validDate(value: string | null): value is string {
 }
 
 export async function POST(request: Request) {
-  const session = await requireAiSession(request);
+  return traceAiRequest("receipt-drafts", timing => handleRequest(request, timing));
+}
+
+async function handleRequest(request: Request, timing: AiRequestTiming) {
+  const session = await timing.measure("auth", () => requireAiSession(request));
   if (session instanceof Response) return session;
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED", message: "Đọc hóa đơn hiện chưa sẵn sàng. Vui lòng thử lại sau." }, { status: 503 });
@@ -73,12 +78,12 @@ export async function POST(request: Request) {
     return Response.json({ error: "INVALID_IMAGE", message: "Định dạng ảnh chưa hỗ trợ hoặc ảnh quá lớn. Hãy chọn JPEG, PNG hoặc WebP dưới 5 MB." }, { status: 400 });
   }
 
-  const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite";
+  const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.5-flash-lite";
   const timeoutMs = getGeminiTimeoutMs("GEMINI_OCR_TIMEOUT_MS", 50_000, 50_000);
   const startedAt = Date.now();
   try {
     const ai = createQuotaGemini(apiKey, session.user.id, "receipt-drafts");
-    const result = await ai.models.generateContent({
+    const result = await timing.measure("model", () => ai.models.generateContent({
       model,
       contents: [{ role: "user", parts: [
         { text: [
@@ -95,7 +100,7 @@ export async function POST(request: Request) {
       config: { responseMimeType: "application/json", responseSchema, temperature: 0.1, maxOutputTokens: 1024,
         ...(model.startsWith("gemini-3.") ? { thinkingConfig: { thinkingLevel: /flash-lite$/.test(model) ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW } } : {}),
         abortSignal: AbortSignal.any([AbortSignal.timeout(timeoutMs), request.signal]) },
-    });
+    }));
     let decoded: unknown;
     try { decoded = JSON.parse(result.text || ""); }
     catch { return Response.json({ error: "INVALID_AI_RESPONSE", message: "Không đọc được thông tin hóa đơn. Hãy chụp ảnh rõ hơn hoặc nhập giao dịch bằng chat." }, { status: 502 }); }

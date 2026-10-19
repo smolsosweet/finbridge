@@ -23,6 +23,9 @@ const hooks = registerHooks({
   },
   load(url, context, next) {
     if (url.startsWith("finbridge-persistence-test:")) return { source: stubs[url.slice("finbridge-persistence-test:".length)], format: "module", shortCircuit: true };
+    // Shared transfer services import the same DB adapter by a relative path.
+    // Keep that import isolated too; never load the real production DB module.
+    if (url === pathToFileURL(path.join(root, "lib/database.ts")).href) return { source: stubs["@/lib/database"], format: "module", shortCircuit: true };
     return next(url, context);
   },
 });

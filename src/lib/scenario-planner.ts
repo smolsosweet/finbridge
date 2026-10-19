@@ -1,7 +1,7 @@
 import type { AppState } from "../components/finbridge/workspace/store";
 import { budgetSummary, currencyScale } from "../components/finbridge/workspace/planningModel";
 import { unpaidOccurrences } from "./fixed-expense-payments";
-import { trackedBalance } from "./financial-outlook";
+import { reserveAmounts, trackedBalance } from "./financial-outlook";
 import type { FinancialAction, FinancialQuery } from "./financial-chat";
 
 export interface ScenarioChange {
@@ -33,6 +33,7 @@ export interface DailySpendingLimit {
 }
 
 export interface FinancialScenario {
+  reserves?: Record<string, number>;
   walletIds?: string[];
   id: string;
   name: string;
@@ -46,7 +47,7 @@ export interface FinancialScenario {
 
 export interface ScenarioResult {
   scenarioId: string;
-  wallets: Array<{ walletId: string; currency: string; balanceNow: number; projectedBalance: number; shortfall: number; components?: { unpaidBills: number; paceSpending: number; dailyLimitSpending: number; hypotheticalIncome: number; hypotheticalExpense: number; reducedCategorySpending: number } }>;
+  wallets: Array<{ walletId: string; currency: string; balanceNow: number; projectedBalance: number; shortfall: number; protectedReserve?: number | null; availableAfterReserve?: number | null; balanceComplete?: boolean; components?: { unpaidBills: number; paceSpending: number; dailyLimitSpending: number; hypotheticalIncome: number; hypotheticalExpense: number; reducedCategorySpending: number } }>;
   budgets: Array<{ budgetId: string; title?: string; currency: string; actualRemaining: number; afterScenario: number; unallocatedAfterScenario: number; projectedSpend: number; projectedRemaining: number; plannedAmount: number; paceAmount: number; dailyFlexibleLimit: number; forecastEnd: string; forecastAvailable: boolean }>;
   plannedBills: Array<{ walletId?: string; title: string; amount: number; currency: string; date: string }>;
   estimatedSpending: Array<{ walletId: string; currency: string; amount: number; dailyAverage: number; days: number; basis: "current-month-pace" | "historical-average" }>;
@@ -157,6 +158,7 @@ export function findPreviousScenarioFromHistory(
             horizonEnd: s.horizonEnd || null,
             estimateSpending: !!s.estimateSpending,
             assumptions: Array.isArray(s.assumptions) ? s.assumptions : [],
+            ...(s.reserves && typeof s.reserves === "object" && !Array.isArray(s.reserves) ? { reserves: s.reserves } : {}),
           };
         }
       } catch {
@@ -368,6 +370,7 @@ export function calculateScenario(state: AppState, scenario: FinancialScenario, 
   // Historical balance and payment links must use the same as-of ledger.
   state = { ...state, transactions: state.transactions.filter(t => t.date.slice(0, 10) <= today) };
   const activeWallets = state.wallets.filter(w => !w.archived && (!scenario.walletIds || scenario.walletIds.includes(w.id)));
+  const savedReserves = reserveAmounts(state);
   const scopedWalletIds = new Set(activeWallets.map(w => w.id));
   const isLinkedPayment = (t: AppState["transactions"][number]) => !!t.fixedExpenseId && !!t.fixedExpenseDueDate && t.paymentConfirmation === "user";
   const assumptions = [...scenario.assumptions];
@@ -513,7 +516,10 @@ export function calculateScenario(state: AppState, scenario: FinancialScenario, 
       hypotheticalExpense: changes.filter(c => c.walletId === walletId && c.direction === "expense").reduce((sum, c) => sum + cents(c.amount), 0) / 100,
       reducedCategorySpending: savings.filter(s => s.walletId === walletId).reduce((sum, s) => sum + cents(s.baselineAmount) - cents(s.savedAmount), 0) / 100,
     };
-    return { walletId, currency: wallet.currency, balanceNow, projectedBalance, shortfall: Math.max(0, -projectedBalance), components };
+    const candidateReserve = scenario.reserves?.[walletId] ?? savedReserves[walletId];
+    const scale = currencyScale(wallet.currency);
+    const protectedReserve = typeof candidateReserve === "number" && Number.isFinite(candidateReserve) && candidateReserve >= 0 && Number.isSafeInteger(Math.round(candidateReserve * scale)) && Math.abs(candidateReserve * scale - Math.round(candidateReserve * scale)) < 1e-5 ? candidateReserve : null;
+    return { walletId, currency: wallet.currency, balanceNow, projectedBalance, shortfall: Math.max(0, -projectedBalance), protectedReserve, availableAfterReserve: protectedReserve === null ? null : (Math.round(projectedBalance * scale) - Math.round(protectedReserve * scale)) / scale, balanceComplete: trackedBalance(state, walletId, today).complete, components };
   });
 
   const budgets = state.goals.filter((goal) => goal.kind === "budget").flatMap((budget) => {
@@ -831,7 +837,7 @@ export function normalizePlannerResponse(
       ...(Array.isArray(rawSc.spendingReductions) ? rawSc.spendingReductions.map((r) => ({ ...r, kind: "spending_reduction" })) : []),
     ];
 
-    if (!candidateActions.length && parsedExpr.detectedAmount !== null) {
+    if (!candidateActions.length && !Array.isArray(rawSc.actions) && parsedExpr.detectedAmount !== null) {
       candidateActions.push({
         kind: parsedExpr.isDaily ? "daily_limit" : "change",
         amount: parsedExpr.detectedAmount,

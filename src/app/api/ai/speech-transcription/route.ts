@@ -1,3 +1,4 @@
+import { traceAiRequest, type AiRequestTiming } from "@/lib/ai-request-timing";
 import { readAiJson } from "@/lib/ai-request";
 import { AI_AUDIO_JSON_BYTES } from "@/lib/ai-limits";
 import { AI_AUDIO_BASE64_LENGTH, AI_TRANSCRIPT_CHARACTERS } from "@/lib/ai-limits";
@@ -17,7 +18,11 @@ const requestSchema = z.object({
 }).strict();
 
 export async function POST(request: Request) {
-  const session = await requireAiSession(request);
+  return traceAiRequest("speech-transcription", timing => handleRequest(request, timing));
+}
+
+async function handleRequest(request: Request, timing: AiRequestTiming) {
+  const session = await timing.measure("auth", () => requireAiSession(request));
   if (session instanceof Response) return session;
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return Response.json({ error: "AI_NOT_CONFIGURED", message: "Chuyển giọng nói hiện chưa sẵn sàng. Vui lòng thử lại sau." }, { status: 503 });
@@ -36,14 +41,14 @@ export async function POST(request: Request) {
   const startedAt = Date.now();
   try {
     const ai = createQuotaGemini(apiKey, session.user.id, "speech-transcription");
-    const result = await ai.models.generateContent({
-      model: process.env.GEMINI_AUDIO_MODEL?.trim() || process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite",
+    const result = await timing.measure("model", () => ai.models.generateContent({
+      model: process.env.GEMINI_AUDIO_MODEL?.trim() || process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.5-flash-lite",
       contents: [{ parts: [
         { text: "Transcribe the spoken words exactly in the original language. Automatically identify the language, including Vietnamese and English. Preserve names and numbers as spoken. Return only the transcription, with no translation, explanation, or invented words." },
         { inlineData: { mimeType, data: parsed.data.audioBase64 } },
       ] }],
       config: { maxOutputTokens: 1024, abortSignal: AbortSignal.any([AbortSignal.timeout(getGeminiTimeoutMs("GEMINI_AUDIO_TIMEOUT_MS", 18_000, 25_000)), request.signal]) },
-    });
+    }));
     const text = result.text?.trim();
     if (!text || text.length > AI_TRANSCRIPT_CHARACTERS || result.candidates?.[0]?.finishReason === "MAX_TOKENS") {
       return Response.json({ error: "EMPTY_TRANSCRIPTION", message: "Chưa nhận diện được lời nói. Hãy thử nói lại." }, { status: 502 });

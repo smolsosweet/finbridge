@@ -12,6 +12,11 @@ function emphasized(text: string) {
 export function FinancialChatAnswer({ text, calculationDetails, calculationLabel = "Calculation details" }: { text: string; calculationDetails?: string; calculationLabel?: string }) {
   return <div className="r-financial-chat-answer">{text.split(/\n\s*\n/).filter(Boolean).map((block, index) => {
     const lines = block.split("\n");
+    const cells = (line: string) => line.trim().replace(/^\||\|$/g, "").split("|").map(cell => cell.trim());
+    if (lines.length >= 3 && lines.every(line => line.trim().startsWith("|") && line.trim().endsWith("|")) && cells(lines[1]).every(cell => /^:?-{3,}:?$/.test(cell))) {
+      const columns = cells(lines[0]), rows = lines.slice(2).map(cells);
+      if (columns.length <= 5 && rows.length <= 10 && rows.every(row => row.length === columns.length)) return <div key={index} className="r-financial-comparison" role="region" aria-label={columns.join(" / ")} tabIndex={0}><table><thead><tr>{columns.map((column, i) => <th key={i} scope="col">{emphasized(column)}</th>)}</tr></thead><tbody>{rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}>{emphasized(cell)}</td>)}</tr>)}</tbody></table></div>;
+    }
     if (/^(?:Giả định\/giới hạn|Assumptions\/limits|假设\/限制):/.test(lines[0])) {
       const colon = block.indexOf(":");
       const body = colon < 0 ? "" : block.slice(colon + 1).trim();

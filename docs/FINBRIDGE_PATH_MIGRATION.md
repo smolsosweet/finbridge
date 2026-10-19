@@ -50,3 +50,16 @@ artwork. LICENSE, THIRD_PARTY_NOTICES.md and PROVENANCE_REVIEW.md remain applica
   file bytes. This includes images, font files, category/bank icons and Lottie JSON.
 
 These are local checks of the renamed build, not production deployment acceptance.
+
+## Integration with latest main
+
+Before publishing, integrated main `e1a2fc5`, preserving the Finn planning,
+transfer-chat and performance work. The two newly added ChatTransferCard files
+follow the new workspace directory. Updated new test imports and isolated the
+relative database import in the persistence-route test adapter.
+
+- Full business-unit suite after integration: 445 passed, zero failed, two existing
+  localization TODOs (447 reported tests across 24 groups).
+- Additional transfer-chat, resilience, planning-action and performance tests:
+  48 passed, zero failed, no skipped tests or TODOs.
+- Production build including TypeScript: passed.

@@ -12,6 +12,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src"
 const fixture = globalThis.__finbridgeAssistantTest = { session: { user: { id: "owner", emailVerified: true } }, calls: [], reads: [], output: null, error: null, data: null };
 const stubs = {
   "@google/genai": `export const Type = { OBJECT:'OBJECT', STRING:'STRING', NUMBER:'NUMBER', ARRAY:'ARRAY' }; export const ThinkingLevel = { MINIMAL:'MINIMAL', LOW:'LOW' }; export class GoogleGenAI { models = { generateContent: async args => { const f=globalThis.__finbridgeAssistantTest; f.calls.push(args); if(f.error) throw f.error; return {text:typeof f.output==='string'?f.output:JSON.stringify(f.output)}; } }; }`,
+  "@/lib/transfer-chat-runtime": `export async function readTransferChat(input){globalThis.__finbridgeAssistantTest.transfer=input;return {id:input.id,request:input.request,status:"answer",title:"Transfers",text:"verified repository result",sandbox:false,rows:[],choices:[]};}`,
   "@/lib/auth-session": `export async function getSession(){return globalThis.__finbridgeAssistantTest.session;}`,
   "@/lib/database": `export function database(){return {};}`,
   "@/lib/workspace-repository": `export function workspaceRepository(){return { read:async owner=>{ const f=globalThis.__finbridgeAssistantTest; f.reads.push(owner); return {data:f.data,revision:0}; } };}`,
@@ -440,10 +441,92 @@ test("foreign target IDs return a safe account-owned selection rather than a for
 test("provider API failures are actionable, disclose no provider name, and never produce mutations", async () => {
   for (const [status, name, expected, code] of [[429, "Error", 429, "AI_QUOTA_OR_RATE_LIMIT"], [503, "Error", 503, "AI_BUSY"], [401, "Error", 502, "AI_CONFIGURATION_ERROR"], [undefined, "TimeoutError", 504, "AI_TIMEOUT"]]) {
     fixture.error = Object.assign(new Error("Synthetic failure"), { status, name });
-    const http = await POST(request(body("hello"))), result = await http.json();
+    const http = await POST(request(body("Explain compound interest"))), result = await http.json();
     assert.equal(http.status, expected); assert.equal(result.error, code); assert.doesNotMatch(result.message, /gemini|api key|AI Studio/i);
     assert.equal(fixture.data.transactions.length, 0);
   }
   fixture.error = null; fixture.output = "invalid-json";
-  assert.equal((await POST(request(body("hello")))).status, 502);
+  assert.equal((await POST(request(body("Explain compound interest")))).status, 502);
+});
+
+
+test("FX reads bypass the provider while complex transfer requests route once to account-owned tools", async () => {
+  for (const [message,transferRequest] of [
+    ["100 đô đổi sang tiền Việt được bao nhiêu?",{operation:"convert",amount:"100",sourceCurrency:"USD",targetCurrency:"VND"}],
+    ["so sánh phí chuyển học phí giúp mình",{operation:"quote",searchTerm:"Học phí"}],
+    ["vậy đổi sang nhân dân tệ thì sao",{operation:"convert",amount:"100",sourceCurrency:"USD",targetCurrency:"CNY"}],
+    ["approve that sandbox draft",{operation:"approve",planId:"saved-plan"}],
+    ["查一下汇率",{operation:"rates"}],
+  ]) {
+    fixture.calls=[]; fixture.output=response({intent:"international_transfer",transferRequest,reply:"Fabricated 999999 balance"});
+    const before=structuredClone(fixture.data), result=await (await POST(request(body(message,{transferContext:{operation:"convert",amount:"100",sourceCurrency:"USD",targetCurrency:"VND"}})))).json();
+    assert.equal(result.intent,"international_transfer");assert.equal(result.reply,"");assert.equal(result.transfer.text,"verified repository result");
+    assert.equal(fixture.transfer.owner,"owner");assert.equal(fixture.transfer.demo,false);assert.deepEqual(fixture.transfer.request,transferRequest);
+    const expectedCalls = /so sánh|approve/.test(message) ? 1 : 0;
+    assert.equal(fixture.calls.length,expectedCalls);assert.deepEqual(fixture.data,before);if(expectedCalls)assert.match(fixture.calls[0].contents,/International transfer context/);
+  }
+});
+
+
+test("reported FX questions succeed without model/workspace calls even when Gemini returns 503 or is unconfigured", async()=>{
+  fixture.error=Object.assign(new Error("Synthetic high demand"),{status:503});
+  const apiKey=process.env.GEMINI_API_KEY;
+  try {
+    for(const configured of [true,false]) {
+      if(configured)process.env.GEMINI_API_KEY=apiKey;else delete process.env.GEMINI_API_KEY;
+      for(const [message,expected] of [["Tỷ giá nhân dân tệ sang VND hiện có là bao nhiêu? Dữ liệu ngày nào?",{operation:"rates",sourceCurrency:"CNY",targetCurrency:"VND"}],["10 triệu VND đổi được bao nhiêu tệ?",{operation:"convert",amount:"10000000",sourceCurrency:"VND",targetCurrency:"CNY"}]]) {
+        fixture.calls=[];fixture.reads=[];
+        const http=await POST(request(body(message))),result=await http.json();
+        assert.equal(http.status,200);assert.equal(result.intent,"international_transfer");assert.deepEqual(fixture.transfer.request,expected);
+        assert.equal(fixture.calls.length,0);assert.equal(fixture.reads.length,0);assert.equal(fixture.transfer.owner,"owner");assert.equal(fixture.transfer.demo,false);
+        assert.equal(http.headers.get("server-timing")?.includes("model;"),false);
+      }
+    }
+  }finally{process.env.GEMINI_API_KEY=apiKey;}
+});
+
+
+test("financial scenario clarification and reserve follow-ups keep typed context with one model call and no write",async()=>{
+  fixture.data.wallets.push({id:"cny",name:"Alipay",currency:"CNY",initial:10000,type:"cash"});
+  fixture.data.transactions.push({id:"food-cny",type:"expense",title:"Food",amount:600,wallet:"cny",category:"Thức ăn & Đồ uống",date:"2026-10-01",note:""});
+  fixture.data.fixedExpenses=[{id:"rent-cny",title:"Rent",budgetId:"",walletId:"cny",category:"Rent",amount:1000,dueDate:"2026-10-20",recurrence:"once",active:true}];
+  const before=structuredClone(fixture.data);
+  let plan={name:"Điện thoại",walletId:"cny",horizonEnd:"2026-10-31",estimateSpending:true,reserveAmount:null,reserveCurrency:null,actions:[{kind:"change",title:"Điện thoại",amount:null,direction:"expense",percent:null,walletId:"cny",currency:"CNY",category:"Mua sắm",date:"2026-10-20",startDate:null,endDate:null}]};
+  fixture.output=response({intent:"simulate_financial_scenario",scenarioPlan:plan});
+  const first=await (await POST(request(body("Mình định mua điện thoại, cuối tháng có đủ tiền không?",{today:"2026-10-19"})))).json();
+  assert.equal(first.scenarioResponse.intent,"clarification");assert.equal(first.scenarioResponse.pendingScenario.actions[0].title,"Điện thoại");assert.match(first.scenarioResponse.clarification,/bao nhiêu tiền/);assert.equal(fixture.calls.length,1);
+  plan={...plan,reserveAmount:2000,reserveCurrency:"CNY",actions:[{...plan.actions[0],amount:3000}]};fixture.calls=[];
+  fixture.output=response({intent:"simulate_financial_scenario",scenarioPlan:plan,presentation:{detail:"standard",layout:"comparison",lead:null}});
+  const second=await (await POST(request(body("3000 tệ, nhớ giữ lại 2000 tệ dự phòng nhé",{today:"2026-10-19",pendingScenario:first.scenarioResponse.pendingScenario})))).json();
+  assert.equal(fixture.calls.length,1);assert.match(fixture.calls[0].contents,/Pending financial scenario awaiting clarification/);
+  assert.equal(second.calculations[0].wallets[0].currency,"CNY");assert.equal(second.calculations[0].wallets[0].projectedBalance,5021.05);assert.equal(second.calculations[0].wallets[0].availableAfterReserve,3021.05);
+  assert.equal(second.baselines[0].wallets[0].projectedBalance,8021.05);assert.deepEqual(fixture.data,before);
+});
+
+
+test("whole-message greetings and Finn identity stay available without model or workspace calls",async()=>{
+  fixture.error=Object.assign(new Error("Synthetic high demand"),{status:503});
+  const before=structuredClone(fixture.data);
+  for(const message of ["chào finn","xin chào Finn!","Hello Finn","你好Finn","bạn tên gì"]){
+    fixture.calls=[];fixture.reads=[];
+    const result=await(await POST(request(body(message)))).json();assert.equal(result.intent,"general");assert.match(result.reply,/Finn/);assert.deepEqual(result.drafts,[]);assert.equal(fixture.calls.length,0);assert.equal(fixture.reads.length,0);
+  }
+  assert.deepEqual(fixture.data,before);
+});
+
+test("provider 503 recovers a real 10k breakfast draft with the owned category/currency and no financial mutation",async()=>{
+  fixture.error=Object.assign(new Error("Synthetic high demand"),{status:503});const before=structuredClone(fixture.data),requestBody=body("ăn sáng 10k");
+  const first=await POST(request(requestBody)),result=await first.json();assert.equal(first.status,200);assert.equal(result.interpretationSource,"local-recovery");
+  assert.equal(result.drafts.length,1);assert.equal(result.drafts[0].amount,10000);assert.equal(result.drafts[0].currency,"VND");assert.equal(result.drafts[0].wallet,"vnd");assert.equal(result.drafts[0].category,"Thức ăn & Đồ uống");assert.deepEqual(result.drafts[0].needsReview,[]);
+  const repeat=await(await POST(request(requestBody))).json();assert.equal(repeat.drafts[0].id,result.drafts[0].id);assert.deepEqual(fixture.data,before);
+  fixture.calls=[];const pending=await(await POST(request(body("ăn sáng 10k",{pendingDrafts:result.drafts})))).json();assert.equal(pending.drafts.length,0);assert.match(pending.reply,/bản nháp chưa hoàn tất/);
+});
+
+test("outage recovery does not swallow scenarios, corrections, auth failures or currency ambiguity",async()=>{
+  fixture.error=Object.assign(new Error("Synthetic high demand"),{status:503});
+  for(const message of ["Nếu ăn sáng 10k mỗi ngày thì cuối tháng còn bao nhiêu?","Sửa khoản đó thành ăn sáng 20k","Tôi chưa ăn sáng 10k","Chuyển 100 USD sang VND rồi mua áo 10k"]){
+    assert.equal((await POST(request(body(message)))).status,503,message);
+  }
+  fixture.error=Object.assign(new Error("Synthetic auth failure"),{status:401});assert.equal((await POST(request(body("ăn sáng 10k")))).status,502);
+  fixture.error=Object.assign(new Error("Synthetic quota failure"),{status:429});assert.equal((await POST(request(body("ăn sáng 10k")))).status,429);
 });
