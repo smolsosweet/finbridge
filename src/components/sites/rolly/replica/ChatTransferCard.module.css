@@ -1,0 +1,22 @@
+.card { display: grid; gap: 10px; min-width: 0; width: 100%; box-sizing: border-box; padding: 12px; border: 1px solid var(--r-line, #dce4ee); border-radius: 14px; background: var(--r-surface, #fff); color: var(--r-text, #183747); }
+.card header { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; justify-content: space-between; }
+.card small { color: var(--r-text, #53677c); opacity: .75; font-size: 12px; }
+.card p { margin: 0; line-height: 1.5; }
+.card dl { display: grid; gap: 6px; margin: 0; }
+.card dl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; padding: 5px 0; border-bottom: 1px solid var(--r-line, #dce4ee); }
+.card dt { font-size: 13px; }
+.card dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; max-width: 100%; }
+.card summary { cursor: pointer; font-weight: 600; }
+.choices, .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.card button { border: 1px solid var(--r-line, #c8d4e1); border-radius: 10px; padding: 9px 12px; cursor: pointer; color: inherit; background: var(--r-surface, white); font-weight: 600; }
+.actions button { flex: 1; }
+.card button:global(.r-primary) { background: var(--r-primary, #743cf4); color: white; }
+.card button:disabled { opacity: .5; cursor: not-allowed; }
+.card button:focus-visible, .card summary:focus-visible { outline: 2px solid #743cf4; outline-offset: 3px; }
+.card .open { justify-self: start; background: transparent; font-size: 12px; }
+.acknowledge { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.5; }
+.acknowledge input { margin-top: 4px; flex-shrink: 0; }
+.card .error { color: #b42318; }
+@media(max-width: 480px) { .card dl > div { display: grid; gap: 3px; } .actions { flex-direction: column; } }
+
+.card .acknowledge input[type="checkbox"] { width: 16px; height: 16px; min-height: 16px; padding: 0; appearance: auto; }

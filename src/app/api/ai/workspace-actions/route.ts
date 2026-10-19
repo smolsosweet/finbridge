@@ -1,3 +1,4 @@
+import { traceAiRequest, type AiRequestTiming } from "@/lib/ai-request-timing";
 import { createHash } from "node:crypto";
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { z } from "zod";
@@ -29,12 +30,16 @@ function stableActionId(batch: string, index: number) {
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
 }
 export async function POST(request: Request) {
+  return traceAiRequest("workspace-actions", timing => handleRequest(request, timing));
+}
+
+async function handleRequest(request: Request, timing: AiRequestTiming) {
   const expectedOrigin = process.env.BETTER_AUTH_URL ? new URL(process.env.BETTER_AUTH_URL).origin : new URL(request.url).origin;
   const url = new URL(request.url);
   const demo = process.env.NODE_ENV === "development" && process.env.FINBRIDGE_DEMO_MODE === "true" && ["localhost", "127.0.0.1"].includes(url.hostname) && request.headers.get("origin") === url.origin;
   const respond = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
   if (!demo && request.headers.get("origin") !== expectedOrigin) return respond({ error: "INVALID_ORIGIN" }, 403);
-  const session = demo ? null : await getSession();
+  const session = demo ? null : await timing.measure("auth", () => getSession());
   if (!demo && !session) return respond({ error: "UNAUTHENTICATED" }, 401);
   if (session && request.headers.get("x-finbridge-workspace-owner") !== session.user.id) return respond({ error: "ACCOUNT_CHANGED" }, 409);
   if (Number(request.headers.get("content-length") || 0) > 600_000) return respond({ error: "PAYLOAD_TOO_LARGE" }, 413);
@@ -45,7 +50,7 @@ export async function POST(request: Request) {
   if (!parsed.success) return respond({ error: "INVALID_REQUEST" }, 400);
   const input = parsed.data, t = workspaceActionCopy[input.language];
   try {
-    const state = session ? (await workspaceRepository(database()).read(session.user.id)).data
+    const state = session ? (await timing.measure("workspace", () => workspaceRepository(database(), timing).read(session.user.id))).data
       : input.context ? { ...input.context, transactions: [], recurring: [], rules: [], settings: { language: input.language } } as AppState : null;
     if (!state) return respond({ error: "WORKSPACE_UNAVAILABLE", message: t.unavailable }, 503);
     const pending = input.pending && ["collecting", "review", "failed"].includes(input.pending.status) && !input.pending.applied ? input.pending : null;
@@ -82,9 +87,9 @@ export async function POST(request: Request) {
     } else {
       const key = process.env.GEMINI_API_KEY;
       if (!key) return respond({ error: "AI_NOT_CONFIGURED", message: t.unavailable }, 503);
-      const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite";
+      const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.5-flash-lite";
       const ai = new GoogleGenAI({ apiKey: key, httpOptions: { retryOptions: { attempts: 1 } } });
-      const result = await ai.models.generateContent({ model,
+      const result = await timing.measure("model", () => ai.models.generateContent({ model,
         contents: [
           "You are Finn's financial workspace creation planner. You ONLY propose new manually tracked wallets, budgets and fixed expense schedules. You NEVER save, transfer/pay money, delete data or claim an operation succeeded. Output JSON matching the schema.",
           "Use mode=manage for creation or answering/editing a pending creation. Use mode=unrelated for Q&A, recorded transactions, category commands, or hypothetical simulations. Use mode=cancel only when the user explicitly cancels the pending creation. Multiple requested objects may be proposed (max six).",
@@ -98,7 +103,7 @@ export async function POST(request: Request) {
         config: { responseMimeType: "application/json", responseJsonSchema: z.toJSONSchema(outputSchema), temperature: 0.1, maxOutputTokens: 1600,
           ...(model.startsWith("gemini-3.") ? { thinkingConfig: { thinkingLevel: /flash-lite$/.test(model) ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW } } : {}),
           abortSignal: AbortSignal.any([request.signal, AbortSignal.timeout(getGeminiTimeoutMs("GEMINI_CHAT_TIMEOUT_MS", 20_000, 25_000))]) },
-      });
+      }));
       const decoded = outputSchema.safeParse(JSON.parse(result.text || "null"));
       if (!decoded.success) return respond({ error: "INVALID_AI_RESPONSE", message: t.unavailable }, 502);
       if (decoded.data.mode !== "manage") return respond({ mode: decoded.data.mode });

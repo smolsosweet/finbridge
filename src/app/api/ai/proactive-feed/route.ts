@@ -37,7 +37,7 @@ export async function POST(request: Request) {
   if (!parsed.success || new Set(parsed.data.alerts.map((alert) => alert.id)).size !== parsed.data.alerts.length) return Response.json({ error: "INVALID_REQUEST" }, { status: 400 });
   const { language, alerts } = parsed.data;
   const allowedIds = new Set(alerts.map((alert) => alert.id));
-  const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite";
+  const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.5-flash-lite";
   const timeoutMs = getGeminiTimeoutMs("GEMINI_FEED_TIMEOUT_MS", 6_000, 9_000);
   const startedAt = Date.now();
   try {

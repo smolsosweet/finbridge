@@ -24,6 +24,7 @@ export function renameCategoryMessageReferences(message: ChatMessage, sources: s
     ...(message.transaction ? { transaction: { ...message.transaction, category: rename(message.transaction.category) } } : {}),
     ...(message.financialContext?.category ? { financialContext: { ...message.financialContext, category: rename(message.financialContext.category) } } : {}),
     ...(message.categoryList ? { categoryList: [...new Set(message.categoryList.map(rename))] } : {}),
+    ...(message.pendingScenario ? { pendingScenario: { ...message.pendingScenario, actions: message.pendingScenario.actions.map(action => ({ ...action, category: action.category ? rename(action.category) : null })) } } : {}),
     ...(message.scenarios ? { scenarios: message.scenarios.map(s => ({ ...s, changes: s.changes.map(c => ({ ...c, category: c.category ? rename(c.category) : null })), spendingReductions: s.spendingReductions?.map(r => ({ ...r, category: r.category ? rename(r.category) : null })) })) } : {}),
   };
 }

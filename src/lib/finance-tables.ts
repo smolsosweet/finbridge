@@ -41,12 +41,22 @@ CREATE INDEX IF NOT EXISTS finbridge_budgets_wallet ON finbridge_budgets(user_id
 const fingerprint = (value: string) => createHash("sha256").update(value).digest("hex");
 const categoryId = (name: string) => name ? fingerprint(name) : null;
 type Row = { id: string; data: unknown; position: number } & Record<string, unknown>;
-async function upsert(client: PoolClient, owner: string, table: string, fields: Record<string, string>, rows: Row[]) {
+async function upsert(client: PoolClient, owner: string, table: string, fields: Record<string, string>, rows: Row[], previous?: Row[]) {
   // SQL identifiers are static application constants. All user values are bound.
   const types = { id: "TEXT", data: "JSONB", position: "INTEGER", ...fields }, columns = Object.keys(types);
   // Release live unique keys before inserting replacements in this same revision.
   // The entire workspace save is transactional; removed rows remain recoverable.
-  await client.query(`UPDATE ${table} SET deleted_at=CURRENT_TIMESTAMP WHERE user_id=$1 AND deleted_at IS NULL AND NOT(id=ANY($2::text[]))`, [owner, rows.map(r => r.id)]);
+  if (previous) {
+    const nextIds = new Set(rows.map(row => row.id));
+    const removed = previous.filter(row => !nextIds.has(row.id)).map(row => row.id);
+    if (removed.length) await client.query(`UPDATE ${table} SET deleted_at=CURRENT_TIMESTAMP WHERE user_id=$1 AND deleted_at IS NULL AND id=ANY($2::text[])`, [owner, removed]);
+    const old = new Map(previous.map(row => [row.id, row]));
+    rows = rows.filter(row => !isDeepStrictEqual(old.get(row.id), row));
+  } else {
+    // Initial import has no authoritative previous rows: retain full reconciliation.
+    await client.query(`UPDATE ${table} SET deleted_at=CURRENT_TIMESTAMP WHERE user_id=$1 AND deleted_at IS NULL AND NOT(id=ANY($2::text[]))`, [owner, rows.map(r => r.id)]);
+  }
+  if (!rows.length) return;
   await client.query(`INSERT INTO ${table}(user_id,${columns.join(",")}) SELECT $1,${columns.map(k => "r." + k).join(",")} FROM jsonb_to_recordset($2::jsonb) AS r(${Object.entries(types).map(([k, t]) => `${k} ${t}`).join(",")}) ON CONFLICT(user_id,id) DO UPDATE SET ${columns.filter(k => k !== "id").map(k => `${k}=EXCLUDED.${k}`).join(",")},deleted_at=NULL,updated_at=CURRENT_TIMESTAMP`, [owner, JSON.stringify(rows)]);
 }
 type FinanceTableWrite = { table: string; types: Record<string, string>; rows: Row[] };
@@ -78,7 +88,7 @@ export async function writeFinanceTables(client: PoolClient, owner: string, s: A
   const old = new Map(previous ? financeTableWrites(previous).map(write => [write.table, write.rows]) : []);
   for (const write of financeTableWrites(s)) {
     if (previous && isDeepStrictEqual(old.get(write.table), write.rows)) continue;
-    await upsert(client, owner, write.table, write.types, write.rows);
+    await upsert(client, owner, write.table, write.types, write.rows, previous ? old.get(write.table) : undefined);
   }
 }
 export async function writeAlertRules(client: PoolClient, owner: string, rules: SafetyRule[]) {
@@ -103,19 +113,45 @@ export async function readSafetyFinanceTables(client: PoolClient, owner: string,
   return { ...fallback, ...result.rows[0] };
 }
 export async function readFinanceTables(client: PoolClient, owner: string, fallback: AppState): Promise<AppState> {
-  const rows = async (table: string, expression = "data") => (await client.query(`SELECT ${expression} AS data FROM ${table} WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position`, [owner])).rows.map(r => r.data);
-  const wallets = await rows("finbridge_wallets", "data || jsonb_build_object('name',name,'currency',trim(currency),'initial',opening_balance,'type',wallet_type,'archived',archived)");
-  const cats = (await client.query("SELECT * FROM finbridge_categories WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position", [owner])).rows;
-  const links = (await client.query("SELECT l.wallet_id,c.name FROM finbridge_wallet_categories l JOIN finbridge_categories c ON c.user_id=l.user_id AND c.id=l.category_id WHERE l.user_id=$1 AND l.deleted_at IS NULL ORDER BY l.position", [owner])).rows;
-  const children = (await client.query("SELECT category_id,name FROM finbridge_category_children WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position", [owner])).rows;
-  const transactions = (await client.query(`SELECT (t.data - 'fixedExpenseId' - 'fixedExpenseDueDate' - 'paymentConfirmation' - 'targetWallet') || jsonb_build_object('title',t.title,'amount',t.amount,'type',t.direction,'wallet',t.wallet_id,'category',COALESCE(c.name,''),'date',t.occurred_on::text || substring(COALESCE(t.data->>'date','') FROM 11)) || CASE WHEN t.target_wallet_id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('targetWallet',t.target_wallet_id) END || CASE WHEN t.fixed_expense_id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('fixedExpenseId',t.fixed_expense_id,'fixedExpenseDueDate',t.fixed_due_on::text,'paymentConfirmation',t.payment_confirmation) END AS data FROM finbridge_transactions t LEFT JOIN finbridge_categories c ON c.user_id=t.user_id AND c.id=t.category_id WHERE t.user_id=$1 AND t.deleted_at IS NULL ORDER BY t.position`, [owner])).rows.map(r => r.data);
-  const goals = (await client.query(`SELECT b.data || jsonb_build_object('kind','budget','title',b.title,'amount',b.amount,'currency',trim(b.currency),'wallet',b.wallet_id,'category',COALESCE(c.name,''),'date',b.starts_on::text,'cycle',b.cycle) AS data,b.position FROM finbridge_budgets b LEFT JOIN finbridge_categories c ON c.user_id=b.user_id AND c.id=b.category_id WHERE b.user_id=$1 AND b.deleted_at IS NULL UNION ALL SELECT data || jsonb_build_object('title',title,'kind',goal_kind,'amount',target_amount,'saved',saved_amount,'currency',trim(currency)),position FROM finbridge_goals WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position`, [owner])).rows.map(r => r.data);
-  const fixedExpenses = (await client.query(`SELECT e.data || jsonb_build_object('title',e.title,'budgetId',COALESCE(e.budget_id,''),'walletId',e.wallet_id,'category',COALESCE(c.name,''),'amount',e.amount,'dueDate',e.due_on::text,'recurrence',e.recurrence,'active',e.active) AS data FROM finbridge_fixed_expenses e LEFT JOIN finbridge_categories c ON c.user_id=e.user_id AND c.id=e.category_id WHERE e.user_id=$1 AND e.deleted_at IS NULL ORDER BY e.position`, [owner])).rows.map(r => r.data);
-  const preferences = (await client.query("SELECT preference_key,value FROM finbridge_preferences WHERE user_id=$1 AND deleted_at IS NULL", [owner])).rows;
-  const recipients = (await client.query("SELECT expense_id, data || jsonb_build_object('bankBin',trim(bank_bin),'accountNumber',account_number,'accountName',account_name,'reference',reference) || CASE WHEN preferred_app IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('preferredApp',preferred_app) END AS data FROM finbridge_fixed_expense_recipients WHERE user_id=$1 AND deleted_at IS NULL", [owner])).rows;
+  // Static queries retain the same authoritative columns, owner filters and ordering.
+  // Batch on the existing transaction/client: Promise.all on one pg client would
+  // still serialize network round trips. No data is shared or cached across users.
+  const queries = [
+    ["categories", "SELECT * FROM finbridge_categories WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position"],
+    ["links", "SELECT l.wallet_id,c.name FROM finbridge_wallet_categories l JOIN finbridge_categories c ON c.user_id=l.user_id AND c.id=l.category_id WHERE l.user_id=$1 AND l.deleted_at IS NULL ORDER BY l.position"],
+    ["children", "SELECT category_id,name FROM finbridge_category_children WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position"],
+    ["transactions", `SELECT (t.data - 'fixedExpenseId' - 'fixedExpenseDueDate' - 'paymentConfirmation' - 'targetWallet') || jsonb_build_object('title',t.title,'amount',t.amount,'type',t.direction,'wallet',t.wallet_id,'category',COALESCE(c.name,''),'date',t.occurred_on::text || substring(COALESCE(t.data->>'date','') FROM 11)) || CASE WHEN t.target_wallet_id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('targetWallet',t.target_wallet_id) END || CASE WHEN t.fixed_expense_id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('fixedExpenseId',t.fixed_expense_id,'fixedExpenseDueDate',t.fixed_due_on::text,'paymentConfirmation',t.payment_confirmation) END AS data FROM finbridge_transactions t LEFT JOIN finbridge_categories c ON c.user_id=t.user_id AND c.id=t.category_id WHERE t.user_id=$1 AND t.deleted_at IS NULL ORDER BY t.position`],
+    ["goals", `SELECT b.data || jsonb_build_object('kind','budget','title',b.title,'amount',b.amount,'currency',trim(b.currency),'wallet',b.wallet_id,'category',COALESCE(c.name,''),'date',b.starts_on::text,'cycle',b.cycle) AS data,b.position FROM finbridge_budgets b LEFT JOIN finbridge_categories c ON c.user_id=b.user_id AND c.id=b.category_id WHERE b.user_id=$1 AND b.deleted_at IS NULL UNION ALL SELECT data || jsonb_build_object('title',title,'kind',goal_kind,'amount',target_amount,'saved',saved_amount,'currency',trim(currency)),position FROM finbridge_goals WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position`],
+    ["fixedExpenses", `SELECT e.data || jsonb_build_object('title',e.title,'budgetId',COALESCE(e.budget_id,''),'walletId',e.wallet_id,'category',COALESCE(c.name,''),'amount',e.amount,'dueDate',e.due_on::text,'recurrence',e.recurrence,'active',e.active) AS data FROM finbridge_fixed_expenses e LEFT JOIN finbridge_categories c ON c.user_id=e.user_id AND c.id=e.category_id WHERE e.user_id=$1 AND e.deleted_at IS NULL ORDER BY e.position`],
+    ["preferences", "SELECT preference_key,value FROM finbridge_preferences WHERE user_id=$1 AND deleted_at IS NULL"],
+    ["recipients", "SELECT expense_id, data || jsonb_build_object('bankBin',trim(bank_bin),'accountNumber',account_number,'accountName',account_name,'reference',reference) || CASE WHEN preferred_app IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('preferredApp',preferred_app) END AS data FROM finbridge_fixed_expense_recipients WHERE user_id=$1 AND deleted_at IS NULL"],
+    ["messages", "SELECT conversation_id,data || jsonb_build_object('role',role,'text',body) AS data FROM finbridge_chat_messages WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position"],
+    ["conversations", "SELECT id,data FROM finbridge_conversations WHERE user_id=$1 AND deleted_at IS NULL"],
+    ["wallets", `SELECT data || jsonb_build_object('name',name,'currency',trim(currency),'initial',opening_balance,'type',wallet_type,'archived',archived) AS data FROM finbridge_wallets WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position`],
+    ["drafts", `SELECT data AS data FROM finbridge_transaction_drafts WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position`],
+    ["onboarding", `SELECT data AS data FROM finbridge_onboarding_drafts WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position`],
+    ["recurring", `SELECT data || jsonb_build_object('wallet',wallet_id,'amount',amount,'type',direction) AS data FROM finbridge_recurring_transactions WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position`],
+    ["rules", `SELECT to_jsonb(rule_text) AS data FROM finbridge_categorization_rules WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position`],
+  ] as const;
+  const result = await client.query<{ sections: Record<string, import("pg").QueryResultRow[]> }>(
+    `SELECT jsonb_build_object(${queries.map(([name, sql]) =>
+      `'${name}', COALESCE((SELECT jsonb_agg(to_jsonb(finance_rows)) FROM (${sql}) finance_rows), '[]'::jsonb)`
+    ).join(",")}) AS sections`, [owner],
+  );
+  if (!result.rows[0]?.sections) throw new Error("FINANCE_READ_UNAVAILABLE");
+  const sections = result.rows[0].sections;
+  const wallets = sections.wallets.map(r => r.data);
+  const cats = sections.categories;
+  const links = sections.links;
+  const children = sections.children;
+  const transactions = sections.transactions.map(r => r.data);
+  const goals = sections.goals.map(r => r.data);
+  const fixedExpenses = sections.fixedExpenses.map(r => r.data);
+  const preferences = sections.preferences;
+  const recipients = sections.recipients;
   for (const expense of fixedExpenses) expense.paymentRecipient = recipients.find(r => r.expense_id === expense.id)?.data;
-  const messages = (await client.query("SELECT conversation_id,data || jsonb_build_object('role',role,'text',body) AS data FROM finbridge_chat_messages WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position", [owner])).rows;
-  const drafts = await rows("finbridge_transaction_drafts");
-  const conversations = (await client.query("SELECT id,data FROM finbridge_conversations WHERE user_id=$1 AND deleted_at IS NULL", [owner])).rows;
-  return { ...fallback, onboardingDraft: (await rows("finbridge_onboarding_drafts"))[0], wallets, transactions, goals, fixedExpenses, recurring: await rows("finbridge_recurring_transactions", "data || jsonb_build_object('wallet',wallet_id,'amount',amount,'type',direction)"), categories: cats.filter(c => c.listed).map(c => c.name), categoryMeta: Object.fromEntries(cats.map(c => [c.name, { ...c.data, type: c.category_type, icon: c.icon, archived: c.archived, children: children.filter(row => row.category_id === c.id).map(row => row.name) }])), walletCategories: Object.fromEntries(wallets.map(w => [w.id, links.filter(l => l.wallet_id === w.id).map(l => l.name)])), settings: Object.fromEntries(preferences.map(p => [p.preference_key, p.value])), rules: (await rows("finbridge_categorization_rules", "to_jsonb(rule_text)")).map(String), ...(fallback.transactionChat || messages.some(m => m.conversation_id === "transactions") ? { transactionChat: { messages: messages.filter(m => m.conversation_id === "transactions").map(m => m.data), drafts, clarifyingDraftId: conversations.find(c => c.id === "transactions")?.data.clarifyingDraftId || null, activeDraftId: conversations.find(c => c.id === "transactions")?.data.activeDraftId || null, referencedCategories: conversations.find(c => c.id === "transactions")?.data.referencedCategories || [] } } : {}), planningChat: messages.filter(m => m.conversation_id === "planning").map(m => m.data) };
+  const messages = sections.messages;
+  const drafts = sections.drafts.map(r => r.data);
+  const conversations = sections.conversations;
+  return { ...fallback, onboardingDraft: (sections.onboarding.map(r => r.data))[0], wallets, transactions, goals, fixedExpenses, recurring: sections.recurring.map(r => r.data), categories: cats.filter(c => c.listed).map(c => c.name), categoryMeta: Object.fromEntries(cats.map(c => [c.name, { ...c.data, type: c.category_type, icon: c.icon, archived: c.archived, children: children.filter(row => row.category_id === c.id).map(row => row.name) }])), walletCategories: Object.fromEntries(wallets.map(w => [w.id, links.filter(l => l.wallet_id === w.id).map(l => l.name)])), settings: Object.fromEntries(preferences.map(p => [p.preference_key, p.value])), rules: (sections.rules.map(r => r.data)).map(String), ...(fallback.transactionChat || messages.some(m => m.conversation_id === "transactions") ? { transactionChat: { messages: messages.filter(m => m.conversation_id === "transactions").map(m => m.data), drafts, clarifyingDraftId: conversations.find(c => c.id === "transactions")?.data.clarifyingDraftId || null, activeDraftId: conversations.find(c => c.id === "transactions")?.data.activeDraftId || null, referencedCategories: conversations.find(c => c.id === "transactions")?.data.referencedCategories || [] } } : {}), planningChat: messages.filter(m => m.conversation_id === "planning").map(m => m.data) };
 }

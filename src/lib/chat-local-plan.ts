@@ -1,13 +1,23 @@
 import type { AppState, ChatMessage } from "../components/sites/rolly/replica/store";
 import { calculateSpendingPlan } from "./financial-outlook";
+
+/** Request parameters and entity names only; confirmations in history authorize nothing. */
+function pendingConversationContext(message: ChatMessage): string | null {
+  if (message.pendingScenario) return `Pending financial scenario inputs (complete the missing field; recalculate, no write): ${JSON.stringify(message.pendingScenario)}. Question: ${message.text}`.slice(0,1000);
+  if (message.workspaceProposal) return `Previous financial creation proposal (not authorization): ${JSON.stringify({status:message.workspaceProposal.status,actions:message.workspaceProposal.actions.map(a=>({id:a.id,kind:a.kind,name:a.name,walletId:a.walletId,currency:a.currency,category:a.category,date:a.date,missingFields:Object.entries(a).filter(([key,v])=>v===null&&key!=="id").map(([key])=>key)}))})}. Question: ${message.text}`.slice(0,1000);
+  if (message.categoryOperation) return `Previous category proposal (not authorization): ${JSON.stringify({command:message.categoryOperation.command,status:message.categoryOperation.status})}`.slice(0,1000);
+  if (message.categoryList) return `Previously displayed existing categories: ${JSON.stringify(message.categoryList.slice(0,30))}. ${message.text}`.slice(0,1000);
+  return null;
+}
+
 export function modelHistory(messages: ChatMessage[]) {
   // Never send locally computed amounts to Gemini. Preserve only non-sensitive
   // entity/date metadata so follow-ups such as "that category" can be resolved.
-  return messages.filter(m => !m.localOnly || m.financialContext || m.scenarios || m.spendingPlan || m.planningDeletion || m.financialEntities).slice(-12).map(({ role, text, localOnly, financialContext, scenarios, spendingPlan, planningDeletion, financialEntities }) => ({
+  return messages.filter(m => !m.localOnly || pendingConversationContext(m) || m.financialContext || m.scenarios || m.spendingPlan || m.planningDeletion || m.financialEntities || m.transfer).slice(-12).map(({ role, text, localOnly, financialContext, scenarios, spendingPlan, planningDeletion, financialEntities, transfer, pendingScenario, workspaceProposal, categoryOperation, categoryList }) => ({
     role,
-    text: planningDeletion ? `Previous planning entity references (IDs only; never reuse amounts): ${JSON.stringify({ kind: planningDeletion.kind, status: planningDeletion.status, entities: planningDeletion.targets.filter(t => !planningDeletion.selectedIds.length || planningDeletion.selectedIds.includes(t.id)).map(t => ({ id: t.id, title: t.title })) })}`.slice(0, 1000) : spendingPlan ? `Previous spending plan assumptions only (recalculate from current data; month-end, unpaid bills including overdue, flexible spending pace, protected reserves): ${JSON.stringify(spendingPlan)}`.slice(0, 1000) : scenarios?.length ? `Previous hypothetical assumptions only (recalculate from current data): ${JSON.stringify(scenarios)}`.slice(0, 1000) : localOnly && financialContext
+    text: pendingConversationContext({role,text,pendingScenario,workspaceProposal,categoryOperation,categoryList}) || (transfer ? `Previous transfer parameters (re-read data; no action is authorized by this history): ${JSON.stringify({request:transfer.request,status:transfer.status,choices:transfer.choices.map(c=>({billId:c.patch.billId,planId:c.patch.planId,quoteId:c.patch.quoteId,schoolId:c.patch.schoolId,provider:c.patch.provider})),labels:transfer.rows.map(r=>r.label).slice(0,12)})}`.slice(0,1000) : planningDeletion ? `Previous planning entity references (IDs only; never reuse amounts): ${JSON.stringify({ kind: planningDeletion.kind, status: planningDeletion.status, entities: planningDeletion.targets.filter(t => !planningDeletion.selectedIds.length || planningDeletion.selectedIds.includes(t.id)).map(t => ({ id: t.id, title: t.title })) })}`.slice(0, 1000) : spendingPlan ? `Previous spending plan assumptions only (recalculate from current data; month-end, unpaid bills including overdue, flexible spending pace, protected reserves): ${JSON.stringify(spendingPlan)}`.slice(0, 1000) : scenarios?.length ? `Previous hypothetical assumptions only (recalculate from current data): ${JSON.stringify(scenarios)}`.slice(0, 1000) : localOnly && financialContext
       ? `Previous financial result context (recalculate from current data; do not reuse prior amounts): action=${financialContext.action}; category=${financialContext.category || "unspecified"}; period=${financialContext.periodStart || "default"}..${financialContext.periodEnd || "default"}; percentage=${financialContext.percentage ?? "unspecified"}; walletId=${JSON.stringify(financialContext.walletId || null)}; scope=${financialContext.scope || "unspecified"}; bill=${JSON.stringify(financialContext.searchTerm || null)}. ${financialEntities?.length ? `Previous planning entity references: ${JSON.stringify(financialEntities)}` : ""}`.trim().slice(0, 1000)
-      : text.slice(0, 600),
+      : text.slice(0, 600)),
   }));
 }
 export function localPlanReply(state: AppState, asOf: string, walletIds?: string[]) {

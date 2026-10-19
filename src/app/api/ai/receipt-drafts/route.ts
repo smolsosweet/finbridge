@@ -1,3 +1,4 @@
+import { traceAiRequest, type AiRequestTiming } from "@/lib/ai-request-timing";
 import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 import { z } from "zod";
 import { getSession } from "@/lib/auth-session";
@@ -60,7 +61,11 @@ function isLocalDemoRequest(request: Request): boolean {
 }
 
 export async function POST(request: Request) {
-  if (!isLocalDemoRequest(request) && !(await getSession())) {
+  return traceAiRequest("receipt-drafts", timing => handleRequest(request, timing));
+}
+
+async function handleRequest(request: Request, timing: AiRequestTiming) {
+  if (!isLocalDemoRequest(request) && !(await timing.measure("auth", () => getSession()))) {
     return Response.json({ error: "UNAUTHENTICATED", message: "Hãy đăng nhập để đọc hóa đơn." }, { status: 401 });
   }
   if (Number(request.headers.get("content-length") || 0) > 7_500_000) {
@@ -80,12 +85,12 @@ export async function POST(request: Request) {
     return Response.json({ error: "INVALID_IMAGE", message: "Định dạng ảnh chưa hỗ trợ hoặc ảnh quá lớn. Hãy chọn JPEG, PNG hoặc WebP dưới 5 MB." }, { status: 400 });
   }
 
-  const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite";
+  const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.5-flash-lite";
   const timeoutMs = getGeminiTimeoutMs("GEMINI_OCR_TIMEOUT_MS", 60_000, 60_000);
   const startedAt = Date.now();
   try {
     const ai = new GoogleGenAI({ apiKey, httpOptions: { retryOptions: { attempts: 1 } } });
-    const result = await ai.models.generateContent({
+    const result = await timing.measure("model", () => ai.models.generateContent({
       model,
       contents: [{ role: "user", parts: [
         { text: [
@@ -102,7 +107,7 @@ export async function POST(request: Request) {
       config: { responseMimeType: "application/json", responseSchema, temperature: 0.1, maxOutputTokens: 1024,
         ...(model.startsWith("gemini-3.") ? { thinkingConfig: { thinkingLevel: /flash-lite$/.test(model) ? ThinkingLevel.MINIMAL : ThinkingLevel.LOW } } : {}),
         abortSignal: AbortSignal.any([AbortSignal.timeout(timeoutMs), request.signal]) },
-    });
+    }));
     let decoded: unknown;
     try { decoded = JSON.parse(result.text || ""); }
     catch { return Response.json({ error: "INVALID_AI_RESPONSE", message: "Không đọc được thông tin hóa đơn. Hãy chụp ảnh rõ hơn hoặc nhập giao dịch bằng chat." }, { status: 502 }); }

@@ -5,6 +5,10 @@ import { useSearchParams } from "next/navigation";
 import { ledgerDateKey } from "./calendarLedger";
 import { Camera, Mic, Square, Send, Settings, Plus, X, Trash2 } from "lucide-react";
 import { EmptyState, Field, Mascot, Modal, PageHeader, Toggle } from "./Ui";
+import { ChatTransferCard } from "./ChatTransferCard";
+import { transferChatCopy, transferChatResultSchema, transferChatWriteSchema, type TransferChatRequest, type TransferChatResult } from "@/lib/transfer-chat-model";
+import { transferChatWriteResult } from "@/lib/transfer-chat";
+import { TRANSFER_COPY } from "@/components/transfers/transfer-copy";
 import { currencySymbol, flushWorkspace, flushWorkspaceForAnalysis, getWorkspaceState, money, setSetting, today, updateState, useAppState, workspaceOwner, workspacePersistence, type AppState, type ChatMessage, type Transaction } from "./store";
 import { applyCategoryOperation, prepareCategoryOperation, renameCategoryMessageReferences, type CategoryCommand, type CategoryConfirmation } from "@/lib/category-operations";
 import { categoryOperationCopy, categoryOperationDescription, categoryOperationError } from "@/lib/category-operation-copy";
@@ -13,7 +17,7 @@ import { applyDraftAmountCorrection, categoryResolutionDraftIds, createTimeoutTr
 import { resolveExplicitWallet, resolveUniqueCurrencyWallet } from "@/lib/transaction-currency";
 import { answerFinancialQuery, resolveFinancialFollowup, type FinancialAction } from "@/lib/financial-chat";
 import { modelHistory } from "@/lib/chat-local-plan";
-import { answerPresentationSchema } from "@/lib/assistant-response";
+import { answerPresentationSchema, assistantScenarioSchema } from "@/lib/assistant-response";
 import { resolveSpendingPlanAdjustment, spendingPlanAdjustmentSchema, spendingPlanOptionsSchema, type SpendingPlanOptions } from "@/lib/financial-outlook";
 import { ChatSpendingPlan } from "./ChatSpendingPlan";
 import { FinancialChatAnswer } from "./FinancialChatAnswer";
@@ -557,6 +561,8 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   const messagesRef = useRef<HTMLDivElement>(null);
   const aiRequestLock = useRef(false);
   const conversationGeneration = useRef(0);
+  const transferRequestLock = useRef(false);
+  const [transferBusy, setTransferBusy] = useState(false);
   const activeChatRequest = useRef<AbortController | null>(null);
   const categoryOperationLock = useRef(false);
   const draftCommitLock = useRef(false);
@@ -662,6 +668,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     if (container) container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
   }, [messages.length, sessionLoaded]);
   function resetConversation() {
+    if (transferRequestLock.current || messages.some(m => m.transfer?.uncertain || m.transfer?.status === "saving")) return;
     if (committing || categoryBusy || deletingId) return;
     if (uncertainDraftIds.length) { setModal(""); setMessages(previous => [...previous, { role: "assistant", text: workspaceSaveErrorMessage(null, resolveLanguage(state.settings.language)), draftIds: uncertainDraftIds }]); return; }
     conversationGeneration.current += 1;
@@ -1086,10 +1093,72 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       return categoryFlowCopy.invalid;
     }
   }
+  function updateTransfer(id: string, patch: Partial<TransferChatResult>) {
+    setMessages(previous => previous.map(m => m.transfer?.id === id ? { ...m, transfer: { ...m.transfer, ...patch } } : m));
+  }
+  function cancelTransfer(result: TransferChatResult) {
+    if (transferRequestLock.current || result.uncertain || !["review","failed"].includes(result.status)) return;
+    updateTransfer(result.id, { status: "cancelled", text: transferChatCopy[resolveLanguage(state.settings.language)].cancelled, choices: [], write: undefined, error: undefined });
+  }
+  async function chooseTransfer(result: TransferChatResult, patch: Partial<TransferChatRequest>, label: string) {
+    if (transferRequestLock.current || busy || committing || categoryBusy || deletingId || messages.some(m => m.transfer?.uncertain || m.transfer?.status === "saving")) return;
+    transferRequestLock.current = true; setTransferBusy(true);
+    const owner = workspaceOwner(), generation = conversationGeneration.current, language = resolveLanguage(state.settings.language);
+    const current = () => workspaceOwner() === owner && conversationGeneration.current === generation;
+    try {
+      const response = await fetch("/api/ai/transfer-options", { method: "POST", headers: { "content-type": "application/json", "x-finbridge-workspace-owner": owner || "finbridge-local-demo" }, body: JSON.stringify({ id: crypto.randomUUID(), request: { ...result.request, ...patch }, language }), signal: AbortSignal.timeout(30000) });
+      const body = await response.json();
+      if (!current()) return;
+      const parsed = transferChatResultSchema.safeParse(body.transfer);
+      if (!response.ok || !parsed.success) throw new Error("UNAVAILABLE");
+      // Replace an unsubmitted proposal when a choice revises it; never mutate.
+      setMessages(previous => [...previous.map(m => m.transfer?.id === result.id && m.transfer.write && ["review","failed"].includes(m.transfer.status) ? { ...m, transfer: { ...m.transfer, status: "cancelled" as const, write: undefined, choices: [] } } : m), { role: "user", text: label }, { role: "assistant", text: "", transfer: parsed.data, localOnly: true }]);
+    } catch { if (current()) updateTransfer(result.id, { error: transferChatCopy[language].unavailable }); }
+    finally { transferRequestLock.current = false; if (current()) setTransferBusy(false); }
+  }
+  async function confirmTransfer(result: TransferChatResult) {
+    if (transferRequestLock.current || busy || committing || categoryBusy || deletingId || !["review","failed"].includes(result.status)) return;
+    if (messages.some(m => m.transfer?.id !== result.id && (m.transfer?.uncertain || m.transfer?.status === "saving"))) return;
+    const parsed = transferChatWriteSchema.safeParse(result.write);
+    if (!parsed.success) return;
+    transferRequestLock.current = true; setTransferBusy(true);
+    const owner = workspaceOwner(), generation = conversationGeneration.current, language = resolveLanguage(state.settings.language), t = transferChatCopy[language];
+    const current = () => workspaceOwner() === owner && conversationGeneration.current === generation;
+    updateTransfer(result.id, { status: "saving", error: undefined });
+    let definitiveFailure = false;
+    try {
+      const endpoint = parsed.data.endpoint === "reference" ? "/api/international-transfers/reference" : "/api/international-transfers";
+      const response = await fetch(endpoint, { method: "POST", headers: { "content-type": "application/json", "x-finbridge-workspace-owner": owner || "finbridge-local-demo" }, body: JSON.stringify(parsed.data.command), signal: AbortSignal.timeout(45000) });
+      const body: unknown = await response.json();
+      if (!current()) return;
+      if (!response.ok) {
+        // 5xx can occur after a commit. Keep the idempotency key for recovery.
+        definitiveFailure = response.status < 500;
+        const code = body && typeof body === "object" && "error" in body ? String(body.error) : "UNAVAILABLE";
+        throw new Error(TRANSFER_COPY[language].errors[code as keyof typeof TRANSFER_COPY.en.errors] || t.unavailable);
+      }
+      const verified = transferChatWriteResult(result, body, language);
+      updateTransfer(result.id, { ...verified, uncertain: false, error: undefined });
+    } catch (error) {
+      if (current()) updateTransfer(result.id, { status: "failed", uncertain: !!result.uncertain || !definitiveFailure, error: result.uncertain || !definitiveFailure ? ({vi:"Chưa xác định thao tác đã lưu hay chưa. Bấm thử lại cùng yêu cầu để kiểm tra, tránh tạo yêu cầu mới.",en:"The result is not confirmed. Retry this same request to recover safely instead of creating another.",zh:"结果尚未确认，请重试同一请求以安全恢复，避免重复创建。"}[language]) : error instanceof Error ? error.message : t.unavailable });
+    } finally { transferRequestLock.current = false; if (current()) setTransferBusy(false); }
+  }
   async function send(value: string, requestedDraftId?: string) {
     const message = value.trim();
-    if (!message || busy || aiRequestLock.current || committing || categoryBusy || deletingId) return;
+    if (!message || busy || aiRequestLock.current || transferRequestLock.current || committing || categoryBusy || deletingId) return;
     const recentAssistant = [...messages].reverse().find(m => m.role === "assistant");
+    const pendingTransfer = recentAssistant?.transfer;
+    if (pendingTransfer?.write && ["review","failed"].includes(pendingTransfer.status)) {
+      const reply = planningActionConfirmationReply(message);
+      if (reply === "cancel") {
+        if (pendingTransfer.uncertain) { updateTransfer(pendingTransfer.id, { error: ({vi:"Kết quả lần gửi trước chưa được xác định. Hãy thử lại cùng yêu cầu trước khi hủy để tránh bỏ sót thao tác đã lưu.",en:"The previous result is unknown. Retry the same request before cancelling so a saved action is not overlooked.",zh:"上次结果尚未确认，请先重试同一请求，再决定是否取消。"}[resolveLanguage(state.settings.language)]) }); return; }
+        setText(""); setMessages(previous=>[...previous,{role:"user",text:message}]); cancelTransfer(pendingTransfer); return;
+      }
+      if (reply === "confirm") {
+        if (pendingTransfer.acknowledgement) { updateTransfer(pendingTransfer.id,{error:transferChatCopy[resolveLanguage(state.settings.language)].acknowledge}); return; }
+        setText(""); setMessages(previous=>[...previous,{role:"user",text:message}]); await confirmTransfer(pendingTransfer); return;
+      }
+    }
     const pendingPlanningDeletion = recentAssistant?.planningDeletion;
     if (pendingPlanningDeletion && ["pending", "failed"].includes(pendingPlanningDeletion.status)) {
       const reply = planningConfirmationReply(message);
@@ -1383,6 +1452,9 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           activeDraftId,
           referencedCategories,
           ...(activeSpendingPlan ? { spendingPlan: activeSpendingPlan } : {}),
+          language: resolveLanguage(state.settings.language),
+          ...(recentAssistant?.pendingScenario && assistantScenarioSchema.safeParse(recentAssistant.pendingScenario).success ? { pendingScenario: recentAssistant.pendingScenario } : {}),
+          ...(recentAssistant?.transfer && recentAssistant.transfer.status !== "cancelled" ? { transferContext: recentAssistant.transfer.request } : {}),
           history: modelHistory([...messages, { role: "user" as const, text: message }]),
           wallets: state.wallets.filter((item) => !item.archived).map(({ id, name, currency }) => ({ id, name, currency })),
           categories: state.categories.flatMap((name) => {
@@ -1401,6 +1473,13 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       const validShape = returned.every((item) => item && typeof item === "object" && typeof (item as TransactionDraft).id === "string" && typeof (item as TransactionDraft).title === "string" && Array.isArray((item as TransactionDraft).needsReview));
       if (!validShape || returned.length > 20) throw new Error("AI trả về dữ liệu chưa hợp lệ. Vui lòng thử lại.");
       const ai = result as { intent: string; operationIntent?: ConversationIntent; targetDraftId?: string | null; categoryOperation?: CategoryCommand | null; action?: string; actions?: FinancialAction[]; walletId?: string | null; scope?: "selected" | "all"; periodStart?: string | null; periodEnd?: string | null; category?: string | null; searchTerm?: string | null; transactionType?: "expense" | "income" | null; percentage?: number | null; financialAnswer?: string | null; reply?: string; deletion?: TransactionDeletionCriteria };
+      if (ai.intent === "international_transfer") {
+        const parsed = transferChatResultSchema.safeParse((result as { transfer?: unknown }).transfer);
+        if (!parsed.success) throw new Error(serviceCopy.unavailable);
+        // A lost reply never authorizes another write. Existing proposals keep their keys.
+        setMessages(previous => [...previous, { role: "assistant", text: "", transfer: parsed.data, localOnly: true }]);
+        return;
+      }
       if (ai.operationIntent === "delete_budget" || ai.operationIntent === "delete_fixed_expense") {
         const parsed = planningDeletionSchema.safeParse((result as { planningDeletion?: unknown }).planningDeletion);
         if (!parsed.success) throw new Error(serviceCopy.unavailable);
@@ -1514,7 +1593,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           const baseline = workspacePersistence() === "browser" ? calculateScenario(snapshot, { ...scenario, changes: [], spendingReductions: [], dailySpendingLimits: [] }, input.today) : embedded.baselines?.find(b => b.scenarioId === scenario.id);
           return scenarioAnswer(result, scenario, snapshot.wallets, input.today, input.preferredLanguage, baseline, presentation.success ? presentation.data : undefined);
         });
-        setMessages(previous => [...previous, { role: "assistant", text: parts.length ? parts.join("\n\n") : plan.clarification || plan.reply || serviceCopy.unavailable, scenarios: plan.scenarios, scenarioExplanation: explanations.length ? explanations.join("\n\n") : undefined, localOnly: true }]);
+        setMessages(previous => [...previous, { role: "assistant", text: parts.length ? parts.join("\n\n") : plan.clarification || plan.reply || serviceCopy.unavailable, scenarios: plan.scenarios, ...(assistantScenarioSchema.safeParse((plan as {pendingScenario?:unknown}).pendingScenario).success ? {pendingScenario:assistantScenarioSchema.parse((plan as {pendingScenario?:unknown}).pendingScenario)} : {}), scenarioExplanation: explanations.length ? explanations.join("\n\n") : undefined, localOnly: true }]);
         return;
       }
       if (ai.intent === "delete_transactions") {
@@ -2062,7 +2141,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       </div>
       <span className="r-chat-date">Hôm nay</span>
       {messages.map((message, index) => <div key={index} className={"r-message " + message.role + (message.draftIds ? " r-ai-draft-message" : "")}>
-        {message.spendingPlan ? <>{message.text && <p>{message.text}</p>}<ChatSpendingPlan state={state} asOf={today()} options={message.spendingPlan} onScope={busy || committing ? undefined : (options: SpendingPlanOptions) => setMessages(previous => [...previous, { role: "assistant", text: "", spendingPlan: options, localOnly: true }])}/></> : message.role === "assistant" && (message.financialContext || message.scenarioExplanation || message.draftTargetChoices) && !/gemini|AI Studio/i.test(message.text) ? <FinancialChatAnswer text={message.text} calculationDetails={message.scenarioExplanation} calculationLabel={{ vi: "Xem cách tính", en: "Calculation details", zh: "查看计算方式" }[resolveLanguage(state.settings.language)]} /> : <p>{message.role === "assistant" && /gemini|AI Studio/i.test(message.text)
+        {message.transfer ? <ChatTransferCard result={message.transfer.status === "saving" && !transferBusy ? {...message.transfer,status:"failed",uncertain:true,error:transferChatCopy[resolveLanguage(state.settings.language)].unavailable} : message.transfer} language={resolveLanguage(state.settings.language)} busy={transferBusy || busy || committing || categoryBusy || !!deletingId} onChoice={(patch,label) => void chooseTransfer(message.transfer!,patch,label)} onConfirm={() => void confirmTransfer(message.transfer?.status === "saving" && !transferBusy ? {...message.transfer,status:"failed",uncertain:true} : message.transfer!)} onCancel={() => cancelTransfer(message.transfer!)} onOpen={() => navigate("?tab=transfers")} /> : message.spendingPlan ? <>{message.text && <p>{message.text}</p>}<ChatSpendingPlan state={state} asOf={today()} options={message.spendingPlan} onScope={busy || committing ? undefined : (options: SpendingPlanOptions) => setMessages(previous => [...previous, { role: "assistant", text: "", spendingPlan: options, localOnly: true }])}/></> : message.role === "assistant" && (message.financialContext || message.scenarioExplanation || message.draftTargetChoices) && !/gemini|AI Studio/i.test(message.text) ? <FinancialChatAnswer text={message.text} calculationDetails={message.scenarioExplanation} calculationLabel={{ vi: "Xem cách tính", en: "Calculation details", zh: "查看计算方式" }[resolveLanguage(state.settings.language)]} /> : <p>{message.role === "assistant" && /gemini|AI Studio/i.test(message.text)
           ? message.draftIds?.length ? serviceCopy.draftReady : serviceCopy.unavailable
           : message.text}</p>}
         {message.planningDeletion && !messages.slice(index + 1).some(item => item.planningDeletion?.id === message.planningDeletion?.id) && (() => {
@@ -2236,7 +2315,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         })}
       </div>)}
       {busy && <div className="r-chat-thinking" role="status" aria-label="Đang phân tích giao dịch"><span /><span /><span /></div>}
-    </div><div className="r-chat-bottom"><input ref={fileInput} className="sr-only" type="file" aria-label="Chọn ảnh hóa đơn" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" tabIndex={-1} onChange={(event) => { const file = event.target.files?.[0]; if (file) void readReceipt(file); }} /><form className="r-chat-input" onSubmit={(e) => { e.preventDefault(); void send(text); }}><input aria-label="Nhập giao dịch" placeholder={clarifyingDraftId ? "Trả lời câu hỏi để bổ sung bản nháp…" : "ví dụ: hôm qua ăn sáng 30k, trưa 50k"} value={text} onChange={(e) => setText(e.target.value)} />{text.trim() && !listening ? <button disabled={busy || transcribing} aria-label="Gửi tin nhắn"><Send size={22} /></button> : <><button type="button" disabled={busy || transcribing} aria-pressed={listening} aria-label={listening ? "Dừng ghi âm" : "Ghi bằng giọng nói"} title={listening ? "Dừng ghi âm" : "Nói để chép lời vào ô chat"} onClick={() => { if (listening) recorder.current?.stop(); else { setVoiceError(""); void startVoice(); } }}>{listening ? <Square size={18} fill="currentColor" aria-hidden="true" /> : <Mic size={22} aria-hidden="true" />}</button><button type="button" disabled={busy || transcribing} aria-label="Thêm ảnh hóa đơn" onClick={() => fileInput.current?.click()}><Camera size={22} /></button></>}</form>{(listening || transcribing || voiceError) && <p className="r-chat-voice-status" role="status">{listening ? "Đang nghe… bấm nút vuông để dừng." : transcribing ? "Đang nhận diện lời nói…" : voiceError}</p>}<button type="button" className="r-memory-button" onClick={() => setModal("memory")}>Bộ nhớ của FinBridge</button></div>
+    </div><div className="r-chat-bottom"><input ref={fileInput} className="sr-only" type="file" aria-label="Chọn ảnh hóa đơn" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" tabIndex={-1} onChange={(event) => { const file = event.target.files?.[0]; if (file) void readReceipt(file); }} /><form className="r-chat-input" onSubmit={(e) => { e.preventDefault(); void send(text); }}><input aria-label="Nhập giao dịch" placeholder={clarifyingDraftId ? "Trả lời câu hỏi để bổ sung bản nháp…" : "ví dụ: hôm qua ăn sáng 30k, trưa 50k"} value={text} onChange={(e) => setText(e.target.value)} />{text.trim() && !listening ? <button disabled={busy || transferBusy || transcribing} aria-label="Gửi tin nhắn"><Send size={22} /></button> : <><button type="button" disabled={busy || transferBusy || transcribing} aria-pressed={listening} aria-label={listening ? "Dừng ghi âm" : "Ghi bằng giọng nói"} title={listening ? "Dừng ghi âm" : "Nói để chép lời vào ô chat"} onClick={() => { if (listening) recorder.current?.stop(); else { setVoiceError(""); void startVoice(); } }}>{listening ? <Square size={18} fill="currentColor" aria-hidden="true" /> : <Mic size={22} aria-hidden="true" />}</button><button type="button" disabled={busy || transferBusy || transcribing} aria-label="Thêm ảnh hóa đơn" onClick={() => fileInput.current?.click()}><Camera size={22} /></button></>}</form>{(listening || transcribing || voiceError) && <p className="r-chat-voice-status" role="status">{listening ? "Đang nghe… bấm nút vuông để dừng." : transcribing ? "Đang nhận diện lời nói…" : voiceError}</p>}<button type="button" className="r-memory-button" onClick={() => setModal("memory")}>Bộ nhớ của FinBridge</button></div>
     {modal === "resetChat" && <Modal title="Xóa hội thoại?" onClose={close}><div className="r-form"><p>Lịch sử chat và các bản nháp chưa xác nhận sẽ bị xóa. Giao dịch đã xác nhận vẫn được giữ.</p><div className="r-two-options"><button type="button" className="r-secondary" onClick={close}>Quay lại</button><button type="button" className="r-danger" onClick={resetConversation}>Xóa hội thoại</button></div></div></Modal>}
     {modal === "memory" && <Modal title="Bộ nhớ của FinBridge" sheet onClose={close}><p>Hãy dạy FinBridge quy tắc của bạn để FinBridge sắp xếp giao dịch theo cách bạn muốn.</p><form className="r-rule-input" onSubmit={(e) => { e.preventDefault(); if (rule.trim()) updateState((s) => ({ ...s, rules: [...s.rules, rule.trim()] })); setRule(""); }}><input placeholder="Nhập quy tắc của bạn vào đây..." aria-label="Quy tắc" value={rule} onChange={(e) => setRule(e.target.value)} /><button className="r-primary" aria-label="Thêm quy tắc"><Plus /></button></form><small>Ví dụ:<br />- ăn tối với bạn bè được phân loại là giải trí<br />- thể thao luôn được xếp vào danh mục sức khỏe<br />- cho thuê được xếp vào danh mục nhà ở</small>{state.rules.length ? state.rules.map((r, i) => <div key={i} className="r-toggle-row"><span>{r}</span><button className="r-icon-button" aria-label="Xóa quy tắc" onClick={() => updateState((s) => ({ ...s, rules: s.rules.filter((_, index) => i !== index) }))}><X size={18} /></button></div>) : <div className="r-no-rules"><b>Chưa có quy tắc nào</b><p>Thêm một quy tắc ở trên để dạy FinBridge cách phân loại giao dịch của bạn.</p></div>}<div className="r-toggle-row"><span>Tự động cập nhật bộ nhớ<small>FinBridge lưu quy tắc khi bạn sửa danh mục.</small></span><Toggle checked={Boolean(state.settings.autoMemory)} label="Tự động cập nhật bộ nhớ" onChange={(v) => updateState((s) => ({ ...s, settings: { ...s.settings, autoMemory: v } }))} /></div></Modal>}
     {modal === "transfer" && <TransferForm onClose={close} />}

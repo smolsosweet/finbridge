@@ -1,3 +1,4 @@
+import { traceAiRequest, type AiRequestTiming } from "@/lib/ai-request-timing";
 import { GoogleGenAI, Type } from "@google/genai";
 import { z } from "zod";
 import { getSession } from "@/lib/auth-session";
@@ -83,7 +84,11 @@ function isLocalDemoRequest(request: Request): boolean {
 }
 
 export async function POST(request: Request) {
-  if (!isLocalDemoRequest(request) && !(await getSession())) {
+  return traceAiRequest("transaction-drafts", timing => handleRequest(request, timing));
+}
+
+async function handleRequest(request: Request, timing: AiRequestTiming) {
+  if (!isLocalDemoRequest(request) && !(await timing.measure("auth", () => getSession()))) {
     return Response.json({ error: "UNAUTHENTICATED", message: "Hãy đăng nhập để dùng trợ lý giao dịch." }, { status: 401 });
   }
   const apiKey = process.env.GEMINI_API_KEY;
@@ -99,8 +104,8 @@ export async function POST(request: Request) {
 
   try {
     const ai = new GoogleGenAI({ apiKey, httpOptions: { retryOptions: { attempts: 1 } } });
-    const result = await ai.models.generateContent({
-      model: process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.1-flash-lite",
+    const result = await timing.measure("model", () => ai.models.generateContent({
+      model: process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.5-flash-lite",
       contents: [
         "Chuyển tin nhắn tiếng Việt thành các bản nháp giao dịch. KHÔNG lưu và KHÔNG khẳng định giao dịch đã được ghi nhận.",
         `Ngày hiện tại theo múi giờ ${input.timeZone}: ${input.today}. Nếu người dùng không nói ngày và ngữ cảnh là giao dịch thường ngày, dùng ngày hôm nay. Chuyển ngày tương đối sang YYYY-MM-DD. Nếu người dùng nói mơ hồ như "mấy hôm trước" hoặc nêu khoảng ngày không xác định, date=null và thêm date vào needsReview.`,
@@ -114,7 +119,7 @@ export async function POST(request: Request) {
         `Tin nhắn: ${input.message}`,
       ].join("\n"),
       config: { responseMimeType: "application/json", responseSchema, abortSignal: AbortSignal.any([AbortSignal.timeout(getGeminiTimeoutMs("GEMINI_CHAT_TIMEOUT_MS", 20_000, 25_000)), request.signal]) },
-    });
+    }));
     const decoded: unknown = JSON.parse(result.text || "");
     const output = responseSchema.safeParse(decoded);
     if (!output.success) return Response.json({ error: "INVALID_AI_RESPONSE", message: "AI trả về dữ liệu chưa hợp lệ. Hãy thử diễn đạt lại." }, { status: 502 });

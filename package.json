@@ -57,6 +57,9 @@
     "test:conversation": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-conversation.mjs scripts/verify-assistant-route.mjs scripts/verify-obligation-context.mjs scripts/verify-assistant-responses.mjs scripts/verify-planning-deletion.mjs scripts/verify-planning-actions.mjs scripts/verify-settings-and-natural-language.mjs",
     "test:chat-plan": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-chat-spending-plan.mjs scripts/verify-chat-spending-plan-ui.mjs",
     "test:production-chat": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-production-chat.mjs",
+    "test:chat-performance": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-chat-performance.mjs scripts/verify-finance-write-performance.mjs",
+    "test:assistant-resilience": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-assistant-resilience.mjs scripts/verify-assistant-route.mjs scripts/verify-chat-transfers-ui.mjs",
+    "test:finance-performance:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-finance-read-postgres.mjs",
     "test:conversation:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-conversation-postgres.mjs",
     "test:ai-tools": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-ai-tools.mjs",
     "test:scenario-planner": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-scenario-planner.mjs",
@@ -70,7 +73,9 @@
     "test:feedback:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-feedback-postgres.mjs",
     "test:business:unit": "npm run test:auth && npm run test:workspace && npm run test:calendar && npm run test:transfers && npm run test:transfer-reference && npm run test:planning && npm run test:bill-payments && npm run test:safety && npm run test:onboarding && npm run test:notification-center && npm run test:localization && npm run test:data-safety && npm run test:feedback",
     "test:business:postgres": "npm run test:auth:postgres && npm run test:workspace:postgres && npm run test:planning:postgres && npm run test:bill-payments:postgres && npm run test:safety:postgres && npm run test:transfers:postgres && npm run test:transfer-reference:postgres && npm run test:feedback:postgres",
-    "test:feedback:ui": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/verify-feedback-ui.mjs"
+    "test:feedback:ui": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/verify-feedback-ui.mjs",
+    "test:chat-transfers": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-chat-transfers.mjs scripts/verify-chat-transfers-ui.mjs scripts/verify-transfer-options-route.mjs scripts/verify-transfer-read-routing.mjs",
+    "test:finn-planning-actions": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-finn-planning-actions.mjs scripts/verify-assistant-responses.mjs scripts/verify-assistant-route.mjs scripts/verify-conversation.mjs scripts/verify-settings-and-natural-language.mjs scripts/verify-planning-actions.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
