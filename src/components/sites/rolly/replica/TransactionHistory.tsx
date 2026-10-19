@@ -8,62 +8,11 @@ import { localDateKey } from "./chartWeek";
 import { HistoryPeriodPicker, matchesHistoryPeriod, type HistoryPeriod } from "./HistoryPeriodPicker";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
 import { useAppState } from "./store";
-import * as storeModule from "./store";
+import { setSetting } from "./store";
 import { FinBridgeHeader } from "./FinBridgeHeader";
-import type { AppLanguage } from "@/lib/i18n";
 
-let _i18n: any = null;
-try {
-  _i18n = require("@/lib/i18n");
-} catch {
-  // Test runners without @/ path alias
-}
-
-export const resolveLanguage = (lang: unknown): AppLanguage => {
-  if (_i18n?.resolveLanguage) return _i18n.resolveLanguage(lang);
-  if (typeof lang !== "string") return "vi";
-  const normalized = lang.trim().toLowerCase();
-  if (normalized === "en" || normalized.startsWith("en") || normalized.includes("english") || normalized.includes("anh")) return "en";
-  if (normalized === "zh" || normalized.startsWith("zh") || normalized.includes("chinese") || normalized.includes("trung") || normalized.includes("中文")) return "zh";
-  return "vi";
-};
-
-export const resolveWalletDisplayName = (name: string | null | undefined, lang: unknown): string => {
-  if (_i18n?.resolveWalletDisplayName) return _i18n.resolveWalletDisplayName(name, lang);
-  const trimmed = name?.trim();
-  if (!trimmed || trimmed === "." || trimmed === "Ví chính" || trimmed === "Main wallet" || trimmed === "主钱包") {
-    const l = resolveLanguage(lang);
-    return l === "vi" ? "Ví chính" : l === "zh" ? "主钱包" : "Main wallet";
-  }
-  return name!;
-};
-
-export const resolveCategoryDisplayName = (category: string | null | undefined, lang: unknown, fallbackLabel = ""): string => {
-  if (_i18n?.resolveCategoryDisplayName) return _i18n.resolveCategoryDisplayName(category, lang, fallbackLabel);
-  if (!category || !category.trim()) return fallbackLabel;
-  const l = resolveLanguage(lang);
-  const trimmed = category.trim();
-  const SYSTEM: Record<string, Record<string, string>> = {
-    "Chưa được phân loại": { vi: "Chưa được phân loại", en: "Uncategorized", zh: "未分类" },
-    "Uncategorized": { vi: "Chưa được phân loại", en: "Uncategorized", zh: "未分类" },
-    "未分类": { vi: "Chưa được phân loại", en: "Uncategorized", zh: "未分类" },
-    "Thức ăn & Đồ uống": { vi: "Thức ăn & Đồ uống", en: "Food & Dining", zh: "餐饮" },
-    "Ăn uống": { vi: "Ăn uống", en: "Food & Dining", zh: "餐饮" },
-    "Nhà": { vi: "Nhà", en: "Housing", zh: "住房" },
-    "Nhà ở": { vi: "Nhà ở", en: "Housing", zh: "住房" },
-    "Mua sắm": { vi: "Mua sắm", en: "Shopping", zh: "购物" },
-    "Thu nhập": { vi: "Thu nhập", en: "Income", zh: "收入" },
-    "Lương": { vi: "Lương", en: "Salary", zh: "工资" },
-    "Quà tặng": { vi: "Quà tặng", en: "Gifts", zh: "礼物" },
-    "Hóa đơn & Tiện ích": { vi: "Hóa đơn & Tiện ích", en: "Bills & Utilities", zh: "账单与公共事业" },
-    "Di chuyển": { vi: "Di chuyển", en: "Transportation", zh: "交通出行" },
-    "Giải trí": { vi: "Giải trí", en: "Entertainment", zh: "娱乐" },
-    "Chuyển khoản nội bộ": { vi: "Chuyển khoản nội bộ", en: "Internal Transfer", zh: "内部转账" },
-    "Chuyển khoản": { vi: "Chuyển khoản", en: "Transfer", zh: "转账" },
-    "Điều chỉnh số dư": { vi: "Điều chỉnh số dư", en: "Balance Adjustment", zh: "余额调整" },
-  };
-  return SYSTEM[trimmed]?.[l] || trimmed;
-};
+export { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName } from "@/lib/i18n";
+import { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName } from "@/lib/i18n";
 
 const PAGE_SIZE = 10;
 type Kind = "all" | "expense" | "income" | "transfer";
@@ -354,20 +303,8 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
     return new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric", ...(raw.length > 10 ? { hour: "2-digit", minute: "2-digit", second: "2-digit" } as const : {}) }).format(value);
   };
 
-  const handleToggleTheme = () => {
-    if (typeof (storeModule as any).setSetting === "function") {
-      (storeModule as any).setSetting("theme", state.settings?.theme === "dark" ? "light" : "dark");
-    } else if (typeof (storeModule as any).updateState === "function") {
-      (storeModule as any).updateState((s: any) => ({ ...s, settings: { ...s?.settings, theme: s?.settings?.theme === "dark" ? "light" : "dark" } }));
-    }
-  };
-  const handleSelectLanguage = (val: string) => {
-    if (typeof (storeModule as any).setSetting === "function") {
-      (storeModule as any).setSetting("language", val);
-    } else if (typeof (storeModule as any).updateState === "function") {
-      (storeModule as any).updateState((s: any) => ({ ...s, settings: { ...s?.settings, language: val } }));
-    }
-  };
+  const handleToggleTheme = () => setSetting("theme", state.settings.theme === "dark" ? "light" : "dark");
+  const handleSelectLanguage = (value: string) => setSetting("language", value);
 
   return <main className="r-dashboard fb-home fb-history">
     <FinBridgeHeader

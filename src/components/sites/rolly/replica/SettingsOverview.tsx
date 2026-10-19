@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFeedbackSubmission } from "@/components/auth/useFeedbackSubmission";
 import {
   CalendarDays,
   ChevronLeft,
@@ -9,8 +10,6 @@ import {
   FileText,
   HelpCircle,
   ListTodo,
-  Mail,
-  MessageSquare,
   Moon,
   Plus,
   Send,
@@ -45,15 +44,11 @@ const COPY = {
     calendar: "Lịch thu chi",
     contactTitle: "Liên hệ với FinBridge",
     contactDesc: "Chúng tôi luôn sẵn sàng lắng nghe mọi ý kiến đóng góp, thắc mắc và yêu cầu hỗ trợ từ bạn.",
-    contactEmail: "Email hỗ trợ chính thức",
-    contactHours: "Giờ làm việc",
-    contactHoursVal: "08:00 – 21:00 (Thứ 2 – Thứ 7)",
     contactSubject: "Tiêu đề yêu cầu",
     contactSubjectPlaceholder: "Ví dụ: Góp ý tính năng, báo lỗi...",
     contactMessage: "Nội dung tin nhắn",
     contactMessagePlaceholder: "Nhập nội dung bạn muốn gửi tới đội ngũ FinBridge...",
     contactSend: "Gửi tin nhắn",
-    contactSuccess: "Cảm ơn bạn! Tin nhắn đã được gửi tới đội ngũ FinBridge. Chúng tôi sẽ phản hồi sớm nhất có thể.",
     termsTitle: "Điều khoản dịch vụ FinBridge",
     privacyTitle: "Chính sách bảo mật FinBridge",
     close: "Đóng",
@@ -96,7 +91,7 @@ const COPY = {
       },
       {
         heading: "2. Lưu trữ và bảo mật",
-        body: "Dữ liệu giao dịch hiện được lưu trên thiết bị này theo từng tài khoản. Khi FinBridge triển khai đồng bộ máy chủ, dữ liệu được truyền qua HTTPS; mật khẩu không bao giờ được lưu ở dạng văn bản thuần.",
+        body: "Dữ liệu tài chính của tài khoản đăng nhập được lưu trong PostgreSQL trên máy chủ. Trình duyệt giữ trạng thái làm việc tạm thời; chế độ demo cục bộ dùng dữ liệu trên thiết bị. Bản triển khai công khai dùng HTTPS; mật khẩu không được lưu dạng văn bản thuần.",
       },
       {
         heading: "3. Không thương mại hóa dữ liệu cá nhân",
@@ -115,7 +110,7 @@ const COPY = {
     account: "Account settings",
     accountSub: "Display name, email, language, currency format & security",
     features: "Feature requests",
-    featuresSub: "Suggest new features and vote on development ideas",
+    featuresSub: "Explore ideas and submit a feature suggestion",
     contact: "Contact us",
     contactSub: "Send feedback or get support from the FinBridge team",
     terms: "Terms of service",
@@ -126,15 +121,11 @@ const COPY = {
     calendar: "Calendar",
     contactTitle: "Contact FinBridge",
     contactDesc: "We are always here to listen to your feedback, questions and support requests.",
-    contactEmail: "Official Support Email",
-    contactHours: "Operating Hours",
-    contactHoursVal: "08:00 – 21:00 (Mon – Sat)",
     contactSubject: "Subject",
     contactSubjectPlaceholder: "e.g., Feature idea, bug report...",
     contactMessage: "Message",
     contactMessagePlaceholder: "Write your message for the FinBridge team...",
     contactSend: "Send message",
-    contactSuccess: "Thank you! Your message has been sent to the FinBridge team. We will respond shortly.",
     termsTitle: "FinBridge Terms of Service",
     privacyTitle: "FinBridge Privacy Policy",
     close: "Close",
@@ -177,7 +168,7 @@ const COPY = {
       },
       {
         heading: "2. Storage & security",
-        body: "Financial workspace data is currently stored per account on this device. When server synchronization is enabled, data is transmitted over HTTPS; passwords are never stored in plain text.",
+        body: "Signed-in financial records are stored in server-side PostgreSQL. The browser holds temporary workspace state; local demo mode uses device storage. Public deployments use HTTPS; passwords are not stored in plain text.",
       },
       {
         heading: "3. Zero Commercialization of Personal Data",
@@ -196,7 +187,7 @@ const COPY = {
     account: "账户设置",
     accountSub: "用户名、邮箱、语言、货币格式及安全",
     features: "功能建议",
-    featuresSub: "提出新功能建议并为开发想法投票",
+    featuresSub: "浏览想法并提交功能建议",
     contact: "联系我们",
     contactSub: "发送反馈或获取 FinBridge 团队支持",
     terms: "服务条款",
@@ -207,15 +198,11 @@ const COPY = {
     calendar: "日历",
     contactTitle: "联系 FinBridge",
     contactDesc: "我们始终乐于倾听您的意见、疑问和支持请求。",
-    contactEmail: "官方支持邮箱",
-    contactHours: "工作时间",
-    contactHoursVal: "08:00 – 21:00（周一至周六）",
     contactSubject: "主题",
     contactSubjectPlaceholder: "例如：功能建议、问题反馈...",
     contactMessage: "内容",
     contactMessagePlaceholder: "请输入您想发送给 FinBridge 团队的内容...",
     contactSend: "发送消息",
-    contactSuccess: "感谢您的反馈！消息已发送至 FinBridge 团队，我们将尽快答复。",
     termsTitle: "FinBridge 服务条款",
     privacyTitle: "FinBridge 隐私政策",
     close: "关闭",
@@ -258,7 +245,7 @@ const COPY = {
       },
       {
         heading: "2. 存储与安全",
-        body: "财务工作区数据目前按账户保存在本设备上。启用服务器同步后，数据将通过 HTTPS 传输；密码绝不会以明文保存。",
+        body: "登录账户的财务记录保存在服务器 PostgreSQL 中。浏览器保留临时工作状态；本地演示使用设备存储。公开部署使用 HTTPS，密码不以明文存储。",
       },
       {
         heading: "3. 绝不将个人数据商业化",
@@ -286,21 +273,18 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
   const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
   const [contactSubject, setContactSubject] = useState("");
   const [contactMessage, setContactMessage] = useState("");
-  const [contactSent, setContactSent] = useState(false);
+
 
   const lang = settingsLanguage(state.settings.language);
   const t = COPY[lang];
+  const feedback = useFeedbackSubmission("contact", lang);
 
-  function handleSendContact(e: React.FormEvent) {
+  async function handleSendContact(e: React.FormEvent) {
     e.preventDefault();
     if (!contactMessage.trim()) return;
-    setContactSent(true);
-    setTimeout(() => {
-      setContactSent(false);
-      setContactSubject("");
-      setContactMessage("");
-      setContactModalOpen(false);
-    }, 1600);
+    if (await feedback.submit(contactSubject, contactMessage)) {
+      setContactSubject(""); setContactMessage("");
+    }
   }
 
   const menuItems = [
@@ -324,7 +308,7 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
       subtitle: t.contactSub,
       icon: <HelpCircle size={22} />,
       onClick: () => {
-        setContactSent(false);
+        feedback.reset();
         setContactModalOpen(true);
       },
     },
@@ -381,30 +365,15 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
 
       {/* Modal: Liên hệ với chúng tôi */}
       {contactModalOpen && (
-        <Modal title={t.contactTitle} wide onClose={() => setContactModalOpen(false)}>
+        <Modal title={t.contactTitle} wide closeLabel={t.close} onClose={() => setContactModalOpen(false)}>
           <div className="fb-contact-modal-body">
             <p className="fb-contact-lead">{t.contactDesc}</p>
-            <div className="fb-contact-info-cards">
-              <div className="fb-contact-info-item">
-                <Mail size={18} />
-                <div>
-                  <small>{t.contactEmail}</small>
-                  <b>support@finbridge.app</b>
-                </div>
-              </div>
-              <div className="fb-contact-info-item">
-                <MessageSquare size={18} />
-                <div>
-                  <small>{t.contactHours}</small>
-                  <b>{t.contactHoursVal}</b>
-                </div>
-              </div>
-            </div>
+            <p className="r-dialog-note">{feedback.copy.note}</p>
 
-            {contactSent ? (
+            {feedback.receipt ? (
               <div className="fb-contact-success-msg">
                 <ShieldCheck size={26} />
-                <p>{t.contactSuccess}</p>
+                <p>{feedback.copy.saved} <code>{feedback.receipt.id}</code></p>
               </div>
             ) : (
               <form className="r-form fb-contact-form" onSubmit={handleSendContact}>
@@ -412,6 +381,8 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
                   {t.contactSubject}
                   <input
                     placeholder={t.contactSubjectPlaceholder}
+                    maxLength={120}
+                    disabled={feedback.busy}
                     value={contactSubject}
                     onChange={(e) => setContactSubject(e.target.value)}
                   />
@@ -420,19 +391,22 @@ export function SettingsOverview({ navigate }: { navigate: (screen: string) => v
                   {t.contactMessage}
                   <textarea
                     rows={4}
+                    maxLength={2000}
+                    disabled={feedback.busy}
                     placeholder={t.contactMessagePlaceholder}
                     value={contactMessage}
                     onChange={(e) => setContactMessage(e.target.value)}
                     required
                   />
                 </label>
+                {feedback.error && <p role="alert">{feedback.error}</p>}
                 <div className="fb-modal-actions">
                   <button type="button" className="r-button" onClick={() => setContactModalOpen(false)}>
                     {t.close}
                   </button>
-                  <button type="submit" className="r-primary fb-contact-submit-btn">
+                  <button type="submit" className="r-primary fb-contact-submit-btn" disabled={feedback.busy}>
                     <Send size={15} />
-                    <span>{t.contactSend}</span>
+                    <span>{feedback.busy ? feedback.copy.busy : t.contactSend}</span>
                   </button>
                 </div>
               </form>

@@ -61,7 +61,13 @@
     "test:notification-center": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-notification-center.mjs",
     "test:notification-center:ui": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/verify-planning-notifications-ui.mjs",
     "test:localization": "node --test scripts/verify-localization.cjs",
-    "test:localization:e2e": "node scripts/verify-localization-e2e.mjs"
+    "test:localization:e2e": "node scripts/verify-localization-e2e.mjs",
+    "test:data-safety": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-data-safety.mjs scripts/verify-persistence-routes.mjs",
+    "test:feedback": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-feedback.mjs",
+    "test:feedback:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-feedback-postgres.mjs",
+    "test:business:unit": "npm run test:auth && npm run test:workspace && npm run test:calendar && npm run test:transfers && npm run test:transfer-reference && npm run test:planning && npm run test:bill-payments && npm run test:safety && npm run test:onboarding && npm run test:notification-center && npm run test:localization && npm run test:data-safety && npm run test:feedback",
+    "test:business:postgres": "npm run test:auth:postgres && npm run test:workspace:postgres && npm run test:planning:postgres && npm run test:bill-payments:postgres && npm run test:safety:postgres && npm run test:transfers:postgres && npm run test:transfer-reference:postgres && npm run test:feedback:postgres",
+    "test:feedback:ui": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/verify-feedback-ui.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

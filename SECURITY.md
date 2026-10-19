@@ -22,7 +22,13 @@ The product label is **Close account**. It is a soft deactivation, never a hard 
 
 Run `npm run auth:migrate` against PostgreSQL before the application begins serving requests. This creates the lifecycle table used by account closure without resetting existing data.
 
-Financial workspaces currently use account-scoped browser storage, without complete cross-device synchronization. Provider keys stay server-side. Browser storage is not an appropriate long-term store for financial records in a public deployment; migrate it to server-side, authorized storage before treating FinBridge as a production financial service.
+Signed-in financial workspaces, safety rules, reference estimates and sandbox payment records use server-side PostgreSQL scoped to the authenticated account. Browser state is a temporary working copy. API database failures return an error; they never silently switch authenticated users to an in-memory repository. Provider keys stay server-side.
+
+Local demo mode requires development, an explicit `FINBRIDGE_DEMO_MODE=true` flag and localhost requests. Its device storage and temporary server memory are not production persistence. In-memory reference quotes still require a real provider observation; unavailable upstream data never becomes an invented Frankfurter rate.
+
+Contact messages and feature suggestions are persisted in `finbridge_feedback` only after an authenticated, verified account submits a same-origin request. Submissions use idempotency identifiers and a database-backed limit of five new messages per ten minutes per account. A receipt means stored, not emailed or read by a support agent. Operators can review these records using authorized database access; there is no support inbox UI or email forwarding service. Feedback remains with other records after account closure for audit. Do not include passwords, API keys or bank credentials in feedback.
+
+International payment execution is a sandbox with separate test balances. Reference FX estimates are real provider observations, not bank quotes or payment authorization. Real settlement requires a payment partner and operational review.
 
 Forwarded-IP trust in auth rate limiting remains a deployment concern. See [acceptance findings](docs/auth/AUTH_FLOW_ACCEPTANCE_2026-10-14.md). Live providers, production proxy behavior, restore and multi-instance operation require separate checks.
 

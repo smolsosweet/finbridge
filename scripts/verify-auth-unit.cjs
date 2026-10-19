@@ -106,7 +106,7 @@ test("display language preference is normalized, stored locally and mapped for t
 });
 test("actual store partitions accounts, clears memory on logout, and preserves saved records", () => {
   const s = fixture(), previousWindow = global.window, previousStorage = global.localStorage;
-  global.window = {}; global.localStorage = s;
+  global.window = new EventTarget(); global.localStorage = s;
   try {
     const store = compile("src/components/sites/rolly/replica/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "@/lib/language-preference" ? languagePreference : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
     assert.throws(() => store.updateState((state) => state));
@@ -133,7 +133,7 @@ test("actual store partitions accounts, clears memory on logout, and preserves s
 });
 test("actual store imports only after choice and retains the legacy backup", () => {
   const s = fixture(), previousWindow = global.window, previousStorage = global.localStorage;
-  global.window = {}; global.localStorage = s;
+  global.window = new EventTarget(); global.localStorage = s;
   try {
     const store = compile("src/components/sites/rolly/replica/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "@/lib/language-preference" ? languagePreference : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
     store.activateUserWorkspace("A", "Google A"); assert.throws(() => store.importOldWorkspace(false));
@@ -145,7 +145,7 @@ test("actual store imports only after choice and retains the legacy backup", () 
 });
 test("default category arrays do not leak across accounts", () => {
   const s = fixture(), previousWindow = global.window, previousStorage = global.localStorage;
-  global.window = {}; global.localStorage = s;
+  global.window = new EventTarget(); global.localStorage = s;
   try {
     const store = compile("src/components/sites/rolly/replica/store.ts", (name) => name === "@/lib/workspace-storage" ? storage : name === "@/lib/language-preference" ? languagePreference : name === "react" ? { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() } : require(name));
     store.activateUserWorkspace("A", "A"); store.useAppState().categories.push("A-only");

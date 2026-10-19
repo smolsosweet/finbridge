@@ -50,7 +50,6 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
   const heading = useRef<HTMLHeadingElement>(null), field = useId();
   const snapshot = useMemo(() => { try { return safetySnapshot(state, String(state.settings.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone)); } catch { return null; } }, [state]);
   useEffect(() => { heading.current?.focus(); }, [step, draft?.groupId]);
-  useEffect(() => { setVisibleRuleCount(5); }, [query, filter, typeFilter]);
   if (!safety) return null;
   const { doc, loading, busy } = safety;
   const rules = doc.rules.filter(r => !r.archived);
@@ -441,7 +440,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
         <>
           {/* AWS CloudWatch / Budgets Style KPI Overview Cards */}
           <div className={styles.awsSummaryGrid}>
-            <button type="button" className={styles.awsKpiCard} aria-pressed={view === "rules" && filter === "all"} onClick={() => { setView("rules"); setFilter("all"); setTypeFilter("all"); }}>
+            <button type="button" className={styles.awsKpiCard} aria-pressed={view === "rules" && filter === "all"} onClick={() => { setView("rules"); setVisibleRuleCount(5); setFilter("all"); setTypeFilter("all"); }}>
               <div className={styles.kpiIconWrap}><Bell size={20} /></div>
               <div className={styles.kpiContent}>
                 <span className={styles.kpiLabel}>{x.kpiTotal}</span>
@@ -449,7 +448,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                 <small className={styles.kpiDesc}>{x.kpiTotalDesc}</small>
               </div>
             </button>
-            <button type="button" className={`${styles.awsKpiCard} ${groups.filter(g => status(g.rows) === "alarm").length > 0 ? styles.kpiAlarmActive : ""}`} aria-pressed={view === "rules" && filter === "alarm"} onClick={() => { setView("rules"); setFilter("alarm"); setTypeFilter("all"); }}>
+            <button type="button" className={`${styles.awsKpiCard} ${groups.filter(g => status(g.rows) === "alarm").length > 0 ? styles.kpiAlarmActive : ""}`} aria-pressed={view === "rules" && filter === "alarm"} onClick={() => { setView("rules"); setVisibleRuleCount(5); setFilter("alarm"); setTypeFilter("all"); }}>
               <div className={`${styles.kpiIconWrap} ${styles.kpiAlarmIcon}`}><AlertTriangle size={20} /></div>
               <div className={styles.kpiContent}>
                 <span className={styles.kpiLabel}>{x.kpiAlarm}</span>
@@ -457,7 +456,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                 <small className={styles.kpiDesc}>{x.kpiAlarmDesc}</small>
               </div>
             </button>
-            <button type="button" className={styles.awsKpiCard} aria-pressed={view === "rules" && filter === "ok"} onClick={() => { setView("rules"); setFilter("ok"); setTypeFilter("all"); }}>
+            <button type="button" className={styles.awsKpiCard} aria-pressed={view === "rules" && filter === "ok"} onClick={() => { setView("rules"); setVisibleRuleCount(5); setFilter("ok"); setTypeFilter("all"); }}>
               <div className={`${styles.kpiIconWrap} ${styles.kpiOkIcon}`}><CheckCircle2 size={20} /></div>
               <div className={styles.kpiContent}>
                 <span className={styles.kpiLabel}>{x.kpiOk}</span>
@@ -465,7 +464,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                 <small className={styles.kpiDesc}>{x.kpiOkDesc}</small>
               </div>
             </button>
-            <button type="button" className={styles.awsKpiCard} aria-pressed={view === "rules" && filter === "paused"} onClick={() => { setView("rules"); setFilter("paused"); setTypeFilter("all"); }}>
+            <button type="button" className={styles.awsKpiCard} aria-pressed={view === "rules" && filter === "paused"} onClick={() => { setView("rules"); setVisibleRuleCount(5); setFilter("paused"); setTypeFilter("all"); }}>
               <div className={`${styles.kpiIconWrap} ${styles.kpiPausedIcon}`}><PauseCircle size={20} /></div>
               <div className={styles.kpiContent}>
                 <span className={styles.kpiLabel}>{x.kpiPaused}</span>
@@ -490,7 +489,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                 <button
                   type="button"
                   className={`${styles.typePill} ${typeFilter === "all" ? styles.typePillActive : ""}`}
-                  onClick={() => setTypeFilter("all")}
+                  onClick={() => { setVisibleRuleCount(5); setTypeFilter("all"); }}
                 >
                   <span>{x.typeAll}</span>
                   <span className={styles.typePillCount}>{groups.length}</span>
@@ -498,7 +497,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                 <button
                   type="button"
                   className={`${styles.typePill} ${typeFilter === "actual" ? styles.typePillActive : ""}`}
-                  onClick={() => setTypeFilter("actual")}
+                  onClick={() => { setVisibleRuleCount(5); setTypeFilter("actual"); }}
                 >
                   <Zap size={13} />
                   <span>{x.typeActual}</span>
@@ -509,7 +508,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                 <button
                   type="button"
                   className={`${styles.typePill} ${typeFilter === "forecast" ? styles.typePillActive : ""}`}
-                  onClick={() => setTypeFilter("forecast")}
+                  onClick={() => { setVisibleRuleCount(5); setTypeFilter("forecast"); }}
                 >
                   <TrendingUp size={13} />
                   <span>{x.typeForecast}</span>
@@ -520,7 +519,7 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
                 <button
                   type="button"
                   className={`${styles.typePill} ${typeFilter === "reserve" ? styles.typePillActive : ""}`}
-                  onClick={() => setTypeFilter("reserve")}
+                  onClick={() => { setVisibleRuleCount(5); setTypeFilter("reserve"); }}
                 >
                   <Wallet size={13} />
                   <span>{x.typeReserve}</span>
@@ -533,11 +532,11 @@ export function SafetyAlerts({ navigate }: { navigate: (screen: string) => void 
               <div className={styles.filters}>
                 <label>
                   <Search size={17}/>
-                  <input aria-label={t.search} placeholder={t.search} value={query} onChange={e => setQuery(e.target.value)}/>
+                  <input aria-label={t.search} placeholder={t.search} value={query} onChange={e => { setVisibleRuleCount(5); setQuery(e.target.value); }}/>
                 </label>
                 <FinBridgeDropdown
                   value={filter}
-                  onChange={setFilter}
+                  onChange={value => { setVisibleRuleCount(5); setFilter(value); }}
                   ariaLabel={t.all}
                   options={(["all", "ok", "alarm", "paused", "unavailable"] as const).map(s => ({
                     value: s,

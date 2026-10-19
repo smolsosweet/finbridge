@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Ban, CalendarDays, Check, ChevronDown, FolderTree, Info, Lock, Pencil, Plus, ReceiptText, RotateCcw, Search, Settings, SlidersHorizontal, Trash2, Wallet, X } from "lucide-react";
 import { EmptyState, Icon, Modal } from "./Ui";
@@ -1235,11 +1235,17 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
     setModal("manageWallet");
   };
 
+  const openWalletFromRoute = useEffectEvent((id: string) => openManageWalletModal(id));
+
   useEffect(() => {
     if (!walletSettingsMode || !queryWallet || openedWalletFromUrl.current === queryWallet) return;
     if (!state.wallets.some((item) => item.id === queryWallet)) return;
-    openedWalletFromUrl.current = queryWallet;
-    openManageWalletModal(queryWallet);
+    // Open the route-selected modal after the current page has committed.
+    const frame = requestAnimationFrame(() => {
+      openedWalletFromUrl.current = queryWallet;
+      openWalletFromRoute(queryWallet);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [walletSettingsMode, queryWallet, state.wallets]);
 
   const openWalletHistory = (targetWalletId: string) => {
