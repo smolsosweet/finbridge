@@ -1,4 +1,5 @@
 "use client";
+import { privacyCopy } from "@/lib/privacy-copy";
 
 import { useState } from "react";
 import { useFeedbackSubmission } from "@/components/auth/useFeedbackSubmission";
@@ -77,31 +78,14 @@ const COPY = {
       },
       {
         heading: "3. Quyền sở hữu trí tuệ",
-        body: "Mọi thiết kế giao diện, thuật toán thống kê, tài sản thương hiệu và biểu tượng thuộc bản quyền của FinBridge. Nghiêm cấm sao chép, đảo ngược mã nguồn hoặc phân phối lại khi chưa có sự đồng ý bằng văn bản.",
+        body: "Thành phần mã nguồn mở và tài sản của bên thứ ba tuân theo giấy phép riêng. Ghi nhận nguồn được giữ trong LICENSE và THIRD_PARTY_NOTICES.md. Tên và đường dẫn di sản Rolly không xác lập quyền sở hữu giao diện hoặc tài sản gốc.",
       },
       {
         heading: "4. Giới hạn trách nhiệm",
         body: "FinBridge cung cấp công cụ hỗ trợ theo dõi và quản lý dữ liệu cá nhân, không cấu thành lời khuyên tư vấn tài chính, đầu tư hoặc bảo hiểm có chứng chỉ pháp lý.",
       },
     ],
-    privacySections: [
-      {
-        heading: "1. Cam kết quyền riêng tư tuyệt đối",
-        body: "FinBridge coi quyền riêng tư và an toàn dữ liệu của bạn là ưu tiên cao nhất. Dữ liệu tài chính, ví và các khoản chi tiêu thuộc về bạn và chỉ phục vụ cho việc quản lý tài chính của chính bạn.",
-      },
-      {
-        heading: "2. Lưu trữ và bảo mật",
-        body: "Dữ liệu tài chính của tài khoản đăng nhập được lưu trong PostgreSQL trên máy chủ. Trình duyệt giữ trạng thái làm việc tạm thời; chế độ demo cục bộ dùng dữ liệu trên thiết bị. Bản triển khai công khai dùng HTTPS; mật khẩu không được lưu dạng văn bản thuần.",
-      },
-      {
-        heading: "3. Không thương mại hóa dữ liệu cá nhân",
-        body: "FinBridge cam kết không bao giờ bán, cho thuê, chia sẻ hay tiết lộ thông tin tài chính hoặc hành vi chi tiêu của bạn cho bất kỳ bên thứ ba, công ty quảng cáo hay đối tác môi giới nào.",
-      },
-      {
-        heading: "4. Quyền kiểm soát dữ liệu",
-        body: "Bạn có thể xuất, chỉnh sửa hoặc đóng tài khoản trong Cài đặt tài khoản. Đóng tài khoản sẽ vô hiệu hóa quyền truy cập và giữ dữ liệu cần thiết cho kiểm toán; không xóa vĩnh viễn dữ liệu tài chính.",
-      },
-    ],
+    privacySections: privacyCopy.vi,
   },
   en: {
     eyebrow: "ACCOUNT & SETTINGS",
@@ -154,31 +138,14 @@ const COPY = {
       },
       {
         heading: "3. Intellectual Property Rights",
-        body: "All user interface designs, statistical models, brand assets, and icons are the proprietary intellectual property of FinBridge. Reproduction, reverse engineering, or redistribution without prior written consent is strictly prohibited.",
+        body: "Open-source components and third-party assets retain their own licenses. Attribution is recorded in LICENSE and THIRD_PARTY_NOTICES.md. Legacy Rolly names and paths do not establish ownership of the original interface or assets.",
       },
       {
         heading: "4. Limitation of Liability",
         body: "FinBridge provides personal bookkeeping and financial organization tools. Application insights do not constitute certified financial, investment, legal, or tax advisory services.",
       },
     ],
-    privacySections: [
-      {
-        heading: "1. Absolute Commitment to Privacy",
-        body: "FinBridge treats your privacy and data security as our utmost priority. All financial records, wallets, and transaction entries belong solely to you and serve only your personal financial management.",
-      },
-      {
-        heading: "2. Storage & security",
-        body: "Signed-in financial records are stored in server-side PostgreSQL. The browser holds temporary workspace state; local demo mode uses device storage. Public deployments use HTTPS; passwords are not stored in plain text.",
-      },
-      {
-        heading: "3. Zero Commercialization of Personal Data",
-        body: "FinBridge pledges never to sell, rent, monetize, share, or disclose your financial information or spending habits to any third-party advertisers, data brokers, or marketing partners.",
-      },
-      {
-        heading: "4. Data control",
-        body: "You can export, modify, or close your account in Account Settings. Closing it immediately disables access and retains the data required for audit; it does not permanently erase financial records.",
-      },
-    ],
+    privacySections: privacyCopy.en,
   },
   zh: {
     eyebrow: "账户与设置",
@@ -231,31 +198,14 @@ const COPY = {
       },
       {
         heading: "3. 知识产权",
-        body: "所有界面设计、统计分析模型、品牌资产与图标均为 FinBridge 的专有知识产权。未经书面许可，严禁复制、反向工程或重新分发。",
+        body: "开源组件和第三方素材遵循各自许可证。来源说明保留在 LICENSE 和 THIRD_PARTY_NOTICES.md 中。遗留的 Rolly 名称和路径不代表拥有原始界面或素材的权利。",
       },
       {
         heading: "4. 责任限制",
         body: "FinBridge 提供个人记账与财务规划辅助工具。应用内的洞察与分析不构成具法律效力的认证财务、投资、法律或税务咨询建议。",
       },
     ],
-    privacySections: [
-      {
-        heading: "1. 绝对隐私承诺",
-        body: "FinBridge 将您的隐私与数据安全视为重中之重。所有财务数据、钱包和交易记录均归您所有，仅用于您的个人财务管理。",
-      },
-      {
-        heading: "2. 存储与安全",
-        body: "登录账户的财务记录保存在服务器 PostgreSQL 中。浏览器保留临时工作状态；本地演示使用设备存储。公开部署使用 HTTPS，密码不以明文存储。",
-      },
-      {
-        heading: "3. 绝不将个人数据商业化",
-        body: "FinBridge 承诺绝不出售、出租、共享或向任何第三方广告商、数据中介或商业伙伴披露您的财务信息或消费行为。",
-      },
-      {
-        heading: "4. 数据控制权",
-        body: "您可以在“账户设置”中导出、修改或关闭账户。关闭账户会立即停用访问权限，并保留审计所需的数据；不会永久删除财务记录。",
-      },
-    ],
+    privacySections: privacyCopy.zh,
   },
 };
 
