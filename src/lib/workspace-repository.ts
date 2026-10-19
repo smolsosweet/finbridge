@@ -6,6 +6,7 @@ import { refreshSafetyFromWorkspace } from "./safety-repository";
 import { readFinanceTables, writeFinanceTables } from "./finance-tables";
 import { validateFixedPaymentChanges } from "./fixed-expense-payments";
 import { validatePlanningChanges } from "./planning-validation";
+import { isDeepStrictEqual } from "node:util";
 export const WORKSPACE_SQL = `
 CREATE TABLE IF NOT EXISTS finbridge_workspaces (
  user_id TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE RESTRICT,
@@ -75,9 +76,10 @@ export function workspaceRepository(pool: Pool): WorkspaceRepository {
         if (!allowed.rowCount) throw new WorkspaceError("RATE_LIMITED", 429);
         const revision = previous.revision + 1;
         const result = await client.query("UPDATE finbridge_workspaces SET revision=$2,data=$3::jsonb,updated_at=CURRENT_TIMESTAMP WHERE user_id=$1 RETURNING *", [owner, revision, encoded]);
-        await writeFinanceTables(client, owner, data);
+        await writeFinanceTables(client, owner, data, previousData);
         await client.query("INSERT INTO finbridge_workspace_revisions(user_id,revision,mutation_id,content_hash,data) VALUES($1,$2,$3,$4,$5)", [owner, revision, input.mutationId, hash, encoded]);
-        await refreshSafetyFromWorkspace(client, owner, data, result.rows[0].updated_at);
+        const safetyInputs = (s: AppState) => JSON.parse(JSON.stringify([s.wallets, s.transactions, s.goals, s.fixedExpenses, s.settings])) as unknown;
+        if (!previousData || !isDeepStrictEqual(safetyInputs(previousData), safetyInputs(data))) await refreshSafetyFromWorkspace(client, owner, data, result.rows[0].updated_at);
         await client.query("COMMIT"); return record(result.rows[0]);
       } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
     },

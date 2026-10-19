@@ -44,6 +44,26 @@ const body = (message, extra = {}) => ({ batchId: randomUUID(), message, today: 
 const draft = (id, title, amount) => ({ id, title, amount, type: "expense", category: "Thức ăn & Đồ uống", wallet: "vnd", currency: "VND", date: "2026-10-18", needsReview: [] });
 const modelDraft = (title, amount, category = "Mua sắm") => ({ title, amount, type: "expense", category, categoryConfidence: "confident", date: "2026-10-18", walletId: null, needsReview: [] });
 const request = (input, owner = "owner", origin = process.env.BETTER_AUTH_URL) => new Request(process.env.BETTER_AUTH_URL + "/api/ai/assistant", { method: "POST", headers: { "content-type": "application/json", origin, "x-finbridge-workspace-owner": owner }, body: JSON.stringify(input) });
+
+test("plan follow-ups retain validated assumptions and never create a financial mutation", async () => {
+  const before = structuredClone(fixture.data);
+  for (const message of ["giảm chi ăn uống 20%", "bớt tiền ăn 20 phần trăm", "cut food spending by 20 percent", "餐饮支出减少20%"] ) {
+    fixture.output = response({ intent: "simulate_financial_scenario", planAdjustment: { walletId: "vnd", currency: "VND", category: "Thức ăn & Đồ uống", percent: 20, reserve: null, reset: false } });
+    const res = await POST(request(body(message, { spendingPlan: { walletIds: ["vnd"], reserves: { vnd: 100000 } } })));
+    const data = await res.json(); assert.equal(res.status, 200); assert.equal(data.planAdjustment.percent, 20); assert.deepEqual(data.drafts, []);
+    assert.match(fixture.calls.at(-1).contents, /Spending plan context/);
+  }
+  fixture.output = response({ intent: "simulate_financial_scenario", planAdjustment: { walletId: "vnd", currency: "VND", category: null, percent: null, reserve: 300000, reset: false } });
+  const res = await POST(request(body("giữ lại 300k dự phòng", { spendingPlan: { walletIds: ["vnd"], reductions: [{ walletId: "vnd", category: "Thức ăn & Đồ uống", percent: 20 }] } })));
+  assert.equal((await res.json()).planAdjustment.reserve, 300000); assert.deepEqual(fixture.data, before);
+});
+
+test("plan assumptions reject impossible percentages and negative reserves before provider access", async () => {
+  for (const spendingPlan of [{ reserves: { vnd: -1 } }, { reductions: [{ walletId: "vnd", category: "Food", percent: 101 }] }]) {
+    const res = await POST(request(body("update plan", { spendingPlan }))); assert.equal(res.status, 400);
+  }
+  assert.equal(fixture.calls.length, 0);
+});
 test.beforeEach(() => { fixture.data = state(); fixture.calls = []; fixture.reads = []; fixture.output = response(); fixture.error = null; fixture.session = { user: { id: "owner" } }; });
 
 test("real handler grounds education category and VND amount despite wrong model shopping category", async () => {

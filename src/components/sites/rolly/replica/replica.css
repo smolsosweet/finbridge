@@ -257,6 +257,17 @@ html:has(.r-chat-page){scrollbar-gutter:auto}
 .r-financial-chat-answer strong{font-weight:700;color:var(--r-text);font-variant-numeric:tabular-nums}
 .r-financial-chat-answer details{font-size:12px;color:var(--r-muted);border-top:1px solid var(--r-line);padding-top:6px}
 .r-financial-chat-answer summary{cursor:pointer;min-height:28px}
+.r-workspace-action-card{display:grid;gap:10px;margin-top:6px;padding:12px;border:1px solid var(--r-line);border-radius:12px;background:var(--r-surface);min-width:0}
+.r-workspace-action-items{display:grid;gap:10px}
+.r-workspace-action-items>div+div{border-top:1px solid var(--r-line);padding-top:8px}
+.r-workspace-action-items b{display:block;overflow-wrap:anywhere}
+.r-workspace-action-items dl{display:grid;gap:3px;margin:6px 0 0;font-size:12px}
+.r-workspace-action-items dl>div{display:grid;grid-template-columns:minmax(90px,1fr) minmax(0,2fr);gap:10px}
+.r-workspace-action-items dt{color:var(--r-muted)}
+.r-workspace-action-items dd{margin:0;text-align:right;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.r-workspace-action-card>.r-two-options{margin-top:0;gap:8px}
+.r-workspace-action-card>.r-two-options>button{min-height:42px;padding:8px 12px;flex:1}
+.r-workspace-action-card [role=alert]{color:#b42318}
 .r-message.user{align-self:flex-end}
 .r-message.user>p{background:linear-gradient(135deg,#147d78,#189892);border:none;color:#ffffff;border-radius:16px 16px 4px 16px;box-shadow:0 2px 8px rgba(20,125,120,.22)}
 .r-chat-thinking{display:flex;align-items:center;gap:5px;width:max-content;padding:12px 15px;background:var(--r-surface);border-radius:14px 14px 14px 0;box-shadow:0 1px 3px #0002}
@@ -280,6 +291,9 @@ html:has(.r-chat-page){scrollbar-gutter:auto}
 .r-ai-draft-review{display:block;margin-top:4px;color:#9a5c00}
 .r-ai-draft-card>.r-two-options{gap:8px;margin-top:8px}
 .r-ai-draft-card>.r-two-options>.r-primary,.r-ai-draft-card>.r-two-options>.r-secondary{min-height:42px;flex:1}
+:is(.r-ai-draft-card,.r-workspace-action-card,.r-ai-delete-confirm,.r-ai-category-create-controls,.r-ai-new-category) .r-secondary:not(:disabled){background:color-mix(in srgb,var(--r-text) 6%,var(--r-surface));color:var(--r-text);border:1px solid color-mix(in srgb,var(--r-text) 40%,var(--r-surface));font-weight:600;cursor:pointer;transition:background .15s,border-color .15s}
+:is(.r-ai-draft-card,.r-workspace-action-card,.r-ai-delete-confirm,.r-ai-category-create-controls,.r-ai-new-category) .r-secondary:not(:disabled):hover{background:color-mix(in srgb,var(--r-text) 12%,var(--r-surface));border-color:var(--r-text)}
+:is(.r-ai-draft-card,.r-workspace-action-card,.r-ai-delete-confirm,.r-ai-category-create-controls,.r-ai-new-category) .r-secondary:not(:disabled):focus-visible{outline:2px solid var(--r-teal);outline-offset:3px}
 .r-ai-clarify-button{margin-top:8px;padding:7px 10px;border:1px solid var(--r-line);border-radius:9px;background:transparent;color:var(--r-teal);font-size:12px;cursor:pointer}
 .r-ai-wallet-choice{display:grid;gap:7px;padding:12px;border:1px solid var(--r-line);border-radius:12px;background:var(--r-surface)}
 .r-ai-wallet-choice>b{font-size:13px}.r-ai-wallet-choice>span{font-size:12px;color:var(--r-muted)}

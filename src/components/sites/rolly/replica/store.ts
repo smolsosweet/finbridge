@@ -7,13 +7,15 @@ import type { FinancialScenario } from "@/lib/scenario-planner";
 import type { OnboardingData } from "@/lib/onboarding";
 import type { BankRecipient } from "@/lib/bank-transfer";
 import type { CategoryConfirmation } from "@/lib/category-operations";
+import type { SpendingPlanOptions } from "@/lib/financial-outlook";
+import type { WorkspaceProposal } from "@/lib/workspace-actions";
 
 export interface Wallet { id: string; name: string; currency: string; initial: number; type: string; limit?: number; archived?: boolean; }
 export interface Transaction { id: string; title: string; amount: number; type: "expense" | "income" | "transfer"; category: string; subcategory?: string; date: string; wallet: string; targetWallet?: string; note: string; image?: string; interval?: number; unit?: string; fixedExpenseId?: string; fixedExpenseDueDate?: string; paymentConfirmation?: "user"; }
 export interface Goal { id: string; kind: string; title: string; amount: number; saved: number; currency: string; date: string; cycle: string; category: string; wallet: string; direction: string; person: string; }
 export interface FixedExpense { id: string; budgetId: string; walletId?: string; title: string; amount: number; category: string; dueDate: string; recurrence: "once" | "weekly" | "monthly" | "yearly"; intervalMonths?: number; monthPosition?: "start" | "end" | "date"; reminderDays?: number; active: boolean; paymentRecipient?: BankRecipient; }
 export interface CategoryMetadata { type: string; icon: string; children: string[]; archived?: boolean; }
-export interface ChatMessage { role: "assistant" | "user"; text: string; categoryOperation?: CategoryConfirmation; categoryList?: string[]; draftTargetChoices?: string[]; pendingFollowup?: string; scenarios?: FinancialScenario[]; scenarioExplanation?: string; localOnly?: boolean; financialContext?: { action: string; category?: string | null; periodStart?: string | null; periodEnd?: string | null; percentage?: number | null }; transaction?: Transaction; draftIds?: string[]; walletChoiceDraftIds?: string[]; requiredCurrency?: string; categoryChoiceDraftIds?: string[]; retryReceipt?: boolean; transactionDeletion?: { confirmationId: string; transactionIds: string[]; selectedIds: string[]; scope: "matching" | "all"; status: "pending" | "saving" | "confirmed" | "cancelled" | "failed"; deletedCount?: number; appliedIds?: string[] }; }
+export interface ChatMessage { spendingPlan?: SpendingPlanOptions; role: "assistant" | "user"; text: string; categoryOperation?: CategoryConfirmation; workspaceProposal?: WorkspaceProposal; categoryList?: string[]; draftTargetChoices?: string[]; pendingFollowup?: string; scenarios?: FinancialScenario[]; scenarioExplanation?: string; localOnly?: boolean; financialContext?: { action: string; category?: string | null; periodStart?: string | null; periodEnd?: string | null; percentage?: number | null }; transaction?: Transaction; draftIds?: string[]; walletChoiceDraftIds?: string[]; requiredCurrency?: string; categoryChoiceDraftIds?: string[]; retryReceipt?: boolean; transactionDeletion?: { confirmationId: string; transactionIds: string[]; selectedIds: string[]; scope: "matching" | "all"; status: "pending" | "saving" | "confirmed" | "cancelled" | "failed"; deletedCount?: number; appliedIds?: string[] }; }
 export interface TransactionChatSession { messages: ChatMessage[]; drafts: Array<{ id: string; title: string; amount: number | null; type: "expense" | "income" | null; category: string | null; date: string | null; wallet: string | null; currency: string | null; newCategory?: { name: string; type: "expense" | "income" }; needsReview: string[] }>; clarifyingDraftId: string | null; activeDraftId?: string | null; referencedCategories?: string[]; }
 export type PlanningChatMessage = { role: "user" | "assistant"; text: string; scenarios?: FinancialScenario[]; clarification?: string | null; walletChoices?: Array<{ id: string; name: string; currency: string }>; pendingScenario?: string; selectedWalletId?: string };
 export interface AppState { wallets: Wallet[]; transactions: Transaction[]; goals: Goal[]; fixedExpenses?: FixedExpense[]; recurring: Transaction[]; rules: string[]; categories: string[]; categoryMeta: Record<string, CategoryMetadata>; walletCategories?: Record<string, string[]>; receiptDraft?: string; transactionChat?: TransactionChatSession; planningChat?: PlanningChatMessage[]; onboardingDraft?: OnboardingData; settings: Record<string, string | boolean>; }
@@ -38,6 +40,7 @@ let activeOwner: string | null = null;
 let ownerName = "";
 let persistence: "browser" | "database" = "browser";
 let flushDatabase: (() => Promise<void>) | null = null;
+let flushFinancialDatabase: (() => Promise<void>) | null = null;
 const listeners = new Set<() => void>();
 function notify() { listeners.forEach((listener) => listener()); }
 export function workspaceOwner() { return activeOwner; }
@@ -51,7 +54,7 @@ export function activateUserWorkspace(userId: string, name: string, options?: { 
 }
 export function clearUserWorkspace(expectedOwner?: string) {
   if (expectedOwner && activeOwner !== expectedOwner) return;
-  activeOwner = null; ownerName = ""; initialized = false; current = initialState; flushDatabase = null; notify();
+  activeOwner = null; ownerName = ""; initialized = false; current = initialState; flushDatabase = null; flushFinancialDatabase = null; notify();
 }
 export function workspacePersistence() { return persistence; }
 export function getWorkspaceState() { return getSnapshot(); }
@@ -59,10 +62,16 @@ export function replaceDatabaseWorkspace(owner: string, value: AppState) {
   if (activeOwner !== owner || persistence !== "database") return;
   current = value; initialized = true; notify();
 }
-export function registerWorkspaceFlusher(owner: string, flush: () => Promise<void>) {
+export function registerWorkspaceFlusher(owner: string, flush: () => Promise<void>, flushFinancial?: () => Promise<void>) {
   if (activeOwner !== owner) return () => {};
   flushDatabase = flush;
-  return () => { if (flushDatabase === flush) flushDatabase = null; };
+  flushFinancialDatabase = flushFinancial || flush;
+  return () => { if (flushDatabase === flush) { flushDatabase = null; flushFinancialDatabase = null; } };
+}
+export async function flushWorkspaceForAnalysis() {
+  if (persistence !== "database") return;
+  if (!flushFinancialDatabase) throw new Error("WORKSPACE_UNAVAILABLE");
+  await flushFinancialDatabase();
 }
 export async function flushWorkspace(requireWriter = false) {
   if (persistence !== "database") return;

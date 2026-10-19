@@ -24,6 +24,11 @@ export interface TransactionDraft {
 
 export interface ParsedTransactionAmount { amount: number; currency: string | null; }
 
+/** A wallet choice is actionable only if an active compatible wallet exists. */
+export function hasCompatibleDraftWallet(draft: Pick<TransactionDraft, "currency">, wallets: DraftWallet[]): boolean {
+  return wallets.some(wallet => !wallet.archived && (!draft.currency || wallet.currency.toUpperCase() === draft.currency.toUpperCase()));
+}
+
 /** Parse only amounts with an explicit shorthand or currency marker. */
 export function parseTransactionAmounts(message: string): ParsedTransactionAmount[] {
   const pattern = /(?:\$\s*(\d[\d.,]*)|\b(\d[\d.,]*)\s*(k|nghìn|ngàn|nghin|ngan|triệu|trieu|tr|million|m|usd|dollars?|dollar|đô\s*la|đô|cny|rmb|yuan|tệ|te|vnd|đồng|dong|₫|đ|\$))/giu;
@@ -72,8 +77,8 @@ export function parseDraftAmountCorrection(message: string): ParsedTransactionAm
 /** Draft amounts always include an unambiguous ISO currency code. */
 export function formatTransactionMoney(amount: number, currency: string): string {
   const code = currency.trim().toUpperCase();
-  const fractionDigits = code === "VND" || code === "JPY" || code === "KRW" ? 0 : 2;
-  const formatted = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: fractionDigits, maximumFractionDigits: 2 }).format(amount);
+  const fractionDigits = new Intl.NumberFormat("vi-VN", { style: "currency", currency: code }).resolvedOptions().maximumFractionDigits ?? 2;
+  const formatted = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }).format(amount);
   return `${formatted} ${code}`;
 }
 
@@ -237,6 +242,13 @@ export function validateDraftForState(draft: TransactionDraft, state: DraftState
     next.amount = null;
     next.needsReview.push("amount");
   }
+  if (next.amount !== null && next.currency) {
+    try {
+      const digits = new Intl.NumberFormat("en", { style: "currency", currency: next.currency }).resolvedOptions().maximumFractionDigits ?? 2;
+      const units = next.amount * 10 ** digits;
+      if (!Number.isSafeInteger(Math.round(units)) || Math.abs(units - Math.round(units)) > 1e-5) { next.amount = null; next.needsReview.push("amount"); }
+    } catch { next.needsReview.push("wallet"); }
+  }
   if (!next.type || !["expense", "income"].includes(next.type)) {
     next.type = null;
     next.needsReview.push("type");
@@ -314,6 +326,7 @@ export function validateAndCommitDrafts<T extends DraftState>(state: T, drafts: 
     const rawWallet = state.wallets.find((item) => item.id === raw.wallet && !item.archived);
     if (!rawWallet || !raw.currency || rawWallet.currency.toUpperCase() !== raw.currency.toUpperCase()) continue;
     let draft = validateDraftForState(raw, { ...state, categories, categoryMeta });
+    if (draft.amount === null || !draft.type || !draft.date || !draft.wallet) continue;
     if (draft.newCategory && draft.type === draft.newCategory.type) {
       const requestedName = draft.newCategory.name.trim();
       if (!isValidDraftCategoryName(requestedName)) continue;

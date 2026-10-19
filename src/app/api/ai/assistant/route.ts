@@ -11,6 +11,7 @@ import { categoryCommandSchema, prepareCategoryOperation } from "@/lib/category-
 import { categoryOperationError } from "@/lib/category-operation-copy";
 import type { AppState } from "@/components/sites/rolly/replica/store";
 import { workspaceRepository } from "@/lib/workspace-repository";
+import { spendingPlanAdjustmentSchema, spendingPlanOptionsSchema } from "@/lib/financial-outlook";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,13 +28,14 @@ const requestSchema = z.object({
   today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   timeZone: z.string().min(1).max(80),
   selectedWalletId: z.string().min(1).max(100).nullable(),
-  wallets: z.array(z.object({ id: z.string().min(1).max(100), name: z.string().min(1).max(100), currency: z.string().min(3).max(8) }).strict()).min(1).max(50),
+  wallets: z.array(z.object({ id: z.string().min(1).max(100), name: z.string().min(1).max(100), currency: z.string().min(3).max(8) }).strict()).max(50),
   categories: z.array(z.object({ name: z.string().min(1).max(100), type: z.enum(["expense", "income"]), archived: z.boolean().optional() }).strict()).max(500),
   history: z.array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(1000) }).strict()).max(12),
   pendingDraft: pendingDraftSchema.optional(),
   pendingDrafts: z.array(pendingDraftSchema).max(50).optional(),
   activeDraftId: z.string().max(100).nullable().optional(),
   referencedCategories: z.array(z.string().max(100)).max(20).optional(),
+  spendingPlan: spendingPlanOptionsSchema.optional(),
 }).strict().superRefine((value, context) => {
   if (value.selectedWalletId && !value.wallets.some((wallet) => wallet.id === value.selectedWalletId)) context.addIssue({ code: "custom", path: ["selectedWalletId"], message: "Wallet not found." });
   if (new Set(value.wallets.map((wallet) => wallet.id)).size !== value.wallets.length) context.addIssue({ code: "custom", path: ["wallets"], message: "Wallet IDs must be unique." });
@@ -68,6 +70,11 @@ const modelSchema = {
     searchTerm: { type: Type.STRING, nullable: true },
     transactionType: { type: Type.STRING, nullable: true, enum: ["expense", "income"] },
     percentage: { type: Type.NUMBER, nullable: true },
+    planAdjustment: { type: Type.OBJECT, nullable: true, properties: {
+      walletId: { type: Type.STRING, nullable: true }, currency: { type: Type.STRING, nullable: true },
+      category: { type: Type.STRING, nullable: true }, percent: { type: Type.NUMBER, nullable: true },
+      reserve: { type: Type.NUMBER, nullable: true }, reset: { type: Type.BOOLEAN },
+    }, required: ["walletId", "currency", "category", "percent", "reserve", "reset"] },
     deletionScope: { type: Type.STRING, enum: deleteScopes },
     deletionAmount: { type: Type.NUMBER, nullable: true },
     deletionWalletId: { type: Type.STRING, nullable: true },
@@ -86,10 +93,11 @@ const modelSchema = {
       needsReview: { type: Type.ARRAY, items: { type: Type.STRING, enum: fields } },
     }, required: ["title", "amount", "type", "category", "categoryConfidence", "date", "walletId", "needsReview"] } },
   },
-  required: ["intent", "targetDraftId", "draftPatch", "categoryOperation", "action", "actions", "walletId", "scope", "periodStart", "periodEnd", "category", "searchTerm", "transactionType", "percentage", "deletionScope", "deletionAmount", "deletionWalletId", "deletionPeriodStart", "deletionPeriodEnd", "deletionCategory", "deletionSearchTerm", "deletionType", "reply", "drafts"],
+  required: ["planAdjustment", "intent", "targetDraftId", "draftPatch", "categoryOperation", "action", "actions", "walletId", "scope", "periodStart", "periodEnd", "category", "searchTerm", "transactionType", "percentage", "deletionScope", "deletionAmount", "deletionWalletId", "deletionPeriodStart", "deletionPeriodEnd", "deletionCategory", "deletionSearchTerm", "deletionType", "reply", "drafts"],
 };
 
 const responseSchema = z.object({
+  planAdjustment: spendingPlanAdjustmentSchema.nullable().optional(),
   intent: z.enum(intents), action: z.enum(actions), actions: z.array(z.enum(actions)).max(5).nullable(), walletId: z.string().max(100).nullable(), scope: z.enum(["selected", "all"]),
   targetDraftId: z.string().max(100).nullable(), draftPatch: draftPatchSchema.nullable(), categoryOperation: categoryCommandSchema.nullable(),
   periodStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(), periodEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
@@ -176,7 +184,9 @@ export async function POST(request: Request) {
         `Ngày hiện tại theo múi giờ ${input.timeZone}: ${input.today}.`,
         `Ví đang hoạt động: ${JSON.stringify(input.wallets)}. Danh mục hợp lệ theo loại giao dịch (tên là định danh công khai trong workspace): ${JSON.stringify(input.categories)}. Chat gần đây: ${JSON.stringify(input.history)}. Tất cả bản nháp đang chờ: ${JSON.stringify(input.pendingDrafts || (input.pendingDraft ? [input.pendingDraft] : []))}. ID đang được bổ sung: ${input.activeDraftId || "không có"}. Danh mục vừa tham chiếu: ${JSON.stringify(input.referencedCategories || [])}.`,
         "Dùng ngữ cảnh lịch sử chỉ để phân giải đại từ, danh mục và kỳ thời gian. Không dùng lại số tiền/kết quả cũ; mọi phép tính sẽ chạy lại trên dữ liệu hiện hành của ứng dụng.",
+        `Spending plan context (parameters only): ${JSON.stringify(input.spendingPlan || null)}. When this context exists and the user changes a category spending percentage or protected reserve, return planAdjustment with the explicit walletId, currency if stated, category and percent for a reduction, reserve for an absolute protected amount, reset=true only for an explicit reset to saved assumptions. Other fields null. Use intent=simulate_financial_scenario, empty drafts and action=none; do not calculate amounts. Resolve follow-up references using the plan parameters. Never choose an arbitrary wallet when multiple are in scope. Changes are read-only simulations; never persist a reserve setting. For other requests return planAdjustment=null and use normal routing. When asked to explain the plan use action=explain; when asked to show it again use safe_daily_allowance. More complex what-if requests use the existing scenario planner, not planAdjustment.`,
         "Định tuyến bằng intent rõ ràng: create_transaction cho khoản thu/chi MỚI; update_pending_transaction cho sửa bản nháp; answer_clarification cho trả lời trường thiếu; query_financial_data cho tra cứu; analyze_spending cho phân tích; simulate_financial_scenario cho giả định tương lai; list_categories, create_category, rename_category, merge_categories, delete_category cho quản lý danh mục; delete_transactions CHỈ khi xóa giao dịch; general_finance_question cho kiến thức; unsupported_or_ambiguous_request khi cần hỏi lại.",
+        "Finn CÓ THỂ đề xuất tạo ví, ngân sách và chi phí cố định, hỏi lần lượt thông tin thiếu rồi chờ người dùng xác nhận trước khi lưu. Với yêu cầu tạo ví mới, dùng intent=create_wallet; tạo ngân sách dùng create_budget; tạo lịch chi phí cố định dùng create_fixed_expense. Nếu người dùng hỏi tạo ngân sách và chi phí cố định cùng lúc, dùng create_budget. Không trả lời rằng không có quyền/không hỗ trợ; không nói đã tạo. Các intent này để drafts rỗng, action=none và reply rỗng; ứng dụng sẽ gọi luồng tạo có kiểm tra và xác nhận. Việc này không kết nối ngân hàng hay thanh toán thật.",
         "Câu hỏi mới quyết định action, KHÔNG lặp action cũ chỉ vì cùng ngữ cảnh. Hỏi tổng đã chi dùng spending_summary. Hỏi chi cho những mục gì, đã chi cho những danh mục nào, where did my money go hoặc spending by category dùng category_breakdown (tất cả danh mục đã chi), không dùng spending_summary hay list_categories. top_category chỉ dành cho xếp hạng/cao nhất. Câu nối tiếp giữ ví và kỳ thời gian trước nếu người dùng không thay đổi; lấy chúng từ Previous financial result context, không dùng lại số liệu. Nếu hỏi chi tiết giao dịch trong một danh mục thì dùng transactions với bộ lọc danh mục đó.",
         "Quản lý danh mục hoàn toàn khác xóa giao dịch. categoryOperation chỉ chứa tên nguồn/đích tồn tại, ngoại trừ tên mới khi tạo/đổi tên; type phải rõ khi tạo riêng. Nếu gộp thiếu đích, đổi tên thiếu tên mới hoặc nhiều nguồn không rõ, hỏi đúng một thông tin thiếu, để categoryOperation=null. Không nói đã thực hiện; ứng dụng sẽ hiển thị tác động và xin xác nhận. Khi chọn danh mục cho bản nháp dùng answer_clarification và draftPatch.category, không tạo danh mục riêng.",
         "Danh mục archived=true chỉ dùng để tra cứu lịch sử, không gán cho bản nháp mới hoặc sửa/gộp danh mục.",
@@ -331,7 +341,7 @@ export async function POST(request: Request) {
         return Response.json({ error: "FINANCIAL_DATA_UNAVAILABLE", message: "Chưa đọc được dữ liệu tài chính đã lưu. Vui lòng tải lại trang rồi thử lại." }, { status: 503 });
       }
     }
-    return Response.json({ intent: value.intent, operationIntent, targetDraftId: target?.id || null, categoryOperation, action: value.action, actions: requestedActions, walletId: resolvedWalletId, scope, percentage: value.percentage, financialAnswer,
+    return Response.json({ intent: value.intent, operationIntent, planAdjustment: input.spendingPlan ? value.planAdjustment || null : null, targetDraftId: target?.id || null, categoryOperation, action: value.action, actions: requestedActions, walletId: resolvedWalletId, scope, percentage: value.percentage, financialAnswer,
       periodStart: validDate(value.periodStart) ? value.periodStart : null, periodEnd: validDate(value.periodEnd) ? value.periodEnd : null,
       category, searchTerm: value.searchTerm, transactionType: value.transactionType, reply: categoryReply, drafts,
       deletion: { scope: deletionScope, amount: value.deletionAmount,

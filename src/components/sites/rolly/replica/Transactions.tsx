@@ -3,18 +3,26 @@
 import { useState, useRef, useEffect, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { ledgerDateKey } from "./calendarLedger";
-import { Camera, Mic, Send, Settings, Plus, X, Trash2 } from "lucide-react";
+import { Camera, Mic, Square, Send, Settings, Plus, X, Trash2 } from "lucide-react";
 import { EmptyState, Field, Mascot, Modal, PageHeader, Toggle } from "./Ui";
-import { currencySymbol, flushWorkspace, getWorkspaceState, money, today, updateState, useAppState, workspaceOwner, workspacePersistence, type AppState, type ChatMessage, type Transaction } from "./store";
+import { currencySymbol, flushWorkspace, flushWorkspaceForAnalysis, getWorkspaceState, money, today, updateState, useAppState, workspaceOwner, workspacePersistence, type AppState, type ChatMessage, type Transaction } from "./store";
 import { applyCategoryOperation, prepareCategoryOperation, renameCategoryMessageReferences, type CategoryCommand, type CategoryConfirmation } from "@/lib/category-operations";
 import { categoryOperationCopy, categoryOperationDescription, categoryOperationError } from "@/lib/category-operation-copy";
 import { isCategoryManagementMessage, isClearlyNewTransaction, isDraftCorrection, localCategoryCommand, resolvePendingDraft, type ConversationIntent } from "@/lib/conversation-intent";
 import { applyDraftAmountCorrection, categoryResolutionDraftIds, createTimeoutTransactionDraft, editDraftById, formatTransactionMoney, inferDraftCategory, isNewTransactionMessage, isValidDraftCategoryName, matchDraftCategoryAnswer, normalizeVietnameseMessage, readyDrafts, removeDraftById, requestedDraftCategory, similarDraftCategories, validateAndCommitDrafts, validateDraftForState, type TransactionDraft } from "@/lib/transaction-drafts";
 import { resolveExplicitWallet, resolveUniqueCurrencyWallet } from "@/lib/transaction-currency";
 import { answerFinancialQuery, type FinancialAction } from "@/lib/financial-chat";
-import { localPlanReply, modelHistory } from "@/lib/chat-local-plan";
+import { modelHistory } from "@/lib/chat-local-plan";
+import { resolveSpendingPlanAdjustment, spendingPlanAdjustmentSchema, spendingPlanOptionsSchema, type SpendingPlanOptions } from "@/lib/financial-outlook";
+import { ChatSpendingPlan } from "./ChatSpendingPlan";
 import { FinancialChatAnswer } from "./FinancialChatAnswer";
+import { prepareReceiptImage } from "@/lib/receipt-image";
+import { definitelyRejectedWorkspace, workspaceSaveErrorMessage } from "@/lib/workspace-payload";
+import { pendingDraftReminder, rollbackRejectedDrafts, shouldBlockNewDraft } from "@/lib/pending-draft-policy";
 import { asksForCalculationExplanation, scenarioCalculationExplanation } from "@/lib/scenario-explanation";
+import { hasCompatibleDraftWallet } from "@/lib/transaction-drafts";
+import { WorkspaceActionCard } from "./WorkspaceActionCard";
+import { applyWorkspaceProposal, inspectWorkspaceProposal, isWorkspaceCreationRequest, workspaceActionCopy, workspaceProposalSchema, type ActionField, type WorkspaceProposal } from "@/lib/workspace-actions";
 import { calculateScenario, normalizePlannerResponse, scenarioContext, type ScenarioResult } from "@/lib/scenario-planner";
 import planStyles from "./FinancialOutlook.module.css";
 import { tools } from "./Tools";
@@ -22,6 +30,15 @@ import { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName, 
 import { findTransactionsForDeletion, type TransactionDeletionCriteria } from "@/lib/transaction-deletion";
 
 const lockedDeletionConfirmations = new Set<string>();
+
+function unavailableWalletReply(currencies: Array<string | null>, language: AppLanguage): string {
+  const codes = [...new Set(currencies.filter((value): value is string => !!value).map(value => value.toUpperCase()))].join(", ");
+  return {
+    vi: codes ? `Chưa có ví ${codes} đang hoạt động. Bạn hãy tạo ví phù hợp rồi gửi lại giao dịch nhé.` : "Chưa có ví đang hoạt động. Bạn hãy tạo ví rồi gửi lại giao dịch nhé.",
+    en: codes ? `There is no active ${codes} wallet. Create a matching wallet, then send the transaction again.` : "There is no active wallet. Create a wallet, then send the transaction again.",
+    zh: codes ? `暂无可用的 ${codes} 钱包。请先创建对应钱包，再重新发送交易。` : "暂无可用钱包。请先创建钱包，再重新发送交易。",
+  }[language];
+}
 const CATEGORY_FLOW_COPY = {
   en: { choose: "Choose a category", income: "Income", expense: "Expense", transaction: "Transaction", newCategory: "Create a new category", name: "New category name", placeholder: "Enter a category name", create: "Create and attach to draft", cancel: "Cancel", invalid: "Use 1–100 letters, numbers, spaces, or basic punctuation.", wrongType: "That name is already used for the other transaction type.", similar: "A similar category already exists", existing: "Similar categories already exist", selected: "Selected", temporary: "Temporary category", draftOnly: "Draft only", savedOnConfirm: "A new category is saved only when you confirm the transaction. Removing the draft discards it.", updated: "Category set to", notSaved: "Draft not saved yet", noOptions: "No existing category is available for this transaction type.", categoryPrompt: "Choose a category below or create a new one.", pendingCategory: "New category", stillDraft: "is attached to the draft only. It will be saved when you confirm.", saving: "Saving transaction…", processing: "Processing…", askTarget: "Which transaction needs a category?" },
   vi: { choose: "Chọn danh mục phù hợp", income: "Khoản thu", expense: "Khoản chi", transaction: "Giao dịch", newCategory: "Tạo danh mục mới", name: "Tên danh mục mới", placeholder: "Nhập tên danh mục", create: "Tạo và gắn vào bản nháp", cancel: "Hủy", invalid: "Tên danh mục không hợp lệ. Dùng chữ, số, dấu cách và dấu câu cơ bản (tối đa 100 ký tự).", wrongType: "Tên này đã được dùng cho loại giao dịch khác.", similar: "Có danh mục gần giống đã tồn tại", existing: "Danh mục gần giống đã có", selected: "Đang chọn", temporary: "Danh mục mới", draftOnly: "Chỉ trong bản nháp", savedOnConfirm: "Danh mục mới chỉ được lưu cùng giao dịch khi bạn xác nhận; bỏ bản nháp sẽ hủy danh mục đó.", updated: "Đã chọn danh mục", notSaved: "Bản nháp chưa được lưu", noOptions: "Chưa có danh mục phù hợp cho loại giao dịch này.", categoryPrompt: "Chọn danh mục có sẵn bên dưới hoặc tạo danh mục mới.", pendingCategory: "Danh mục", stillDraft: "đã được gắn tạm vào bản nháp. Danh mục mới chỉ được lưu khi bạn xác nhận giao dịch.", saving: "Đang lưu giao dịch…", processing: "Đang xử lý yêu cầu…", askTarget: "Bạn muốn chọn danh mục cho giao dịch nào?" },
@@ -486,6 +503,8 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [committing, setCommitting] = useState(false);
+  const workspaceCreationLock = useRef(false);
+  const lastWorkspaceRequest = useRef<{ owner: string | null; message: string; id: string; failed: boolean } | null>(null);
   const [categoryBusy, setCategoryBusy] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [modal, setModal] = useState("");
@@ -503,6 +522,8 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   const activeChatRequest = useRef<AbortController | null>(null);
   const categoryOperationLock = useRef(false);
   const draftCommitLock = useRef(false);
+  const draftCommitSnapshot = useRef<AppState | null>(null);
+  const [uncertainDraftIds, setUncertainDraftIds] = useState<string[]>([]);
   const lastSubmission = useRef<{ owner: string | null; message: string; batchId: string; failed: boolean } | null>(null);
   const close = () => { recorder.current?.stop(); setListening(false); setModal(""); };
   useEffect(() => () => {
@@ -523,15 +544,28 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       const saved = state.transactionChat || (raw ? JSON.parse(raw) as { messages?: ChatMessage[]; drafts?: TransactionDraft[]; clarifyingDraftId?: string | null; referencedCategories?: string[] } : null);
       if (saved) {
         if (Array.isArray(saved.messages) && Array.isArray(saved.drafts)) {
-          const restoredDrafts = saved.drafts.filter(draft => !state.transactions.some(transaction => transaction.id === draft.id)).map((draft) => validateDraftForState(draft, state));
+          const checkedSaved = saved.drafts.filter(draft => !state.transactions.some(transaction => transaction.id === draft.id)).map((draft) => validateDraftForState(draft, state));
+          const blockedDrafts = checkedSaved.filter(draft => !hasCompatibleDraftWallet(draft, state.wallets));
+          const blockedIds = new Set(blockedDrafts.map(draft => draft.id));
+          const restoredDrafts = checkedSaved.filter(draft => !blockedIds.has(draft.id));
           const unresolved = restoredDrafts.filter((draft) => draft.needsReview.length > 0);
           const needsWalletChoice = new Set(restoredDrafts.filter((draft) => draft.needsReview.includes("wallet")).map((draft) => draft.id));
           const labels: Record<string, string> = { amount: "số tiền", type: "khoản thu hay chi", category: "danh mục", date: "ngày giao dịch", wallet: "ví hoặc tiền tệ" };
           const unresolvedLabels = [...new Set(unresolved.flatMap((draft) => draft.needsReview))].map((field) => labels[field] || field);
           const restoredMessages = saved.messages.map((originalMessage) => {
             let message = { ...originalMessage, text: originalMessage.role === "assistant" && originalMessage.text === "Xin chào!👋 Hãy mô tả giao dịch; tôi sẽ tạo bản nháp để bạn kiểm tra trước khi lưu." ? "Xin chào!👋 Hãy mô tả giao dịch; Finn sẽ tạo bản nháp để bạn kiểm tra trước khi lưu." : originalMessage.text };
+            if (message.workspaceProposal?.status === "saving") message = { ...message, workspaceProposal: { ...message.workspaceProposal, status: "failed" } };
             if (message.categoryOperation?.status === "saving") message = { ...message, categoryOperation: { ...message.categoryOperation, status: "failed" } };
             if (message.transactionDeletion?.status === "saving") message = { ...message, transactionDeletion: { ...message.transactionDeletion, status: "failed" } };
+            const blockedReferences = [...(message.draftIds || []), ...(message.walletChoiceDraftIds || []), ...(message.categoryChoiceDraftIds || [])].filter(id => blockedIds.has(id));
+            if (blockedReferences.length) {
+              message.draftIds = message.draftIds?.filter(id => !blockedIds.has(id));
+              message.walletChoiceDraftIds = message.walletChoiceDraftIds?.filter(id => !blockedIds.has(id));
+              message.categoryChoiceDraftIds = message.categoryChoiceDraftIds?.filter(id => !blockedIds.has(id));
+              if (!message.draftIds?.length && !message.walletChoiceDraftIds?.length && !message.categoryChoiceDraftIds?.length) {
+                message.text = unavailableWalletReply(blockedDrafts.filter(draft => blockedReferences.includes(draft.id)).map(draft => draft.currency), resolveLanguage(state.settings.language));
+              }
+            }
             const movedToWalletChoice = message.draftIds?.filter((id) => needsWalletChoice.has(id)) || [];
             if (message.role !== "assistant" || !movedToWalletChoice.length) return message.role === "assistant" && /chưa xác định được/i.test(message.text) ? { ...message, draftIds: undefined } : message;
             const remainingDraftIds = message.draftIds?.filter((id) => !needsWalletChoice.has(id));
@@ -590,6 +624,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   }, [messages.length, sessionLoaded]);
   function resetConversation() {
     if (committing || categoryBusy || deletingId) return;
+    if (uncertainDraftIds.length) { setModal(""); setMessages(previous => [...previous, { role: "assistant", text: workspaceSaveErrorMessage(null, resolveLanguage(state.settings.language)), draftIds: uncertainDraftIds }]); return; }
     conversationGeneration.current += 1;
     activeChatRequest.current?.abort(); activeChatRequest.current = null;
     aiRequestLock.current = false; setBusy(false);
@@ -694,9 +729,121 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (!applied) setMessages(previous => [...previous, { role: "assistant", text: categoryOperationError(error, resolveLanguage(state.settings.language)) }]);
     } finally { categoryOperationLock.current = false; setCategoryBusy(false); }
   }
+  function markWorkspaceProposal(id: string, patch: Partial<WorkspaceProposal>) {
+    setMessages(previous => previous.map(item => item.workspaceProposal?.id === id ? { ...item, workspaceProposal: { ...item.workspaceProposal, ...patch } } : item));
+  }
+  function cancelWorkspaceProposal(id: string) {
+    if (busy || committing) return;
+    const proposal = [...messages].reverse().find(item => item.workspaceProposal?.id === id)?.workspaceProposal;
+    if (!proposal || proposal.applied || !["collecting", "review", "failed"].includes(proposal.status)) return;
+    markWorkspaceProposal(id, { status: "cancelled", error: undefined });
+  }
+  async function confirmWorkspaceProposal(id: string) {
+    if (workspaceCreationLock.current || committing || busy || categoryBusy || deletingId) return;
+    const proposal = [...messages].reverse().find(item => item.workspaceProposal?.id === id)?.workspaceProposal;
+    if (!proposal || !["review", "failed"].includes(proposal.status)) return;
+    const owner = workspaceOwner(), generation = conversationGeneration.current;
+    const language = resolveLanguage(state.settings.language), t = workspaceActionCopy[language];
+    workspaceCreationLock.current = true; setCommitting(true);
+    let applied = !!proposal.applied;
+    markWorkspaceProposal(id, { status: "saving", error: undefined });
+    try {
+      if (!applied) {
+        await flushWorkspace(true);
+        if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+        updateState(current => {
+          const next = applyWorkspaceProposal(current, proposal, language);
+          const chat = next.transactionChat || { messages, drafts, clarifyingDraftId, activeDraftId: focusedDraftId, referencedCategories };
+          return { ...next, transactionChat: { ...chat, messages: chat.messages.map(item => item.workspaceProposal?.id === id ? { ...item, workspaceProposal: { ...item.workspaceProposal, status: "saving", applied: true } } : item) } };
+        });
+        applied = true;
+        markWorkspaceProposal(id, { status: "saving", applied: true });
+      } else {
+        const current = getWorkspaceState();
+        const inspection = inspectWorkspaceProposal(current, proposal, language);
+        if (inspection.question || inspection.error || proposal.actions.some(action => !(action.kind === "wallet" ? current.wallets : action.kind === "budget" ? current.goals : current.fixedExpenses || []).some(item => item.id === action.id))) throw new Error(t.invalid);
+      }
+      await flushWorkspace(true);
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+      markWorkspaceProposal(id, { status: "confirmed", applied: true, error: undefined });
+      setMessages(previous => [...previous, { role: "assistant", text: t.saved }]);
+    } catch (error) {
+      if (workspaceOwner() === owner && conversationGeneration.current === generation) markWorkspaceProposal(id, { status: "failed", applied, error: applied ? t.failed : error instanceof Error ? error.message.slice(0, 500) : t.invalid });
+    } finally { workspaceCreationLock.current = false; setCommitting(false); }
+  }
+  async function requestWorkspaceCreation(message: string, choice?: { operationId: string; field: ActionField; value: string | number }, alreadyAppended = false): Promise<boolean> {
+    if (!alreadyAppended && (busy || aiRequestLock.current || committing || categoryBusy || deletingId)) return true;
+    const pending = [...messages].reverse().find(item => item.workspaceProposal && ["collecting", "review", "failed"].includes(item.workspaceProposal.status) && !item.workspaceProposal.applied)?.workspaceProposal || null;
+    const language = resolveLanguage(state.settings.language), t = workspaceActionCopy[language];
+    const owner = workspaceOwner(), generation = conversationGeneration.current;
+    const controller = new AbortController(); activeChatRequest.current = controller;
+    const previous = lastWorkspaceRequest.current;
+    const batchId = pending?.id || (previous?.failed && previous.owner === owner && previous.message === message ? previous.id : crypto.randomUUID());
+    lastWorkspaceRequest.current = { owner, message, id: batchId, failed: false };
+    let validationMessage: string | null = null;
+    setBusy(true); aiRequestLock.current = true;
+    try {
+      await flushWorkspaceForAnalysis();
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return true;
+      const snapshot = getWorkspaceState();
+      const response = await fetch("/api/ai/workspace-actions", { method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": owner || "" },
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
+        body: JSON.stringify({ batchId, message, language, today: today(), pending, history: modelHistory(messages).slice(-8), ...(choice ? { choice } : {}),
+          ...(workspacePersistence() === "browser" ? { context: { wallets: snapshot.wallets, goals: snapshot.goals, fixedExpenses: snapshot.fixedExpenses || [], categories: snapshot.categories, categoryMeta: snapshot.categoryMeta, ...(snapshot.walletCategories ? { walletCategories: snapshot.walletCategories } : {}) } } : {}) }),
+      });
+      const raw: unknown = await response.json().catch(() => null);
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return true;
+      const result = raw && typeof raw === "object" ? raw as { mode?: unknown; proposal?: unknown; reply?: unknown; message?: unknown } : null;
+      if (!response.ok || !result) {
+        if (response.status === 422 && typeof result?.message === "string") validationMessage = result.message;
+        throw new Error(result?.message === t.invalid ? t.invalid : t.unavailable);
+      }
+      if (result.mode === "unrelated") { lastWorkspaceRequest.current = null; return false; }
+      if (result.mode === "cancel") {
+        if (pending) markWorkspaceProposal(pending.id, { status: "cancelled", error: undefined });
+        setText(""); setMessages(previous => [...previous, ...(!alreadyAppended ? [{ role: "user" as const, text: message }] : []), { role: "assistant", text: t.cancelled }]);
+        return true;
+      }
+      const parsed = workspaceProposalSchema.safeParse(result.proposal);
+      if (!parsed.success || (pending && parsed.data.id !== pending.id) || !["collecting", "review"].includes(parsed.data.status)) throw new Error(t.unavailable);
+      const proposal = parsed.data;
+      setText(""); lastWorkspaceRequest.current = null;
+      setMessages(previous => [...previous, ...(!alreadyAppended ? [{ role: "user" as const, text: message }] : []), { role: "assistant", text: typeof result.reply === "string" ? result.reply : t.ready, workspaceProposal: proposal }]);
+      return true;
+    } catch (error) {
+      if (workspaceOwner() === owner && conversationGeneration.current === generation) {
+        lastWorkspaceRequest.current = { owner, message, id: batchId, failed: true };
+        setText(message);
+        setMessages(previous => [...previous, ...(!alreadyAppended ? [{ role: "user" as const, text: message }] : []), { role: "assistant", text: validationMessage || (error instanceof Error && error.message === t.invalid ? t.invalid : t.unavailable) }]);
+      }
+      return true;
+    } finally {
+      if (conversationGeneration.current === generation && workspaceOwner() === owner) { setBusy(false); aiRequestLock.current = false; activeChatRequest.current = null; }
+    }
+  }
   async function send(value: string, requestedDraftId?: string) {
     const message = value.trim();
-    if (!message || busy || aiRequestLock.current) return;
+    if (!message || busy || aiRequestLock.current || committing || categoryBusy || deletingId) return;
+    const outstanding = latestDrafts.current;
+    if (!requestedDraftId && outstanding.length === 1 && /^(?:(?:huy|bo)(?:\s+(?:ban nhap|giao dich nay|giao dich do))?|cancel(?:\s+(?:draft|this draft))?|取消(?:草稿)?)[.!\s]*$/i.test(normalizeVietnameseMessage(message))) {
+      setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); removeDraft(outstanding[0].id); return;
+    }
+    if (!requestedDraftId && outstanding.length === 1 && /^(?:xac nhan(?:\s+luu)?|dong y|confirm|yes|确认)[.!\s]*$/i.test(normalizeVietnameseMessage(message))) {
+      setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); await confirmDrafts([outstanding[0].id]); return;
+    }
+    if (!requestedDraftId && shouldBlockNewDraft(message, outstanding)) {
+      setMessages(previous => [...previous, { role: "user", text: message }, { role: "assistant", text: pendingDraftReminder(resolveLanguage(state.settings.language), outstanding.length), draftIds: outstanding.map(d => d.id) }]);
+      setText(message); return;
+    }
+    const pendingWorkspace = [...messages].reverse().find(item => item.workspaceProposal && ["collecting", "review", "failed"].includes(item.workspaceProposal.status) && !item.workspaceProposal.applied)?.workspaceProposal;
+    const lastAssistantForConfirmation = [...messages].reverse().find(item => item.role === "assistant");
+    if (pendingWorkspace && lastAssistantForConfirmation?.workspaceProposal?.id === pendingWorkspace.id && /^(?:xác nhận(?: tạo)?|đồng ý|đúng rồi|có|ok|confirm|yes|确认|同意)[.!\s]*$/i.test(message) && pendingWorkspace.status === "review") {
+      setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
+      await confirmWorkspaceProposal(pendingWorkspace.id); return;
+    }
+    if (!requestedDraftId && (isWorkspaceCreationRequest(message) || pendingWorkspace)) {
+      if (await requestWorkspaceCreation(message)) return;
+    }
     const pendingDrafts = drafts.filter(d => !state.transactions.some(t => t.id === d.id));
     const explicitlyNew = isClearlyNewTransaction(message);
     const categoryManagement = isCategoryManagementMessage(message);
@@ -705,7 +852,22 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     const activeDraftId = target?.id || null;
     const activeDraft = target || undefined;
     const appendUser = () => { setText(""); if (!requestedDraftId) setMessages(previous => [...previous, { role: "user", text: message }]); };
+    if (explicitlyNew) {
+      const currency = resolveUniqueCurrencyWallet(message, state.wallets.filter(item => !item.archived)).currency;
+      if (!hasCompatibleDraftWallet({ currency }, state.wallets)) {
+        appendUser();
+        setMessages(previous => [...previous, { role: "assistant", text: unavailableWalletReply([currency], resolveLanguage(state.settings.language)) }]);
+        return;
+      }
+    }
     const previousAssistant = [...messages].reverse().find(item => item.role === "assistant");
+    const parsedSpendingPlan = spendingPlanOptionsSchema.safeParse(previousAssistant?.spendingPlan);
+    const activeSpendingPlan = parsedSpendingPlan.success ? parsedSpendingPlan.data : null;
+    if (activeSpendingPlan && asksForCalculationExplanation(message)) {
+      appendUser();
+      setMessages(previous => [...previous, { role: "assistant", text: "", spendingPlan: activeSpendingPlan, localOnly: true }]);
+      return;
+    }
     if (asksForCalculationExplanation(message) && previousAssistant?.scenarios?.length) {
       const snapshot = getWorkspaceState();
       const lang = resolveLanguage(snapshot.settings.language);
@@ -772,7 +934,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     const batchId = previousSubmission?.failed && previousSubmission.owner === submissionOwner && previousSubmission.message === message ? previousSubmission.batchId : crypto.randomUUID();
     lastSubmission.current = { owner: submissionOwner, message, batchId, failed: false };
     try {
-      await flushWorkspace(true);
+      await flushWorkspaceForAnalysis();
       if (workspaceOwner() !== submissionOwner || conversationGeneration.current !== submissionGeneration) return;
       const activeWallets = state.wallets.filter((item) => !item.archived);
       const selectedWalletId = activeWallets.some((item) => item.id === wallet) ? wallet : activeWallets.length === 1 ? activeWallets[0].id : null;
@@ -789,6 +951,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           pendingDrafts: [...(activeDraft ? [activeDraft] : []), ...pendingDrafts.filter(d => d.id !== activeDraftId)].slice(0, 50),
           activeDraftId,
           referencedCategories,
+          ...(activeSpendingPlan ? { spendingPlan: activeSpendingPlan } : {}),
           history: modelHistory([...messages, { role: "user" as const, text: message }]),
           wallets: state.wallets.filter((item) => !item.archived).map(({ id, name, currency }) => ({ id, name, currency })),
           categories: state.categories.flatMap((name) => {
@@ -807,6 +970,34 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       const validShape = returned.every((item) => item && typeof item === "object" && typeof (item as TransactionDraft).id === "string" && typeof (item as TransactionDraft).title === "string" && Array.isArray((item as TransactionDraft).needsReview));
       if (!validShape || returned.length > 20) throw new Error("AI trả về dữ liệu chưa hợp lệ. Vui lòng thử lại.");
       const ai = result as { intent: string; operationIntent?: ConversationIntent; targetDraftId?: string | null; categoryOperation?: CategoryCommand | null; action?: string; actions?: FinancialAction[]; walletId?: string | null; scope?: "selected" | "all"; periodStart?: string | null; periodEnd?: string | null; category?: string | null; searchTerm?: string | null; transactionType?: "expense" | "income" | null; percentage?: number | null; financialAnswer?: string | null; reply?: string; deletion?: TransactionDeletionCriteria };
+      if (shouldBlockNewDraft(message, latestDrafts.current, ai.intent)) {
+        setMessages(previous => [...previous, { role: "assistant", text: pendingDraftReminder(resolveLanguage(state.settings.language), latestDrafts.current.length), draftIds: latestDrafts.current.map(d => d.id) }]);
+        setText(message); return;
+      }
+      if (activeSpendingPlan) {
+        const adjustment = spendingPlanAdjustmentSchema.safeParse((result as { planAdjustment?: unknown }).planAdjustment);
+        const categoryReduction = ai.intent === "financial" && ai.action === "category_savings" && ai.percentage !== null && ai.percentage !== undefined
+          ? { walletId: ai.walletId || null, currency: null, category: ai.category || null, percent: ai.percentage, reserve: null, reset: false } : null;
+        if (adjustment.success || categoryReduction) {
+          const next = resolveSpendingPlanAdjustment(getWorkspaceState(), activeSpendingPlan, adjustment.success ? adjustment.data : categoryReduction!);
+          const lang = resolveLanguage(state.settings.language);
+          const questions = {
+            vi: { wallet: "Bạn muốn điều chỉnh kế hoạch cho ví nào? Chọn “Hỏi tiếp cho ví này” trên kế hoạch rồi gửi lại yêu cầu nhé.", currency: "Tiền tệ bạn nêu khác với ví. Bạn muốn dùng ví nào và giữ dự phòng bằng tiền tệ nào?", precision: "Số tiền dự phòng chưa đúng đơn vị nhỏ nhất của tiền tệ trong ví. Bạn nhập lại nhé.", category: "Bạn muốn giảm chi cho danh mục nào?" },
+            en: { wallet: "Which wallet should this apply to? Choose “Follow up for this wallet” on the plan and resend your request.", currency: "The currency differs from the wallet. Which wallet and reserve currency do you mean?", precision: "The reserve amount has unsupported currency precision. Please update it.", category: "Which spending category should be reduced?" },
+            zh: { wallet: "要调整哪个钱包？请在计划中选择“针对此钱包继续提问”，然后重新发送。", currency: "币种与钱包不一致，请明确钱包和备用金币种。", precision: "备用金精度不符合钱包币种，请重新输入。", category: "要减少哪个支出类别？" },
+          }[lang];
+          setMessages(previous => [...previous, next.options ? { role: "assistant", text: "", spendingPlan: next.options, localOnly: true } : { role: "assistant", text: questions[next.missing!], spendingPlan: activeSpendingPlan, localOnly: true }]);
+          return;
+        }
+        if (ai.intent === "financial" && ["safe_daily_allowance", "explain"].includes(ai.action || "")) {
+          setMessages(previous => [...previous, { role: "assistant", text: "", spendingPlan: activeSpendingPlan, localOnly: true }]);
+          return;
+        }
+      }
+      if (ai.operationIntent && ["create_wallet", "create_budget", "create_fixed_expense"].includes(ai.operationIntent)) {
+        if (!await requestWorkspaceCreation(message, undefined, true)) setMessages(previous => [...previous, { role: "assistant", text: { vi: "Bạn muốn Finn tạo ví, ngân sách hay chi phí cố định?", en: "Would you like Finn to create a wallet, budget or fixed expense?", zh: "你想让 Finn 创建钱包、预算还是固定支出？" }[resolveLanguage(state.settings.language)] }]);
+        return;
+      }
       if (ai.operationIntent === "list_categories") {
         const names = state.categories.filter(name => !state.categoryMeta[name]?.archived);
         setReferencedCategories([]);
@@ -905,7 +1096,16 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         setMessages((previous) => [...previous, { role: "assistant", text: ai.reply?.trim() || "Mình chưa hiểu ý bạn. Bạn có thể nói lại theo cách khác không?" }]);
         return;
       }
-      const validated = returned.map(item => validateDraftForState(item as TransactionDraft, state));
+      const checkedReturned = returned.map(item => validateDraftForState(item as TransactionDraft, state));
+      const unavailable = checkedReturned.filter(draft => !hasCompatibleDraftWallet(draft, state.wallets));
+      const validated = checkedReturned.filter(draft => hasCompatibleDraftWallet(draft, state.wallets));
+      if (unavailable.length) {
+        const rejectedIds = new Set(unavailable.map(draft => draft.id));
+        setDrafts(previous => previous.filter(draft => !rejectedIds.has(draft.id)));
+        setMessages(previous => [...previous, { role: "assistant", text: unavailableWalletReply(unavailable.map(draft => draft.currency), resolveLanguage(state.settings.language)) }]);
+        setClarifyingDraftId(null); setFocusedDraftId(null);
+        if (!validated.length || ai.intent === "clarification") return;
+      }
       if (ai.intent === "clarification") {
         const resolved = resolvePendingDraft(message, pendingDrafts, ai.targetDraftId || null, activeDraftId);
         if (!resolved || !validated[0] || validated[0].id !== resolved.id) {
@@ -964,12 +1164,21 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (lastSubmission.current?.batchId === batchId) lastSubmission.current.failed = true;
       const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError" || /chưa phản hồi kịp/i.test(error.message));
       const fallback = timedOut ? createTimeoutTransactionDraft(message, batchId, today(), state) : null;
+      if (fallback && latestDrafts.current.length) {
+        setText(message);
+        setMessages(previous => [...previous, { role: "assistant", text: pendingDraftReminder(resolveLanguage(state.settings.language), latestDrafts.current.length), draftIds: latestDrafts.current.map(d => d.id) }]);
+        return;
+      }
       if (fallback) {
         const activeWallets = state.wallets.filter((item) => !item.archived);
         const currencyWallet = resolveUniqueCurrencyWallet(message, activeWallets);
         const fallbackWallet = currencyWallet.walletId || (!currencyWallet.currency && !currencyWallet.ambiguous ? wallet || (activeWallets.length === 1 ? activeWallets[0].id : null) : null);
         const selectedWallet = state.wallets.find((item) => item.id === fallbackWallet && !item.archived);
         const checked = validateDraftForState({ ...fallback, id: `${batchId}:0`, wallet: selectedWallet?.id || null, currency: fallback.currency || selectedWallet?.currency || null }, state);
+        if (!hasCompatibleDraftWallet(checked, state.wallets)) {
+          setMessages(previous => [...previous, { role: "assistant", text: unavailableWalletReply([checked.currency], resolveLanguage(state.settings.language)) }]);
+          return;
+        }
         setDrafts((previous) => previous.some(d => d.id === checked.id) ? previous : [...previous, checked]);
         setFocusedDraftId(pendingDrafts.length === 0 ? checked.id : null);
         setClarifyingDraftId(pendingDrafts.length === 0 ? checked.id : null);
@@ -993,7 +1202,17 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     }
   }
   async function readReceipt(file: File) {
-    if (busy || aiRequestLock.current) return;
+    if (busy || aiRequestLock.current || committing) return;
+    if (latestDrafts.current.length) {
+      setMessages(previous => [...previous, { role: "assistant", text: pendingDraftReminder(resolveLanguage(state.settings.language), latestDrafts.current.length), draftIds: latestDrafts.current.map(d => d.id) }]);
+      if (fileInput.current) fileInput.current.value = "";
+      return;
+    }
+    if (!state.wallets.some(item => !item.archived)) {
+      setFailedReceiptFile(file);
+      setMessages(previous => [...previous, { role: "assistant", text: unavailableWalletReply([], resolveLanguage(state.settings.language)), retryReceipt: true }]);
+      return;
+    }
     if (!file.type.startsWith("image/")) {
       setMessages((previous) => [...previous, { role: "assistant", text: "Vui lòng chọn một tệp ảnh hóa đơn." }]);
       return;
@@ -1002,17 +1221,15 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       setMessages((previous) => [...previous, { role: "assistant", text: "Ảnh quá lớn. Vui lòng chọn ảnh dưới 5 MB." }]);
       return;
     }
+    const owner = workspaceOwner(), generation = conversationGeneration.current;
+    const controller = new AbortController(); activeChatRequest.current = controller;
     setBusy(true); aiRequestLock.current = true; setFailedReceiptFile(file);
     setMessages((previous) => [...previous, { role: "user", text: "📷 Ảnh hóa đơn" }, { role: "assistant", text: "Đang đọc hóa đơn và kiểm tra thông tin…" }]);
     try {
-      const imageDataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("Không đọc được tệp ảnh."));
-        reader.onerror = () => reject(new Error("Không đọc được tệp ảnh."));
-        reader.readAsDataURL(file);
-      });
+      const imageDataUrl = await prepareReceiptImage(file);
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
       const response = await fetch("/api/ai/receipt-drafts", {
-        signal: AbortSignal.timeout(65_000), method: "POST",
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(65_000)]), method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           imageDataUrl, today: today(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
@@ -1025,6 +1242,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         }),
       });
       const result: unknown = await response.json().catch(() => null);
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
       const draftValue = result && typeof result === "object" ? (result as { draft?: unknown }).draft : null;
       if (!response.ok || !draftValue || typeof draftValue !== "object" || typeof (draftValue as TransactionDraft).id !== "string" || typeof (draftValue as TransactionDraft).title !== "string") {
         const message = result && typeof result === "object" && typeof (result as { message?: unknown }).message === "string" ? (result as { message: string }).message : "Không thể đọc hóa đơn. Hãy chọn ảnh rõ hơn hoặc nhập giao dịch bằng chat.";
@@ -1033,6 +1251,10 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       const parsedDraft = draftValue as TransactionDraft;
       const inferredCategory = parsedDraft.category || inferDraftCategory(parsedDraft.title, parsedDraft.type, state);
       const draft = validateDraftForState({ ...(inferredCategory ? { ...parsedDraft, category: inferredCategory } : parsedDraft), wallet: null, currency: parsedDraft.currency }, state);
+      if (!hasCompatibleDraftWallet(draft, state.wallets)) {
+        setMessages(previous => [...previous.slice(0, -1), { role: "assistant", text: unavailableWalletReply([draft.currency], resolveLanguage(state.settings.language)), retryReceipt: true }]);
+        return;
+      }
       setReceiptImageUrls((previous) => ({ ...previous, [draft.id]: imageDataUrl }));
       setFailedReceiptFile(null);
       setDrafts((previous) => [...previous, draft]);
@@ -1040,16 +1262,20 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         const needsCategory = draft.needsReview.includes("category") && !!draft.type;
         setMessages((previous) => [...previous.slice(0, -1), { role: "assistant", text: "Mình đã đọc hóa đơn. Bạn muốn ghi giao dịch này vào ví nào? Chọn ví bên dưới để tạo bản nháp.", walletChoiceDraftIds: [draft.id], ...(needsCategory ? { categoryChoiceDraftIds: [draft.id] } : {}) }]);
     } catch (error) {
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
       const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
-      const message = timedOut ? "Đọc hóa đơn quá thời gian chờ. Ảnh vẫn được giữ; bấm “Thử lại ảnh” hoặc chọn ảnh nhỏ hơn." : error instanceof Error ? error.message : "Không thể đọc hóa đơn. Vui lòng thử lại.";
+      const preparationFailed = error instanceof Error && ["RECEIPT_IMAGE_TOO_LARGE", "INVALID_RECEIPT_IMAGE", "InvalidStateError", "EncodingError"].some(code => error.message === code || error.name === code);
+      const message = preparationFailed ? { vi: "Chưa chuẩn bị được ảnh để gửi an toàn. Ảnh gốc vẫn được giữ; hãy chọn JPEG/PNG rõ nét, nhỏ hơn rồi thử lại.", en: "The image could not be prepared safely. The original is kept; try a smaller, clear JPEG or PNG.", zh: "无法安全准备图片，原图已保留。请尝试较小且清晰的 JPEG 或 PNG。" }[resolveLanguage(state.settings.language)] : timedOut ? "Đọc hóa đơn quá thời gian chờ. Ảnh vẫn được giữ; bấm “Thử lại ảnh” hoặc chọn ảnh nhỏ hơn." : error instanceof Error ? error.message : "Không thể đọc hóa đơn. Vui lòng thử lại.";
       setMessages((previous) => [...previous.slice(0, -1), { role: "assistant", text: message, retryReceipt: true }]);
     } finally {
-      setBusy(false);
-      aiRequestLock.current = false;
-      if (fileInput.current) fileInput.current.value = "";
+      if (workspaceOwner() === owner && conversationGeneration.current === generation) {
+        setBusy(false); aiRequestLock.current = false; activeChatRequest.current = null;
+        if (fileInput.current) fileInput.current.value = "";
+      }
     }
   }
   function editDraft(id: string, patch: Partial<Omit<TransactionDraft, "id" | "needsReview">>) {
+    if (uncertainDraftIds.includes(id)) return;
     setFocusedDraftId(id);
     const selectedWallet = patch.wallet ? state.wallets.find((item) => item.id === patch.wallet && !item.archived) : undefined;
     const explicitPatch = selectedWallet ? { ...patch, currency: selectedWallet.currency } : patch;
@@ -1078,12 +1304,20 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   }
   async function confirmDrafts(ids: string[]) {
     if (committing || draftCommitLock.current || ids.length === 0) return;
+    if (uncertainDraftIds.some(id => !ids.includes(id))) {
+      setMessages(previous => [...previous, { role: "assistant", text: workspaceSaveErrorMessage(null, resolveLanguage(state.settings.language)), draftIds: uncertainDraftIds }]); return;
+    }
+    const selected = drafts.filter(draft => ids.includes(draft.id));
+    if (!selected.some(draft => uncertainDraftIds.includes(draft.id) || state.transactions.some(t => t.id === draft.id)) && readyDrafts(selected, state).length !== selected.length) {
+      setMessages(previous => [...previous, { role: "assistant", text: { vi: "Bản nháp còn thiếu thông tin. Bạn bổ sung các mục được đánh dấu bên dưới trước khi xác nhận nhé.", en: "The draft needs more details. Complete the marked fields below before confirming.", zh: "草稿信息不完整，请先补全下面标记的字段再确认。" }[resolveLanguage(state.settings.language)], draftIds: ids }]); return;
+    }
     draftCommitLock.current = true;
     setCommitting(true);
     const owner = workspaceOwner();
     let committed: string[] = [];
     let duplicateIds: string[] = [];
     let savedTransactions: Transaction[] = [];
+    draftCommitSnapshot.current ||= getWorkspaceState();
     try {
       const chosen = drafts.filter((draft) => ids.includes(draft.id));
       updateState((current) => {
@@ -1097,6 +1331,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       });
       await flushWorkspace(true);
       if (workspaceOwner() !== owner) return;
+      if (committed.some(id => !getWorkspaceState().transactions.some(t => t.id === id))) throw new Error("SAVE_NOT_CONFIRMED");
       if (committed.length) {
         const transactions = committed.map((id) => {
           const image = receiptImageUrls[id];
@@ -1109,6 +1344,8 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         setMessages((previous) => [...previous, { role: "assistant", text: "Bản nháp này đã được lưu trước đó; không tạo bản ghi trùng." }]);
       }
       const processed = new Set([...committed, ...duplicateIds]);
+      setUncertainDraftIds(previous => previous.filter(id => !processed.has(id)));
+      draftCommitSnapshot.current = null;
       if (processed.size) setMessages((previous) => previous.map((message) => {
         const walletChoiceDraftIds = message.walletChoiceDraftIds?.filter((id) => !processed.has(id));
         const categoryChoiceDraftIds = message.categoryChoiceDraftIds?.filter((id) => !processed.has(id));
@@ -1121,11 +1358,20 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       setDrafts((previous) => previous.filter((draft) => !processed.has(draft.id)));
       if (processed.has(focusedDraftId || "")) setFocusedDraftId(null);
       if (ids.includes(clarifyingDraftId || "")) setClarifyingDraftId(null);
-    } catch {
-      if (workspaceOwner() === owner) setMessages(previous => [...previous, { role: "assistant", text: "Chưa xác nhận được việc lưu giao dịch. Giữ trang mở và thử xác nhận lại; bản nháp vẫn được giữ." }]);
+    } catch (error) {
+      if (workspaceOwner() === owner) {
+        if (definitelyRejectedWorkspace(error) && draftCommitSnapshot.current) {
+          const before = draftCommitSnapshot.current;
+          updateState(current => rollbackRejectedDrafts(current, before, ids));
+          draftCommitSnapshot.current = null; setUncertainDraftIds(previous => previous.filter(id => !ids.includes(id)));
+        } else setUncertainDraftIds(previous => [...new Set([...previous, ...ids])]);
+        setMessages(previous => [...previous, { role: "assistant", text: workspaceSaveErrorMessage(error, resolveLanguage(state.settings.language)), draftIds: ids }]);
+      }
     } finally { draftCommitLock.current = false; setCommitting(false); }
   }
   function removeDraft(id: string) {
+    if (committing || draftCommitLock.current) return;
+    if (uncertainDraftIds.includes(id)) { setMessages(previous => [...previous, { role: "assistant", text: workspaceSaveErrorMessage(null, resolveLanguage(state.settings.language)), draftIds: [id] }]); return; }
     if (lastSubmission.current && id.startsWith(lastSubmission.current.batchId + ":")) lastSubmission.current = null;
     if (focusedDraftId === id) setFocusedDraftId(null);
     setReceiptImageUrls((previous) => { const next = { ...previous }; delete next[id]; return next; });
@@ -1139,6 +1385,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     })), { role: "assistant", text: "Đã bỏ bản nháp." }]);
   }
   function chooseDraftWallet(draftId: string, walletId: string) {
+    if (committing || uncertainDraftIds.includes(draftId)) return;
     setFocusedDraftId(draftId);
     const chosenWallet = state.wallets.find((item) => item.id === walletId && !item.archived);
     const draft = drafts.find((item) => item.id === draftId);
@@ -1322,13 +1569,19 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   return <div className="r-chat-page"><PageHeader onBack={() => navigate("?tab=transactions")}><button type="button" className="r-icon-button" aria-label="Xóa hội thoại" title="Xóa hội thoại" onClick={() => setModal("resetChat")}><Trash2 size={18} /></button><button type="button" className="r-icon-button" aria-label="Cài đặt chat" onClick={() => navigate("accountSettings")}><Settings size={20} /></button></PageHeader><div className="r-chat-messages" ref={messagesRef} role="log" aria-label="Lịch sử hội thoại" tabIndex={0}><Mascot greeting={chatMascotGreeting} className="r-chat-mascot" size={80} />
       <div className={planStyles.chatIntroduction + " r-chat-introduction"}>
         <p>{String(state.settings.name || "")}, { /中文|zh/.test(String(state.settings.language)) ? "你好！我是 Finn。" : /Việt|vi/.test(String(state.settings.language)) ? "xin chào! Mình là Finn." : "hello! I'm Finn." }</p>
-        <button type="button" disabled={busy} onClick={() => setMessages(previous => [...previous, { role: "assistant", text: localPlanReply(state, today()), localOnly: true }])}>{/中文|zh/.test(String(state.settings.language)) ? "查看支出计划" : /Việt|vi/.test(String(state.settings.language)) ? "Xem kế hoạch chi tiêu" : "View spending plan"}</button>
+        <button type="button" disabled={busy || committing} onClick={() => setMessages(previous => [...previous, { role: "assistant", text: "", spendingPlan: {}, localOnly: true }])}>{/中文|zh/.test(String(state.settings.language)) ? "查看支出计划" : /Việt|vi/.test(String(state.settings.language)) ? "Xem kế hoạch chi tiêu" : "View spending plan"}</button>
       </div>
       <span className="r-chat-date">Hôm nay</span>
       {messages.map((message, index) => <div key={index} className={"r-message " + message.role + (message.draftIds ? " r-ai-draft-message" : "")}>
-        {message.role === "assistant" && (message.financialContext || message.scenarioExplanation) && !/gemini|AI Studio/i.test(message.text) ? <FinancialChatAnswer text={message.text} /> : <p>{message.role === "assistant" && /gemini|AI Studio/i.test(message.text)
+        {message.spendingPlan ? <>{message.text && <p>{message.text}</p>}<ChatSpendingPlan state={state} asOf={today()} options={message.spendingPlan} onScope={busy || committing ? undefined : (options: SpendingPlanOptions) => setMessages(previous => [...previous, { role: "assistant", text: "", spendingPlan: options, localOnly: true }])}/></> : message.role === "assistant" && (message.financialContext || message.scenarioExplanation) && !/gemini|AI Studio/i.test(message.text) ? <FinancialChatAnswer text={message.text} /> : <p>{message.role === "assistant" && /gemini|AI Studio/i.test(message.text)
           ? message.draftIds?.length ? serviceCopy.draftReady : serviceCopy.unavailable
           : message.text}</p>}
+        {message.workspaceProposal && !messages.slice(index + 1).some(item => item.workspaceProposal?.id === message.workspaceProposal?.id) && (() => {
+          const parsed = workspaceProposalSchema.safeParse(message.workspaceProposal);
+          return parsed.success ? <WorkspaceActionCard proposal={parsed.data} state={state} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
+            onConfirm={() => void confirmWorkspaceProposal(parsed.data.id)} onCancel={() => cancelWorkspaceProposal(parsed.data.id)}
+            onAnswer={(choice, label) => void requestWorkspaceCreation(label, choice)} /> : null;
+        })()}
         {message.categoryList && <div className="r-ai-category-options" role="group" aria-label={categoryFlowCopy.choose}>
           {message.categoryList.filter(name => state.categories.includes(name) && !state.categoryMeta[name]?.archived).map(name => <button type="button" key={name} aria-pressed={referencedCategories.includes(name)} className={referencedCategories.includes(name) ? "selected" : ""} disabled={busy} onClick={() => setReferencedCategories(previous => previous.includes(name) ? previous.filter(n => n !== name) : [...previous, name].slice(-20))}>{state.categoryMeta[name]?.icon || "❓"} {name}</button>)}
         </div>}
@@ -1390,7 +1643,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         </button>}
         {message.walletChoiceDraftIds?.map((id) => {
           const pending = drafts.find((draft) => draft.id === id);
-          if (!pending) return null;
+          if (!pending || uncertainDraftIds.includes(id)) return null;
           const requiredCurrency = pending.currency || message.requiredCurrency;
           const availableWallets = state.wallets.filter((item) => !item.archived && (!requiredCurrency || item.currency.toUpperCase() === requiredCurrency.toUpperCase()));
           return <section className="r-ai-wallet-choice" key={id} aria-label={`Chọn ví cho ${pending.title}`}>
@@ -1402,7 +1655,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         })}
         {categoryResolutionDraftIds(messages, index, drafts).map((id) => {
           const pending = drafts.find((draft) => draft.id === id);
-          if (!pending) return null;
+          if (!pending || uncertainDraftIds.includes(id)) return null;
           const walletCategoryNames = pending.wallet ? state.walletCategories?.[pending.wallet] : undefined;
           const options = state.categories.filter((name) => !state.categoryMeta[name]?.archived
             && name.toLocaleLowerCase("vi") !== "chưa được phân loại"
@@ -1445,7 +1698,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           const labels: Record<string, string> = { amount: "số tiền", type: "loại giao dịch", category: "danh mục", date: "ngày", wallet: "ví/tiền tệ" };
           const needsReview = draft.needsReview.map((field) => labels[field] || field);
           return <article key={id} className="r-chat-record r-ai-draft-card">
-            <div className="r-ai-draft-heading"><small>Bản nháp · {draft.type === "income" ? "Thu nhập" : draft.type === "expense" ? "Chi phí" : "Chưa rõ loại"}</small><button type="button" className="r-icon-button" aria-label="Bỏ bản nháp" onClick={() => removeDraft(id)}><X size={16} /></button></div>
+            <div className="r-ai-draft-heading"><small>Bản nháp · {draft.type === "income" ? "Thu nhập" : draft.type === "expense" ? "Chi phí" : "Chưa rõ loại"}</small><button type="button" className="r-icon-button" aria-label="Bỏ bản nháp" disabled={committing || uncertainDraftIds.includes(id)} onClick={() => removeDraft(id)}><X size={16} /></button></div>
             {receiptImageUrls[id] && <div className="r-ai-receipt-thumb" role="img" aria-label="Ảnh hóa đơn đính kèm bản nháp" style={{ backgroundImage: `url("${receiptImageUrls[id]}")` }} />}
             <div className="r-ai-draft-summary"><b>{draft.title.trim() || "Chưa có mô tả"}</b><strong>{draft.amount !== null && draft.currency ? formatTransactionMoney(draft.amount, draft.currency) : "Chưa rõ số tiền/tiền tệ"}</strong></div>
             <p className="r-ai-draft-details">{draft.category || draft.newCategory?.name || "Chưa chọn danh mục"} · {draft.date || "Chưa rõ ngày"} · {draftWallet ? `${draftWallet.name} (${draftWallet.currency})` : draft.currency ? `Chưa chọn ví · ${draft.currency}` : "Chưa chọn ví/tiền tệ"}</p>
@@ -1457,14 +1710,15 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
                 {state.wallets.filter((item) => !item.archived && (!draft.currency || item.currency.toUpperCase() === draft.currency.toUpperCase())).map((item) => <option key={item.id} value={item.id}>{item.name === "." ? "Ví chính" : item.name} · {item.currency}</option>)}
               </select>
             </label>}
-            <div className="r-two-options"><button type="button" className="r-secondary" onClick={() => setEditingDraftId(id)}>Chỉnh sửa</button><button type="button" className="r-primary" disabled={!valid || committing} onClick={() => confirmDrafts([id])}>Xác nhận</button></div>
+            <div className="r-two-options"><button type="button" className="r-secondary" disabled={committing || uncertainDraftIds.includes(id)} onClick={() => setEditingDraftId(id)}>Chỉnh sửa</button><button type="button" className="r-primary" disabled={(!valid && !uncertainDraftIds.includes(id)) || committing} onClick={() => confirmDrafts([id])}>{uncertainDraftIds.includes(id) ? { vi: "Kiểm tra lưu lại", en: "Check save again", zh: "重新检查保存" }[resolveLanguage(state.settings.language)] : "Xác nhận"}</button></div>
+            {uncertainDraftIds.includes(id) && <small role="status">{workspaceSaveErrorMessage(null, resolveLanguage(state.settings.language))}</small>}
             {needsReview.length > 0 && <button type="button" className="r-ai-clarify-button" onClick={() => { setClarifyingDraftId(id); setFocusedDraftId(id); setText(""); }}>Trả lời để bổ sung thông tin</button>}
             {!valid && <small className="r-ai-draft-review">Hãy bổ sung các thông tin còn thiếu trước khi xác nhận.</small>}
           </article>;
         })}
       </div>)}
       {busy && <div className="r-chat-thinking" role="status" aria-label="Đang phân tích giao dịch"><span /><span /><span /></div>}
-    </div><div className="r-chat-bottom"><input ref={fileInput} className="sr-only" type="file" aria-label="Chọn ảnh hóa đơn" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" tabIndex={-1} onChange={(event) => { const file = event.target.files?.[0]; if (file) void readReceipt(file); }} /><form className="r-chat-input" onSubmit={(e) => { e.preventDefault(); void send(text); }}><input aria-label="Nhập giao dịch" placeholder={clarifyingDraftId ? "Trả lời câu hỏi để bổ sung bản nháp…" : "ví dụ: hôm qua ăn sáng 30k, trưa 50k"} value={text} onChange={(e) => setText(e.target.value)} />{text.trim() ? <button disabled={busy || transcribing} aria-label="Gửi tin nhắn"><Send size={22} /></button> : <><button type="button" disabled={busy || transcribing} aria-label={listening ? "Dừng ghi âm" : "Ghi bằng giọng nói"} title={listening ? "Dừng ghi âm" : "Nói để chép lời vào ô chat"} onClick={() => { if (listening) recorder.current?.stop(); else { setVoiceError(""); void startVoice(); } }}><Mic size={22} /></button><button type="button" disabled={busy || transcribing} aria-label="Thêm ảnh hóa đơn" onClick={() => fileInput.current?.click()}><Camera size={22} /></button></>}</form>{(listening || transcribing || voiceError) && <p className="r-chat-voice-status" role="status">{listening ? "Đang nghe… bấm micro để dừng." : transcribing ? "Đang nhận diện lời nói…" : voiceError}</p>}<button type="button" className="r-memory-button" onClick={() => setModal("memory")}>Bộ nhớ của FinBridge</button></div>
+    </div><div className="r-chat-bottom"><input ref={fileInput} className="sr-only" type="file" aria-label="Chọn ảnh hóa đơn" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" tabIndex={-1} onChange={(event) => { const file = event.target.files?.[0]; if (file) void readReceipt(file); }} /><form className="r-chat-input" onSubmit={(e) => { e.preventDefault(); void send(text); }}><input aria-label="Nhập giao dịch" placeholder={clarifyingDraftId ? "Trả lời câu hỏi để bổ sung bản nháp…" : "ví dụ: hôm qua ăn sáng 30k, trưa 50k"} value={text} onChange={(e) => setText(e.target.value)} />{text.trim() && !listening ? <button disabled={busy || transcribing} aria-label="Gửi tin nhắn"><Send size={22} /></button> : <><button type="button" disabled={busy || transcribing} aria-pressed={listening} aria-label={listening ? "Dừng ghi âm" : "Ghi bằng giọng nói"} title={listening ? "Dừng ghi âm" : "Nói để chép lời vào ô chat"} onClick={() => { if (listening) recorder.current?.stop(); else { setVoiceError(""); void startVoice(); } }}>{listening ? <Square size={18} fill="currentColor" aria-hidden="true" /> : <Mic size={22} aria-hidden="true" />}</button><button type="button" disabled={busy || transcribing} aria-label="Thêm ảnh hóa đơn" onClick={() => fileInput.current?.click()}><Camera size={22} /></button></>}</form>{(listening || transcribing || voiceError) && <p className="r-chat-voice-status" role="status">{listening ? "Đang nghe… bấm nút vuông để dừng." : transcribing ? "Đang nhận diện lời nói…" : voiceError}</p>}<button type="button" className="r-memory-button" onClick={() => setModal("memory")}>Bộ nhớ của FinBridge</button></div>
     {modal === "resetChat" && <Modal title="Xóa hội thoại?" onClose={close}><div className="r-form"><p>Lịch sử chat và các bản nháp chưa xác nhận sẽ bị xóa. Giao dịch đã xác nhận vẫn được giữ.</p><div className="r-two-options"><button type="button" className="r-secondary" onClick={close}>Quay lại</button><button type="button" className="r-danger" onClick={resetConversation}>Xóa hội thoại</button></div></div></Modal>}
     {modal === "memory" && <Modal title="Bộ nhớ của FinBridge" sheet onClose={close}><p>Hãy dạy FinBridge quy tắc của bạn để FinBridge sắp xếp giao dịch theo cách bạn muốn.</p><form className="r-rule-input" onSubmit={(e) => { e.preventDefault(); if (rule.trim()) updateState((s) => ({ ...s, rules: [...s.rules, rule.trim()] })); setRule(""); }}><input placeholder="Nhập quy tắc của bạn vào đây..." aria-label="Quy tắc" value={rule} onChange={(e) => setRule(e.target.value)} /><button className="r-primary" aria-label="Thêm quy tắc"><Plus /></button></form><small>Ví dụ:<br />- ăn tối với bạn bè được phân loại là giải trí<br />- thể thao luôn được xếp vào danh mục sức khỏe<br />- cho thuê được xếp vào danh mục nhà ở</small>{state.rules.length ? state.rules.map((r, i) => <div key={i} className="r-toggle-row"><span>{r}</span><button className="r-icon-button" aria-label="Xóa quy tắc" onClick={() => updateState((s) => ({ ...s, rules: s.rules.filter((_, index) => i !== index) }))}><X size={18} /></button></div>) : <div className="r-no-rules"><b>Chưa có quy tắc nào</b><p>Thêm một quy tắc ở trên để dạy FinBridge cách phân loại giao dịch của bạn.</p></div>}<div className="r-toggle-row"><span>Tự động cập nhật bộ nhớ<small>FinBridge lưu quy tắc khi bạn sửa danh mục.</small></span><Toggle checked={Boolean(state.settings.autoMemory)} label="Tự động cập nhật bộ nhớ" onChange={(v) => updateState((s) => ({ ...s, settings: { ...s.settings, autoMemory: v } }))} /></div></Modal>}
     {modal === "transfer" && <TransferForm onClose={close} />}

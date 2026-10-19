@@ -5,6 +5,7 @@ import { parseWorkspace, type WorkspaceRecord } from "@/lib/workspace-model";
 import { createWorkspaceWriter, type WorkspaceWriteStatus } from "@/lib/workspace-writer";
 import { readUserWorkspace } from "@/lib/workspace-storage";
 import { preferredLanguage, readPreferredLanguage, workspaceLanguage } from "@/lib/language-preference";
+import { financialWorkspaceFingerprint, workspaceRequest } from "@/lib/workspace-payload";
 
 const COPY = {
   en: { loading: "Loading your database workspace…", error: "Could not load your financial records. Check the database connection and try again.", retry: "Retry", migration: "Move your existing records to FinBridge's database", migrationHint: "This account has records saved on this device. Import them once so future edits are stored in PostgreSQL. The original copy stays unchanged.", import: "Import to database", saved: "Saved to your account", pending: "Changes waiting to save", saving: "Saving to your account…", failed: "Changes have not been saved. Keep this page open and retry.", conflict: "Another device updated this workspace. Your edits have not overwritten it. Download your unsaved copy before loading the database version.", download: "Download unsaved copy", reload: "Load database version", confirm: "Load the database version? Unsaved edits in this tab will be replaced. Download them first if you want to keep them." },
@@ -18,15 +19,14 @@ export function DatabaseWorkspace({ owner, children }: { owner: string; children
   const [lang, setLang] = useState<keyof typeof COPY>("en"), copy = COPY[lang];
   const save = useCallback(async (input: { revision: number; mutationId: string; data: AppState }) => {
     if (workspaceOwner() !== owner) throw new Error("ACCOUNT_CHANGED");
-    const response = await fetch("/api/workspace", { method: "POST", headers: { "content-type": "application/json", "x-finbridge-workspace-owner": owner }, body: JSON.stringify(input), signal: AbortSignal.timeout(20000) });
-    const result = await response.json(); if (!response.ok) throw new Error(result.error || "WORKSPACE_UNAVAILABLE"); return result as WorkspaceRecord;
+    return workspaceRequest(input, owner);
   }, [owner]);
   useEffect(() => {
     let active = true, timer: ReturnType<typeof setTimeout>;
     let unsubscribe = () => {}, unregister = () => {};
     async function load() {
       try {
-        const response = await fetch("/api/workspace", { headers: { "x-finbridge-workspace-owner": owner }, cache: "no-store", signal: AbortSignal.timeout(20000) });
+        const response = await fetch("/api/workspace", { headers: { "x-finbridge-workspace-owner": owner, "x-finbridge-compression": "gzip" }, cache: "no-store", signal: AbortSignal.timeout(20000) });
         if (!response.ok) throw new Error("WORKSPACE_UNAVAILABLE");
         const record: WorkspaceRecord = await response.json();
         if (!active || workspaceOwner() !== owner) return;
@@ -40,10 +40,19 @@ export function DatabaseWorkspace({ owner, children }: { owner: string; children
         data.settings.language = workspaceLanguage(language);
         data.settings.timeZone ||= Intl.DateTimeFormat().resolvedOptions().timeZone;
         replaceDatabaseWorkspace(owner, data);
-        const sync = createWorkspaceWriter({ revision: record.revision, initial: record.data || data, getState: getWorkspaceState, save, onStatus: value => { if (active) { setWriteStatus(value); if (value === "saved") window.dispatchEvent(new Event("finbridge:workspace-saved")); } } });
+        let lastFinancial = financialWorkspaceFingerprint(record.data || data);
+        const sync = createWorkspaceWriter({ revision: record.revision, initial: record.data || data, getState: getWorkspaceState, save, onStatus: value => {
+          if (!active) return;
+          setWriteStatus(value);
+          if (value === "saved") {
+            window.dispatchEvent(new Event("finbridge:workspace-saved"));
+            const financial = financialWorkspaceFingerprint(getWorkspaceState());
+            if (financial !== lastFinancial) { lastFinancial = financial; window.dispatchEvent(new Event("finbridge:financial-workspace-saved")); }
+          }
+        } });
         writer.current = sync;
         const changed = () => { if (!active || workspaceOwner() !== owner) return; setLang(preferredLanguage(getWorkspaceState().settings.language)); sync.changed(); clearTimeout(timer); timer = setTimeout(() => { void sync.flush().catch(() => {}); }, 600); };
-        unsubscribe = subscribeWorkspace(changed); unregister = registerWorkspaceFlusher(owner, () => sync.flush());
+        unsubscribe = subscribeWorkspace(changed); unregister = registerWorkspaceFlusher(owner, () => sync.flush(), () => sync.flushFinancial());
         changed(); setStatus("ready");
       } catch { if (active) setStatus("error"); }
     }

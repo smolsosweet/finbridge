@@ -1,0 +1,23 @@
+.plan{display:grid;gap:12px;width:100%;min-width:0;font-size:13px;color:var(--r-text)}
+.plan header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px}
+.plan small{display:block;color:var(--r-muted);font-size:11px;line-height:1.5}
+.plan article{display:grid;gap:12px;padding:12px;border:1px solid var(--r-line);border-radius:12px;background:var(--r-surface)}
+.plan section{display:grid;gap:6px;border-top:1px solid var(--r-line);padding-top:10px}
+.plan h3{font-size:13px;margin:0;font-weight:650}
+.plan p{margin:0;line-height:1.6}
+.metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}
+.metrics>div{padding:8px;background:color-mix(in srgb,var(--r-teal) 5%,var(--r-surface));border-radius:8px;min-width:0}
+.metrics dt{font-size:11px;color:var(--r-muted)}
+.metrics dd{margin:4px 0 0;font-weight:650;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.plan ol{display:grid;gap:8px;list-style:none;margin:0;padding:0}
+.plan li{display:flex;justify-content:space-between;gap:12px;padding-bottom:6px;border-bottom:1px solid var(--r-line)}
+.plan li>div{min-width:0;overflow-wrap:anywhere}
+.plan li>div:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.budget{padding:8px;border:1px solid var(--r-line);border-radius:8px}
+.plan details{font-size:12px;line-height:1.6}
+.plan summary{cursor:pointer;font-weight:600;min-height:32px;align-content:center}
+.plan details p{margin-top:6px}
+.risk{color:#b42318;font-weight:600}
+.plan button{padding:6px 9px;border:1px solid var(--r-line);border-radius:8px;background:var(--r-mint);color:var(--r-text);font-weight:600;min-height:36px;cursor:pointer}
+.plan :is(button,summary):focus-visible{outline:2px solid var(--r-teal);outline-offset:2px}
+@media(max-width:420px){.metrics{grid-template-columns:1fr}.plan li{flex-direction:column;gap:4px}.plan li>div:last-child{text-align:left}}

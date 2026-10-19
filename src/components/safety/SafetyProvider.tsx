@@ -38,8 +38,8 @@ function OwnedSafetyProvider({ children, owner }: { children: ReactNode; owner: 
       if (refreshing.current) refreshAgain.current = true;
       void refresh().catch(() => { if (active.current) setError("UNAVAILABLE"); });
     };
-    const timer = setInterval(update, 60000); window.addEventListener("finbridge:workspace-saved", update);
-    return () => { active.current = false; clearInterval(timer); window.removeEventListener("finbridge:workspace-saved", update); };
+    const timer = setInterval(update, 60000); window.addEventListener("finbridge:financial-workspace-saved", update);
+    return () => { active.current = false; clearInterval(timer); window.removeEventListener("finbridge:financial-workspace-saved", update); };
   }, [refresh]);
   const mutate = useCallback(async (command: Command) => {
     if (locked.current) throw new Error("BUSY");
