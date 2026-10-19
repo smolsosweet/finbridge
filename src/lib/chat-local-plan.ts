@@ -19,8 +19,8 @@ export function localPlanReply(state: AppState, asOf: string, walletIds?: string
   }[lang];
   const facts = calculateSpendingPlan(state, asOf, walletIds ? { walletIds } : {});
   const money = (n: number, c: string) => {
-    const digits = new Intl.NumberFormat("en", { style: "currency", currency: c }).resolvedOptions().maximumFractionDigits ?? 2;
-    return new Intl.NumberFormat(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: digits }).format(n) + " " + c;
+    const fractionDigits = c === "VND" || c === "JPY" || c === "KRW" ? 0 : 2;
+    return new Intl.NumberFormat("en-US", { minimumFractionDigits: fractionDigits, maximumFractionDigits: 2 }).format(n) + " " + c;
   };
   const lines = [
     ...facts.wallets.map(w => `${w.name} · ${w.currency}: ${t.now} ${w.balance === null ? t.missing : money(w.balance, w.currency)}; ${t.projected} (${facts.end}) ${w.projected === null ? t.missing : money(w.projected, w.currency)}.`),

@@ -77,8 +77,8 @@ export function parseDraftAmountCorrection(message: string): ParsedTransactionAm
 /** Draft amounts always include an unambiguous ISO currency code. */
 export function formatTransactionMoney(amount: number, currency: string): string {
   const code = currency.trim().toUpperCase();
-  const fractionDigits = new Intl.NumberFormat("vi-VN", { style: "currency", currency: code }).resolvedOptions().maximumFractionDigits ?? 2;
-  const formatted = new Intl.NumberFormat("vi-VN", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits }).format(amount);
+  const fractionDigits = code === "VND" || code === "JPY" || code === "KRW" ? 0 : 2;
+  const formatted = new Intl.NumberFormat("en-US", { minimumFractionDigits: fractionDigits, maximumFractionDigits: 2 }).format(amount);
   return `${formatted} ${code}`;
 }
 

@@ -24,6 +24,7 @@ import { SettingsOverview, settingsLanguage } from "./SettingsOverview";
 import { Field, Icon, Modal, Toggle } from "./Ui";
 import { CurrencySelect } from "./Tools";
 import { setSetting, money, updateState, useAppState, type Wallet } from "./store";
+import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 
 export const settingRows = [
   { name: "Cài đặt tài khoản", sub: "Tên người dùng, email, ngôn ngữ, định dạng tiền tệ & bảo mật", code: "f013", path: "accountSettings" },
@@ -406,8 +407,7 @@ export function AccountSettings({
             <>
               <div className="r-format-options">
                 {[
-                  ["separator", "Kiểu phân tách hàng nghìn", 'Sử dụng dấu "." làm dấu phân cách hàng nghìn (ví dụ: 1.000.000).'],
-                  ["symbolAfter", "Vị trí ký hiệu tiền tệ", "Hiển thị loại tiền tệ sau số tiền (ví dụ: 100.000 ₫)."],
+                  ["symbolAfter", "Vị trí ký hiệu tiền tệ", "Hiển thị loại tiền tệ sau số tiền (ví dụ: 100,000 ₫)."],
                   ["compact", "Định dạng rút gọn", "Hiển thị số tiền theo kiểu rút gọn (K, M, B)."],
                 ].map(([key, title, desc]) => (
                   <div key={key}>
@@ -639,7 +639,7 @@ export function WalletScreen({
   const isSentinel = Boolean(wallet && isSentinelWalletName(wallet.name));
   const [name, setName] = useState(isSentinel ? "" : (wallet?.name || ""));
   const [currency, setCurrency] = useState(wallet?.currency || "VND");
-  const [initial, setInitial] = useState(String(wallet?.initial || 0));
+  const [initial, setInitial] = useState(wallet?.initial ? formatCurrencyInput(wallet.initial) : "0");
 
   function handleSave(e: FormEvent) {
     e.preventDefault();
@@ -650,18 +650,20 @@ export function WalletScreen({
           : (trimmed || wallet?.name || "."))
       : (trimmed || t.defaultWalletName);
 
+    const parsedInitial = parseCurrencyInput(initial);
+
     if (walletId) {
       updateState((s) => ({
         ...s,
         wallets: s.wallets.map((w) =>
-          w.id === walletId ? { ...w, name: finalName, currency, initial: Number(initial) || 0 } : w
+          w.id === walletId ? { ...w, name: finalName, currency, initial: parsedInitial } : w
         ),
       }));
     } else {
       const id = "wallet_" + Date.now();
       updateState((s) => ({
         ...s,
-        wallets: [...s.wallets, { id, name: finalName, currency, initial: Number(initial) || 0, type: "cash" }],
+        wallets: [...s.wallets, { id, name: finalName, currency, initial: parsedInitial, type: "cash" }],
       }));
     }
     navigate("?tab=home");
@@ -705,7 +707,13 @@ export function WalletScreen({
           </label>
           <label>
             {t.initialBalanceLabel}
-            <input type="number" value={initial} onChange={(e) => setInitial(e.target.value)} />
+            <input
+              type="text"
+              inputMode="decimal"
+              value={initial}
+              onChange={(e) => setInitial(e.target.value)}
+              onBlur={() => setInitial(formatCurrencyInput(initial))}
+            />
           </label>
           <button type="submit" className="r-primary">
             {t.saveWallet}

@@ -12,6 +12,7 @@ import { categoryOperationError } from "@/lib/category-operation-copy";
 import type { AppState } from "@/components/sites/rolly/replica/store";
 import { workspaceRepository } from "@/lib/workspace-repository";
 import { spendingPlanAdjustmentSchema, spendingPlanOptionsSchema } from "@/lib/financial-outlook";
+import { financialConversationEntities, resolveObligationReference } from "@/lib/financial-obligation-query";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,7 +42,7 @@ const requestSchema = z.object({
   if (new Set(value.wallets.map((wallet) => wallet.id)).size !== value.wallets.length) context.addIssue({ code: "custom", path: ["wallets"], message: "Wallet IDs must be unique." });
 });
 
-const actions = ["none", "balance", "spending_summary", "category_breakdown", "top_category", "category_savings", "transactions", "budget_status", "safe_daily_allowance", "upcoming_obligations", "goals", "spending_trend", "anomalies", "explain", "unknown"] as const;
+const actions = ["none", "balance", "balance_after_obligation", "spending_summary", "category_breakdown", "top_category", "category_savings", "transactions", "budget_status", "safe_daily_allowance", "upcoming_obligations", "goals", "spending_trend", "anomalies", "explain", "unknown"] as const;
 const intents = conversationIntents;
 const fields = ["amount", "type", "category", "date", "wallet"] as const;
 const deleteScopes = ["none", "matching", "all"] as const;
@@ -184,6 +185,8 @@ export async function POST(request: Request) {
         `Ngày hiện tại theo múi giờ ${input.timeZone}: ${input.today}.`,
         `Ví đang hoạt động: ${JSON.stringify(input.wallets)}. Danh mục hợp lệ theo loại giao dịch (tên là định danh công khai trong workspace): ${JSON.stringify(input.categories)}. Chat gần đây: ${JSON.stringify(input.history)}. Tất cả bản nháp đang chờ: ${JSON.stringify(input.pendingDrafts || (input.pendingDraft ? [input.pendingDraft] : []))}. ID đang được bổ sung: ${input.activeDraftId || "không có"}. Danh mục vừa tham chiếu: ${JSON.stringify(input.referencedCategories || [])}.`,
         "Dùng ngữ cảnh lịch sử chỉ để phân giải đại từ, danh mục và kỳ thời gian. Không dùng lại số tiền/kết quả cũ; mọi phép tính sẽ chạy lại trên dữ liệu hiện hành của ứng dụng.",
+        `Scheduled bill references from the authorized workspace (names, IDs, wallet and dates only): ${JSON.stringify(authorizedWorkspace ? financialConversationEntities(authorizedWorkspace) : [])}.`,
+        "For a balance AFTER paying an existing scheduled bill, use intent=query_financial_data, action=balance_after_obligation, actions=[balance_after_obligation], searchTerm=the exact existing bill title, walletId=its wallet when uniquely resolved. This is a read-only immediate subtraction, not a transaction and not a month-end pace forecast. For 'hiện tại tôi còn bao nhiêu' / 'my current balance', use balance even after a hypothetical answer. Resolve 'that bill' from the user's named bill or the immediately preceding result; if ambiguous leave searchTerm=null and ask. Do not carry a hypothetical payment into the actual balance. For 'which is due next' or a repeated follow-up asking what is soon, use upcoming_obligations with periodStart=today and periodEnd=today+7 days unless the user specifies a different period. Keep an explicitly requested longer range. Other hypothetical changes still use simulate_financial_scenario. Never reuse a prior result amount.",
         `Spending plan context (parameters only): ${JSON.stringify(input.spendingPlan || null)}. When this context exists and the user changes a category spending percentage or protected reserve, return planAdjustment with the explicit walletId, currency if stated, category and percent for a reduction, reserve for an absolute protected amount, reset=true only for an explicit reset to saved assumptions. Other fields null. Use intent=simulate_financial_scenario, empty drafts and action=none; do not calculate amounts. Resolve follow-up references using the plan parameters. Never choose an arbitrary wallet when multiple are in scope. Changes are read-only simulations; never persist a reserve setting. For other requests return planAdjustment=null and use normal routing. When asked to explain the plan use action=explain; when asked to show it again use safe_daily_allowance. More complex what-if requests use the existing scenario planner, not planAdjustment.`,
         "Định tuyến bằng intent rõ ràng: create_transaction cho khoản thu/chi MỚI; update_pending_transaction cho sửa bản nháp; answer_clarification cho trả lời trường thiếu; query_financial_data cho tra cứu; analyze_spending cho phân tích; simulate_financial_scenario cho giả định tương lai; list_categories, create_category, rename_category, merge_categories, delete_category cho quản lý danh mục; delete_transactions CHỈ khi xóa giao dịch; general_finance_question cho kiến thức; unsupported_or_ambiguous_request khi cần hỏi lại.",
         "Finn CÓ THỂ đề xuất tạo ví, ngân sách và chi phí cố định, hỏi lần lượt thông tin thiếu rồi chờ người dùng xác nhận trước khi lưu. Với yêu cầu tạo ví mới, dùng intent=create_wallet; tạo ngân sách dùng create_budget; tạo lịch chi phí cố định dùng create_fixed_expense. Nếu người dùng hỏi tạo ngân sách và chi phí cố định cùng lúc, dùng create_budget. Không trả lời rằng không có quyền/không hỗ trợ; không nói đã tạo. Các intent này để drafts rỗng, action=none và reply rỗng; ứng dụng sẽ gọi luồng tạo có kiểm tra và xác nhận. Việc này không kết nối ngân hàng hay thanh toán thật.",
@@ -290,7 +293,7 @@ export async function POST(request: Request) {
       catch (error) { categoryOperation = null; categoryReply = categoryOperationError(error, "vi"); }
     }
     if (["create_category", "rename_category", "merge_categories", "delete_category"].includes(operationIntent) && !categoryOperation && /(?:đã|already|deleted|renamed|merged|created|已删除|已创建)/i.test(categoryReply)) categoryReply = "Bạn muốn thay đổi danh mục nào? Hãy nêu tên nguồn và tên mới hoặc danh mục đích.";
-    const walletId = value.walletId && allowedWallets.has(value.walletId) ? value.walletId : null;
+    let walletId = value.walletId && allowedWallets.has(value.walletId) ? value.walletId : null;
     let category = value.category && input.categories.some((item) => item.name === value.category) ? value.category : null;
     const deletionWalletId = value.deletionWalletId && allowedWallets.has(value.deletionWalletId) ? value.deletionWalletId : null;
     const deletionCategory = value.deletionCategory && input.categories.some((item) => item.name === value.deletionCategory) ? value.deletionCategory : null;
@@ -306,16 +309,18 @@ export async function POST(request: Request) {
       ? invalidDeletionTarget ? "matching" : value.deletionScope
       : "none";
     if (value.intent === "financial" && value.action !== "none") {
-      const resolved = resolveFinancialFollowup(input.message, {
+      let resolved = resolveFinancialFollowup(input.message, {
         action: value.action, actions: value.actions?.filter((action): action is FinancialAction => action !== "none"),
         walletId: value.walletId, scope: value.scope, periodStart: value.periodStart, periodEnd: value.periodEnd,
         category: value.category, searchTerm: value.searchTerm, transactionType: value.transactionType, percentage: value.percentage,
       }, input.history);
+      if (authorizedWorkspace) resolved = resolveObligationReference(input.message, resolved, authorizedWorkspace, input.history);
       Object.assign(value, resolved);
+      walletId = resolved.walletId && allowedWallets.has(resolved.walletId) ? resolved.walletId : null;
       category = resolved.category && input.categories.some((item) => item.name === resolved.category) ? resolved.category : null;
     }
     const requestedActions = [...new Set((value.actions?.length ? value.actions : [value.action]).filter((action) => action !== "none"))];
-    const requestsBalance = value.action === "balance" || !!value.actions?.includes("balance");
+    const requestsBalance = value.action === "balance" || !!value.actions?.includes("balance") || value.action === "balance_after_obligation";
     const asksAllWallets = requestsBalance && asksForAllWalletBalances(input.message);
     const resolvedWalletId = asksAllWallets ? null : walletId;
     const scope = requestsBalance && (!resolvedWalletId || asksAllWallets) ? "all" : value.scope;

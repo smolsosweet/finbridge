@@ -180,12 +180,14 @@ export function createInMemorySafetyRepository(): SafetyRepository & { ensureSna
     },
     async read(userId: string) {
       const doc = getDoc(userId);
-      return advanceSafety(doc, new Date());
+      const next = advanceSafety(structuredClone(doc), new Date());
+      documents.set(userId, next);
+      return structuredClone(next);
     },
     async mutate(userId: string, revision: number, action: string, change: (doc: SafetyDocument) => SafetyDocument, readIds?: readonly string[]) {
       const current = getDoc(userId);
       if (current.revision !== revision) throw new SafetyError("CONFLICT");
-      const updated = change(current);
+      const updated = change(structuredClone(current));
       if (action === "read" && readIds) {
         for (const e of updated.events) {
           if (readIds.includes(e.id)) e.read = true;
@@ -193,7 +195,7 @@ export function createInMemorySafetyRepository(): SafetyRepository & { ensureSna
       }
       const next = advanceSafety({ ...updated, revision: current.revision + 1 }, new Date());
       documents.set(userId, next);
-      return next;
+      return structuredClone(next);
     },
   };
 }

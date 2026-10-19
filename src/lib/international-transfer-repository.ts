@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { TRANSFER_REFERENCE_SQL } from "./transfer-reference-repository";
 import { transferSandboxEnabled } from "./transfer-runtime";
-import { assertTransferReady, quoteTransfer, transferDate, TransferError, TRANSFER_OPENING, TRANSFER_PROVIDERS, TRANSFER_RESERVE, type TransferBill, type TransferCommand, type TransferDocument, type TransferPlan, type TransferQuote } from "./international-transfer";
+import { transferCommandSchema, assertTransferReady, quoteTransfer, transferDate, TransferError, TRANSFER_OPENING, TRANSFER_PROVIDERS, TRANSFER_RESERVE, type TransferBill, type TransferCommand, type TransferDocument, type TransferPlan, type TransferQuote } from "./international-transfer";
 
 export const INTERNATIONAL_TRANSFER_SQL = TRANSFER_REFERENCE_SQL + `
 CREATE TABLE IF NOT EXISTS finbridge_transfer_controls (
@@ -177,154 +177,111 @@ export function internationalTransferRepository(pool: Pool, clock: () => Date = 
   };
 }
 
-export function createInMemoryTransferRepository(): TransferRepository {
+export function createInMemoryTransferRepository(clock: () => Date = () => new Date(), options: { sandboxEnabled?: boolean } = {}): TransferRepository {
+  const enabled = options.sandboxEnabled ?? transferSandboxEnabled();
   const documents = new Map<string, TransferDocument>();
-
+  const mutations = new Map<string, Map<string, { hash: string; resultId?: string }>>();
+  const limits = new Map<string, { at: number; requests: number }>();
   function getDoc(owner: string): TransferDocument {
-    let doc = documents.get(owner);
-    if (!doc) {
-      doc = {
-        mode: "sandbox",
-        sandboxEnabled: true,
-        paused: false,
-        reserve: TRANSFER_RESERVE,
-        accounts: [
-          { id: "ALIPAY", opening: TRANSFER_OPENING, spent: 0, balance: TRANSFER_OPENING },
-          { id: "BANK_A", opening: TRANSFER_OPENING, spent: 0, balance: TRANSFER_OPENING },
-        ],
-        bills: [],
-        quotes: [],
-        plans: [],
-        receipts: [],
-        audit: [],
-        serverTime: new Date().toISOString(),
-        hasMore: false,
-      };
-      documents.set(owner, doc);
-    }
-    return doc;
+    return documents.get(owner) || { mode: "sandbox", sandboxEnabled: enabled, paused: false, reserve: TRANSFER_RESERVE,
+      accounts: enabled ? (["ALIPAY", "BANK_A"] as const).map(id => ({ id, opening: TRANSFER_OPENING, spent: 0, balance: TRANSFER_OPENING })) : [],
+      bills: [], quotes: [], plans: [], receipts: [], audit: [], serverTime: clock().toISOString(), hasMore: false };
   }
-
+  function view(doc: TransferDocument): TransferDocument {
+    return structuredClone({ ...doc, quotes: doc.quotes.filter(q => Date.parse(q.expiresAt) > +clock()),
+      plans: doc.plans.slice(0, 200), receipts: doc.plans.filter(p => p.status === "completed"),
+      audit: doc.audit.slice(0, 200), serverTime: clock().toISOString(), hasMore: doc.plans.length > 200 });
+  }
   return {
-    async read(owner: string): Promise<TransferDocument> {
-      const doc = getDoc(owner);
-      return { ...doc, serverTime: new Date().toISOString() };
-    },
-    async mutate(owner: string, command: TransferCommand): Promise<TransferDocument & { resultId?: string }> {
-      const doc = getDoc(owner);
-      const now = new Date();
+    async read(owner) { return view(getDoc(owner)); },
+    async mutate(owner, untrusted) {
+      const parsed = transferCommandSchema.safeParse(untrusted);
+      if (!parsed.success) throw new TransferError("INVALID_COMMAND", 400);
+      const command = parsed.data, now = clock(), hash = createHash("sha256").update(JSON.stringify(command)).digest("hex");
+      if (!enabled && ["quote", "draft", "approve", "execute"].includes(command.action)) throw new TransferError("SANDBOX_DISABLED", 403);
+      const saved = mutations.get(owner) || new Map<string, { hash: string; resultId?: string }>();
+      const previous = saved.get(command.mutationId);
+      if (previous) {
+        if (previous.hash !== hash) throw new TransferError("MUTATION_MISMATCH");
+        return { ...view(getDoc(owner)), resultId: previous.resultId };
+      }
+      const limit = limits.get(owner);
+      if (limit && +now - limit.at < 60_000 && limit.requests >= 30) throw new TransferError("RATE_LIMITED", 429);
+      // Copy-on-write gives the demo the same all-or-nothing behavior on failure.
+      const doc = structuredClone(getDoc(owner));
+      const bill = (id: string) => { const b = doc.bills.find(b => b.id === id); if (!b) throw new TransferError("NOT_FOUND", 404); return b; };
+      const paid = (id: string) => doc.plans.some(p => p.bill.id === id && p.status === "completed");
+      const invalidate = (id: string) => { for (const p of doc.plans) if (p.bill.id === id && ["review", "approved"].includes(p.status)) { p.status = "invalidated"; delete p.approvedAt; } };
+      const audit = (event: string, targetId: string) => doc.audit.unshift({ id: randomUUID(), event, targetId, createdAt: now.toISOString() });
       let resultId: string | undefined;
-
-      switch (command.action) {
-        case "saveBill": {
-          if (command.id) {
-            const index = doc.bills.findIndex((b) => b.id === command.id);
-            if (index < 0) throw new TransferError("NOT_FOUND", 404);
-            const existing = doc.bills[index];
-            if (doc.plans.some((p) => p.bill.id === existing.id && p.status === "completed")) {
-              throw new TransferError("ALREADY_COMPLETED", 400);
-            }
-            doc.bills[index] = {
-              ...command.bill,
-              id: existing.id,
-              version: (command.version || existing.version) + 1,
-              archived: existing.archived,
-              createdAt: existing.createdAt,
-            };
+      if (command.action === "pause") {
+        doc.paused = command.paused;
+        if (command.paused) for (const p of doc.plans) if (p.status === "approved") { p.status = "review"; delete p.approvedAt; }
+        audit(command.paused ? "paused" : "resumed", owner);
+      } else if (command.action === "saveBill" || command.action === "archiveBill") {
+        const before = command.id ? bill(command.id) : null;
+        if (before && before.version !== command.version) throw new TransferError("BILL_CHANGED");
+        if (before && paid(before.id)) throw new TransferError("ALREADY_COMPLETED");
+        if (command.action === "saveBill" && command.bill.dueDate < transferDate(now)) throw new TransferError("BILL_OVERDUE", 400);
+        if (!before && doc.bills.length >= 100) throw new TransferError("BILL_LIMIT", 400);
+        const next: TransferBill = command.action === "saveBill"
+          ? { ...command.bill, id: before?.id || randomUUID(), version: (before?.version || 0) + 1, archived: before?.archived || false, createdAt: before?.createdAt || now.toISOString() }
+          : { ...before!, version: before!.version + 1, archived: command.archived };
+        if (doc.bills.some(b => b.id !== next.id && b.schoolId === next.schoolId && b.reference === next.reference)) throw new TransferError("DUPLICATE_REFERENCE");
+        doc.bills = [next, ...doc.bills.filter(b => b.id !== next.id)];
+        invalidate(next.id); resultId = next.id;
+        audit(command.action === "saveBill" ? before ? "billUpdated" : "billCreated" : next.archived ? "billArchived" : "billRestored", next.id);
+      } else if (command.action === "quote") {
+        const b = bill(command.id);
+        if (b.archived || b.version !== command.version) throw new TransferError("BILL_CHANGED");
+        if (paid(b.id)) throw new TransferError("ALREADY_COMPLETED");
+        if (b.dueDate < transferDate(now)) throw new TransferError("BILL_OVERDUE");
+        invalidate(b.id);
+        for (const q of doc.quotes) if (q.billId === b.id) q.expiresAt = now.toISOString();
+        doc.quotes.push(...TRANSFER_PROVIDERS.map(provider => quoteTransfer(b, provider, now, randomUUID())));
+        resultId = b.id; audit("quoted", b.id);
+      } else if (command.action === "draft") {
+        const q = doc.quotes.find(q => q.id === command.quoteId);
+        if (!q) throw new TransferError("NOT_FOUND", 404);
+        if (+now >= Date.parse(q.expiresAt)) throw new TransferError("QUOTE_EXPIRED");
+        const b = bill(q.billId);
+        if (paid(b.id)) throw new TransferError("ALREADY_COMPLETED");
+        const existing = doc.plans.find(p => p.quote.id === q.id);
+        if (existing) resultId = existing.id;
+        else {
+          const p: TransferPlan = { id: randomUUID(), bill: structuredClone(b), quote: structuredClone(q), status: "review", createdAt: now.toISOString() };
+          assertTransferReady(p, b, doc.paused, doc.accounts.find(a => a.id === q.provider)?.balance || 0, now);
+          invalidate(b.id); doc.plans.unshift(p); resultId = p.id; audit("drafted", p.id);
+        }
+      } else {
+        const p = doc.plans.find(p => p.id === command.id);
+        if (!p) throw new TransferError("NOT_FOUND", 404);
+        resultId = p.id;
+        if (p.status === "completed") {
+          if (command.action !== "execute") throw new TransferError("ALREADY_COMPLETED");
+        } else if (command.action === "cancel") {
+          if (!["review", "approved"].includes(p.status)) throw new TransferError("BILL_CHANGED");
+          p.status = "cancelled"; delete p.approvedAt; audit("cancelled", p.id);
+        } else {
+          const b = bill(p.bill.id);
+          if (paid(b.id)) throw new TransferError("ALREADY_COMPLETED");
+          const account = doc.accounts.find(a => a.id === p.quote.provider);
+          const balance = account?.balance || 0;
+          assertTransferReady(p, b, doc.paused, balance, now, command.action === "execute");
+          if (command.action === "approve") {
+            p.status = "approved"; p.approvedAt = now.toISOString(); audit("approved", p.id);
           } else {
-            if (doc.bills.some((b) => b.schoolId === command.bill.schoolId && b.reference === command.bill.reference)) {
-              throw new TransferError("DUPLICATE_REFERENCE", 400);
-            }
-            doc.bills.unshift({
-              ...command.bill,
-              id: randomUUID(),
-              version: 1,
-              archived: false,
-              createdAt: now.toISOString(),
-            });
+            p.status = "completed"; p.completedAt = now.toISOString(); p.receiptId = randomUUID();
+            p.balanceBefore = balance; p.balanceAfter = balance - p.quote.total;
+            account!.balance = p.balanceAfter; account!.spent += p.quote.total;
+            invalidate(b.id); audit("completed", p.id);
           }
-          break;
-        }
-        case "archiveBill": {
-          const b = doc.bills.find((item) => item.id === command.id);
-          if (!b) throw new TransferError("NOT_FOUND", 404);
-          b.archived = command.archived;
-          break;
-        }
-        case "quote": {
-          const b = doc.bills.find((item) => item.id === command.id);
-          if (!b) throw new TransferError("NOT_FOUND", 404);
-          if (doc.plans.some((p) => p.bill.id === b.id && p.status === "completed")) {
-            throw new TransferError("ALREADY_COMPLETED", 400);
-          }
-          const quotes: TransferQuote[] = TRANSFER_PROVIDERS.map((p) => quoteTransfer(b, p, now, randomUUID()));
-          doc.quotes = [...doc.quotes.filter((q) => q.billId !== b.id), ...quotes];
-          break;
-        }
-        case "draft": {
-          const q = doc.quotes.find((item) => item.id === command.quoteId);
-          if (!q) throw new TransferError("NOT_FOUND", 404);
-          if (!q.eligible) throw new TransferError("CHANNEL_UNAVAILABLE", 400);
-          const b = doc.bills.find((item) => item.id === q.billId);
-          if (!b) throw new TransferError("NOT_FOUND", 404);
-          const account = doc.accounts.find((a) => a.id === q.provider);
-          if (account && account.balance - q.total < doc.reserve) {
-            throw new TransferError("INSUFFICIENT_RESERVE", 400);
-          }
-          const p: TransferPlan = {
-            id: randomUUID(),
-            bill: b,
-            quote: q,
-            status: "review",
-            createdAt: now.toISOString(),
-          };
-          doc.plans.unshift(p);
-          resultId = p.id;
-          break;
-        }
-        case "approve": {
-          const p = doc.plans.find((item) => item.id === command.id);
-          if (!p) throw new TransferError("NOT_FOUND", 404);
-          p.status = "approved";
-          p.approvedAt = now.toISOString();
-          break;
-        }
-        case "execute": {
-          const p = doc.plans.find((item) => item.id === command.id);
-          if (!p) throw new TransferError("NOT_FOUND", 404);
-          if (p.status !== "approved") throw new TransferError("APPROVAL_REQUIRED", 400);
-          p.status = "completed";
-          p.completedAt = now.toISOString();
-          p.receiptId = randomUUID();
-          const account = doc.accounts.find((a) => a.id === p.quote.provider);
-          if (account) {
-            p.balanceBefore = account.balance;
-            account.spent += p.quote.total;
-            account.balance -= p.quote.total;
-            p.balanceAfter = account.balance;
-          }
-          doc.receipts.unshift(p);
-          doc.audit.unshift({
-            id: randomUUID(),
-            event: "completed",
-            targetId: p.id,
-            createdAt: now.toISOString(),
-          });
-          break;
-        }
-        case "cancel": {
-          const p = doc.plans.find((item) => item.id === command.id);
-          if (!p) throw new TransferError("NOT_FOUND", 404);
-          p.status = "cancelled";
-          break;
-        }
-        case "pause": {
-          doc.paused = command.paused;
-          break;
         }
       }
-
-      return { ...doc, resultId, serverTime: now.toISOString() };
+      saved.set(command.mutationId, { hash, resultId }); mutations.set(owner, saved);
+      limits.set(owner, limit && +now - limit.at < 60_000 ? { ...limit, requests: limit.requests + 1 } : { at: +now, requests: 1 });
+      documents.set(owner, doc);
+      return { ...view(doc), resultId };
     },
   };
 }

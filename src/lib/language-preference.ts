@@ -16,7 +16,15 @@ export function readPreferredLanguage(fallback: PreferredLanguage = "en"): Prefe
 export function rememberPreferredLanguage(value: unknown) {
   const language = preferredLanguage(value);
   try { localStorage.setItem(STORAGE_KEY, language); } catch { /* The current page can still use its selected language. */ }
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("finbridge:language-preference"));
   return language;
+}
+
+export function subscribePreferredLanguage(listener: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener("storage", listener);
+  window.addEventListener("finbridge:language-preference", listener);
+  return () => { window.removeEventListener("storage", listener); window.removeEventListener("finbridge:language-preference", listener); };
 }
 
 export function workspaceLanguage(language: PreferredLanguage) {

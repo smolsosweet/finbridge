@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { GoogleIcon } from "./Icons";
 import { authClient } from "@/lib/auth-client";
-import { AUTH_COPY, AUTH_LINKING_COPY, authLanguage, type AuthLanguage } from "@/lib/auth-copy";
+import { AUTH_COPY, AUTH_LINKING_COPY } from "@/lib/auth-copy";
 import { AUTH_FORM_COPY, type AuthMode } from "@/lib/auth-form-copy";
 import { AUTH_SIGNUP_NOTICE } from "@/lib/auth-notice-copy";
-import { readPreferredLanguage, rememberPreferredLanguage } from "@/lib/language-preference";
+import { usePreferredLanguage } from "@/components/auth/usePreferredLanguage";
+import { rememberPreferredLanguage } from "@/lib/language-preference";
 import { LanguageSelector } from "./LanguageSelector";
 import welcome from "./WelcomeScreen.module.css";
 import styles from "./AuthCard.module.css";
@@ -22,8 +23,7 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
   onBack: () => void; lang?: string; configured?: boolean; initialErrorCode?: string; preferStoredLanguage?: boolean;
   mode?: AuthMode; mailMode?: "local" | "smtp" | "brevo" | "unavailable"; token?: string; verified?: boolean;
 }) {
-  const [language, setLanguage] = useState<AuthLanguage>(authLanguage(lang));
-  useEffect(() => { if (preferStoredLanguage) setLanguage(readPreferredLanguage(authLanguage(lang))); }, [lang, preferStoredLanguage]);
+  const [language, setLanguage] = usePreferredLanguage(lang, preferStoredLanguage);
   const t = AUTH_COPY[language], f = AUTH_FORM_COPY[language];
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -118,7 +118,7 @@ export function AuthCard({ onBack, lang = "en", configured = false, initialError
         </button>
       </div>
       <div className={styles.headerRight}>
-        <LanguageSelector value={language} onChange={(next) => { rememberPreferredLanguage(next); setLanguage(next); }} />
+        <LanguageSelector value={language} onChange={setLanguage} />
       </div>
     </header>
     <div className={styles.content}>

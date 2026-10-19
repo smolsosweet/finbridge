@@ -28,7 +28,7 @@ export function InternationalTransfers({ navigate }: { navigate: (path: string) 
   const [calendar, setCalendar] = useState(false), [now, setNow] = useState(0);
   const [pending, setPending] = useState<Pending | null>(null);
   const offset = useRef(0), locked = useRef(false), generation = useRef(0);
-  const money = (amount: number | string, currency = "VND") => new Intl.NumberFormat(locale, { style: "currency", currency, currencyDisplay: "code" }).format(Number(amount));
+  const money = (amount: number | string, currency = "VND") => new Intl.NumberFormat("en-US", { style: "currency", currency, currencyDisplay: "code" }).format(Number(amount));
   const dateText = (value: string, time = false) => new Intl.DateTimeFormat(locale, { dateStyle: "medium", ...(time ? { timeStyle: "short" as const } : { timeZone: "UTC" }) }).format(new Date(value.length === 10 ? value + "T12:00:00Z" : value));
   const errorText = (code: string) => code === "SANDBOX_DISABLED" ? REFERENCE_COPY[lang].disabled : code === "UNAVAILABLE" ? t.error : t.errors[code as keyof typeof t.errors] || t.error;
   const accept = useCallback((result: Result) => { offset.current = Date.parse(result.serverTime) - Date.now(); setNow(Date.now() + offset.current); setDoc(result); }, []);

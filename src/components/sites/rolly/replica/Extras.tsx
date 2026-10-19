@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { useFeedbackSubmission } from "@/components/auth/useFeedbackSubmission";
 import { Check, ChevronLeft, ChevronRight, Flame, Plus, RotateCcw, Send, ThumbsUp } from "lucide-react";
 import { MonthCalendar } from "./Dashboard";
 import { Icon, Mascot, Modal, PageHeader, Toggle } from "./Ui";
@@ -66,121 +67,112 @@ const REQUESTS_I18N: Record<"vi" | "en" | "zh", [string, string][]> = {
   ],
 };
 
-const COMPLETED_REQUESTS_I18N: Record<"vi" | "en" | "zh", [string, string][]> = {
-  vi: [
-    ["Tải Lên Hóa Đơn", "Khi hóa đơn được tải lên, nó sẽ tự động được phân tích và thêm vào dưới dạng giao dịch."],
-    ["Nhắc Nhở Thông Báo", "FinBridge sẽ gửi thông báo đẩy để nhắc bạn thêm chi tiêu vào thời gian bạn đã chọn."],
-    ["Quản Lý Ví Chung", "Có thể mời người dùng khác vào ví và quản lý chi tiêu cùng nhau."],
-    ["Đặt Thời Gian Và Ngày Bắt Đầu Của Ngân Sách", "Ngân sách giờ đây có thể được tạo theo ngày, tuần hoặc tháng."],
-    ["Mục tiêu tiết kiệm có thể được đặt là định kỳ", "Khi tạo mục tiêu tiết kiệm, có tùy chọn để lặp lại hàng tháng hoặc hàng tuần"],
-    ["Tùy chỉnh tính cách của FinBridge", "Tạo và thiết lập tính cách cùng giọng điệu phản hồi của FinBridge theo cách bạn muốn – dù là trả lời như mẹ bạn, vợ bạn hay thậm chí là người bạn thầm thích."],
-    ["Lịch sử ngân sách kỳ trước", "Có thể xem số tiền đã chi trong ngân sách ở các chu kỳ trước."],
-    ["Danh mục con", "Cho phép tạo danh mục con dưới mỗi danh mục chính"],
-    ["Chế độ ngoại tuyến", "Có thể đọc và nhập giao dịch khi ngoại tuyến."],
-    ["Tạo ví thẻ tín dụng", "Đặt hạn mức tín dụng của bạn và xem còn lại bao nhiêu."],
-    ["Phiên bản web", "Có thể sử dụng ứng dụng FinBridge trên trang web bằng máy tính để bàn"],
-    ["Mở Khóa Sinh Trắc Học", "Có thể đặt ví yêu cầu mở khóa sinh trắc học để tăng cường quyền riêng tư."],
-    ["Thay đổi ngày bắt đầu tháng", "Có thể đặt ngày bắt đầu của tháng (ví dụ: ngày 15) cho những người nhận lương vào các ngày khác nhau"],
-    ["Nhiều danh mục cho ngân sách", "Có khả năng chọn nhiều danh mục trong một ngân sách."],
-    ["Nhiều Giao Dịch Cùng Lúc", "Bạn chỉ cần nhập nhiều giao dịch trong một câu và FinBridge sẽ tự động nhập từng giao dịch riêng lẻ cho bạn."],
-    ["Tiện Ích Màn Hình Chính", "Tổng quan chi tiêu của bạn trên trang chủ và liên kết nhanh đến trang thêm giao dịch."],
-    ["Tính năng vay", "Theo dõi số tiền cho vay và vay mượn"],
-    ["Chuyển tiếp email hóa đơn đến FinBridge", "Nhận địa chỉ email FinBridge của riêng bạn. Chuyển tiếp bất kỳ hóa đơn, thông báo ngân hàng hay phí đăng ký nào đến đó, FinBridge sẽ ghi lại giao dịch cho bạn và thông báo khi đã thêm xong."],
-    ["Lập ngân sách với AI", "Cho phép AI gợi ý ngân sách và tự động tạo ngân sách phù hợp"],
+const COMPLETED_REQUESTS_I18N = {
+  "vi": [
+    [
+      "Ví và lịch sử giao dịch",
+      "Theo dõi số dư, thu chi và lọc giao dịch theo ví."
+    ],
+    [
+      "Ngân sách và khoản chi cố định",
+      "Lập hạn mức và theo dõi lịch đến hạn."
+    ],
+    [
+      "Lịch thu chi",
+      "Xem giao dịch đã ghi nhận và các khoản dự kiến đến hạn."
+    ],
+    [
+      "Ba ngôn ngữ",
+      "Sử dụng giao diện tiếng Việt, English hoặc 中文."
+    ]
   ],
-  en: [
-    ["Receipt & Invoice Scanner", "Upload receipts or invoices to automatically parse and record them as verified transactions."],
-    ["Daily Notification Reminders", "FinBridge sends gentle push reminders at your chosen times so you never miss recording spending."],
-    ["Shared Wallet Collaboration", "Invite family members or team partners to collaborate on shared wallets in real time."],
-    ["Custom Budget Cycle & Start Dates", "Budgets can now follow daily, weekly, or monthly cadences tailored to your pay schedule."],
-    ["Recurring Savings Goals", "Set repeating weekly or monthly contributions towards your target financial savings goals."],
-    ["Custom AI Persona & Tone", "Customize FinBridge's AI conversation tone and personality to match your preferred communication style."],
-    ["Past Budget Cycle History", "Review previous periods' actual spending vs planned budget allocations with full retrospective analytics."],
-    ["Sub-category Hierarchies", "Create granular sub-categories nested beneath parent expense categories."],
-    ["Offline Mode Support", "Seamlessly read and record transactions even when disconnected from the internet."],
-    ["Credit Card Wallet Tracking", "Define credit limits, statement cycles, and monitor real-time available balances."],
-    ["Full Desktop Web Platform", "Access FinBridge from any modern web browser on desktop and laptop computers."],
-    ["Biometric Wallet Protection", "Lock sensitive individual wallets with biometric security for complete privacy."],
-    ["Flexible Month Start Day", "Configure the month start day (e.g. 15th) to match individual payroll and income cycles."],
-    ["Multi-category Budgeting", "Group and monitor multiple spending categories under a single unified budget envelope."],
-    ["Batch Transaction Natural Language Input", "Describe multiple purchases in one single sentence and FinBridge parses each one individually."],
-    ["Home Screen Widgets", "Glance at spending summaries on your home screen with one-tap shortcuts to record expenses."],
-    ["Loan & Debt Tracking", "Keep track of money lent, borrowed, installment schedules, and remaining balances."],
-    ["Email Bill Forwarding", "Get your dedicated FinBridge email address. Forward any invoice or bank receipt and it logs automatically."],
-    ["AI-assisted Budget Creation", "Let AI analyze your historical patterns and suggest realistic budgets tailored to your lifestyle."],
+  "en": [
+    [
+      "Wallets and transaction history",
+      "Track recorded balances, income and expenses, and filter by wallet."
+    ],
+    [
+      "Budgets and fixed expenses",
+      "Set spending limits and track scheduled commitments."
+    ],
+    [
+      "Cash-flow calendar",
+      "View recorded transactions and scheduled due dates."
+    ],
+    [
+      "Three languages",
+      "Use the interface in Vietnamese, English or Chinese."
+    ]
   ],
-  zh: [
-    ["单据与发票智能识别", "上传发票或小票，AI 自动解析并录入为正式交易明细。"],
-    ["每日记账通知提醒", "在您设定的时间接收推送提醒，培养每日清晰记账的好习惯。"],
-    ["多人共享钱包协作", "邀请家庭成员或伴侣加入钱包，共同协作管理日常开支。"],
-    ["自定义预算周期与起始日", "预算现已支持按日、周或月周期制定，更符合不同发薪节奏。"],
-    ["定期储蓄目标规划", "支持设定每周或每月的定期存款计划，稳步达成储蓄目标。"],
-    ["个性化 AI 交互人设", "自定义 FinBridge 的应答语调与个性风格，打造专属记账体验。"],
-    ["往期预算历史回溯", "随时查阅过往各周期的预算执行情况与支出对比。"],
-    ["多级子分类管理", "在各大支出分类下自由创建多级子类别，账目更细致。"],
-    ["全功能离线模式", "无网络环境下依然能够顺畅查阅与录入新交易。"],
-    ["信用卡专属钱包与额度追踪", "设置信用额度、账单日并实时监控可用额度与还款情况。"],
-    ["桌面端 Web 完整版本", "支持在电脑大屏浏览器上体验全功能 FinBridge 工作空间。"],
-    ["生物识别隐私保护", "为特定私密钱包开启指纹或面容锁，确保隐私无忧。"],
-    ["自定义月份起始日期", "支持设定账单月起始日（如每月15日），贴合个人实际发薪周期。"],
-    ["多类别组合预算", "可在单个预算中灵活关联多个支出类别。"],
-    ["自然语言一次批量录入", "一句话包含多项收支，FinBridge 自动拆解并分别入账。"],
-    ["主屏幕桌面小组件", "在主屏幕一览当期收支，一键直达记账界面。"],
-    ["借贷与欠款追踪管理", "清晰记录借入与借出账目，掌握每笔分期与待还明细。"],
-    ["账单邮件转发自动入账", "获得专属 FinBridge 邮箱，直接转发账单邮件即可自动生成记录。"],
-    ["AI 智能辅助预算编制", "由 AI 分析历史消费偏好，量身定制合理的收支预算方案。"],
-  ],
+  "zh": [
+    [
+      "钱包和交易记录",
+      "跟踪已记录余额、收支并按钱包筛选。"
+    ],
+    [
+      "预算和固定支出",
+      "设置支出限额，跟踪到期计划。"
+    ],
+    [
+      "收支日历",
+      "查看已记录交易和计划到期日。"
+    ],
+    [
+      "三种语言",
+      "支持越南语、英语和中文界面。"
+    ]
+  ]
 };
 
 const UI_TEXT = {
-  vi: {
-    title: "Yêu cầu tính năng",
-    subtitle: "Hãy bỏ phiếu cho các tính năng bạn muốn thấy hoặc đề xuất các tính năng mới cho FinBridge.",
-    completedBtn: "Xem yêu cầu đã hoàn thành ›",
-    inProgress: "Đang thực hiện",
-    underReview: "Đang được xem xét",
-    voteAria: "Bỏ phiếu: ",
-    suggestBtn: "Tôi có yêu cầu khác",
-    modalTitle: "Tôi có yêu cầu khác",
-    sentSuccess: "Cảm ơn bạn! Yêu cầu tính năng đã được gửi tới đội ngũ FinBridge.",
-    inputPlaceholder: "Mô tả tính năng hoặc ý tưởng bạn mong muốn FinBridge phát triển...",
-    inputNote: "Đội ngũ FinBridge sẽ ghi nhận và xem xét đưa tính năng này vào lộ trình cập nhật sắp tới.",
-    submitBtn: "Gửi yêu cầu",
-    completedTitle: "Yêu cầu tính năng đã hoàn thành",
-    completedSubtitle: "Chúng tôi đã hoàn thiện các tính năng bên dưới trong ứng dụng theo yêu cầu của bạn.",
+  "vi": {
+    "title": "Yêu cầu tính năng",
+    "subtitle": "Khám phá ý tưởng và gửi đề xuất. Nút thích chỉ lưu lựa chọn cá nhân, không phải phiếu bầu cộng đồng.",
+    "completedBtn": "Xem tính năng hiện có >",
+    "inProgress": "Ý tưởng tham khảo",
+    "underReview": "Ý tưởng tham khảo",
+    "voteAria": "Lưu ý tưởng yêu thích: ",
+    "suggestBtn": "Tôi có yêu cầu khác",
+    "modalTitle": "Đề xuất tính năng",
+    "sentSuccess": "Đã ghi nhận đề xuất trong hệ thống.",
+    "inputPlaceholder": "Mô tả tính năng bạn mong muốn...",
+    "inputNote": "Đề xuất được lưu trong hệ thống; chưa phải cam kết đưa vào lộ trình.",
+    "submitBtn": "Gửi đề xuất",
+    "completedTitle": "Tính năng hiện có",
+    "completedSubtitle": "Các chức năng hiện có trong FinBridge."
   },
-  en: {
-    title: "Feature requests",
-    subtitle: "Vote on features you would like to see or suggest new development ideas for FinBridge.",
-    completedBtn: "View completed requests ›",
-    inProgress: "In progress",
-    underReview: "Under review",
-    voteAria: "Vote: ",
-    suggestBtn: "Suggest another feature",
-    modalTitle: "Suggest another feature",
-    sentSuccess: "Thank you! Your feature suggestion has been submitted to the FinBridge team.",
-    inputPlaceholder: "Describe the feature or idea you would like FinBridge to build...",
-    inputNote: "The FinBridge team will review this and consider it for upcoming product roadmap updates.",
-    submitBtn: "Submit suggestion",
-    completedTitle: "Completed feature requests",
-    completedSubtitle: "We have shipped the following features in the application based on your community requests.",
+  "en": {
+    "title": "Feature requests",
+    "subtitle": "Explore ideas and submit a suggestion. Likes save personal preferences, not community votes.",
+    "completedBtn": "View available features >",
+    "inProgress": "Example idea",
+    "underReview": "Example idea",
+    "voteAria": "Save preferred idea: ",
+    "suggestBtn": "Suggest another feature",
+    "modalTitle": "Suggest a feature",
+    "sentSuccess": "Your suggestion was saved in the system.",
+    "inputPlaceholder": "Describe the feature you would like...",
+    "inputNote": "Suggestions are stored in the system, with no commitment to a release date.",
+    "submitBtn": "Submit suggestion",
+    "completedTitle": "Available features",
+    "completedSubtitle": "Features currently available in FinBridge."
   },
-  zh: {
-    title: "功能建议",
-    subtitle: "为您期待的功能投票或提出全新的创意建议，与我们一同完善 FinBridge。",
-    completedBtn: "查看已完成的功能 ›",
-    inProgress: "正在开发",
-    underReview: "评估中",
-    voteAria: "投票：",
-    suggestBtn: "我有其他建议",
-    modalTitle: "我有其他建议",
-    sentSuccess: "感谢您的反馈！功能建议已成功提交至 FinBridge 团队。",
-    inputPlaceholder: "请描述您期望 FinBridge 开发的功能或想法...",
-    inputNote: "FinBridge 团队将认真审阅并纳入后续产品迭代规划中。",
-    submitBtn: "提交建议",
-    completedTitle: "已实现的功能需求",
-    completedSubtitle: "我们已根据社区用户的建议在应用中上线了以下功能。",
-  },
+  "zh": {
+    "title": "功能建议",
+    "subtitle": "浏览想法并提交建议。点赞仅保存个人偏好，并非社区投票。",
+    "completedBtn": "查看现有功能 >",
+    "inProgress": "参考想法",
+    "underReview": "参考想法",
+    "voteAria": "保存喜欢的想法：",
+    "suggestBtn": "提出其他建议",
+    "modalTitle": "提交功能建议",
+    "sentSuccess": "建议已保存到系统。",
+    "inputPlaceholder": "描述您希望的功能…",
+    "inputNote": "建议将保存在系统中，并不代表已承诺上线时间。",
+    "submitBtn": "提交建议",
+    "completedTitle": "现有功能",
+    "completedSubtitle": "FinBridge 当前提供的功能。"
+  }
 };
 
 export function CompletedRequests({ navigate }: { navigate: (screen: string) => void }) {
@@ -214,17 +206,12 @@ export function FeatureRequests({ navigate }: { navigate: (screen: string) => vo
   const list = REQUESTS_I18N[lang] || REQUESTS_I18N.vi;
   const [other, setOther] = useState(false);
   const [customRequest, setCustomRequest] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const feedback = useFeedbackSubmission("feature", lang);
 
-  function handleSendRequest(e: React.FormEvent) {
+  async function handleSendRequest(e: React.FormEvent) {
     e.preventDefault();
     if (!customRequest.trim()) return;
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setCustomRequest("");
-      setOther(false);
-    }, 1500);
+    if (await feedback.submit("", customRequest)) setCustomRequest("");
   }
 
   return (
@@ -256,20 +243,22 @@ export function FeatureRequests({ navigate }: { navigate: (screen: string) => vo
           </article>
         ))}
       </div>
-      <button className="r-primary" onClick={() => setOther(true)}>
+      <button className="r-primary" onClick={() => { feedback.reset(); setOther(true); }}>
         {t.suggestBtn}
       </button>
       {other && (
         <Modal title={t.modalTitle} wide onClose={() => setOther(false)}>
-          {submitted ? (
+          {feedback.receipt ? (
             <div className="r-dialog-note" style={{ color: "var(--r-teal)", textAlign: "center", padding: "20px" }}>
-              {t.sentSuccess}
+              {feedback.copy.saved} <code>{feedback.receipt?.id}</code>
             </div>
           ) : (
             <form className="r-form" onSubmit={handleSendRequest}>
               <textarea
-                aria-label="Yêu cầu của bạn"
+                aria-label={t.modalTitle}
                 placeholder={t.inputPlaceholder}
+                maxLength={2000}
+                disabled={feedback.busy}
                 value={customRequest}
                 onChange={(e) => setCustomRequest(e.target.value)}
                 required
@@ -278,8 +267,9 @@ export function FeatureRequests({ navigate }: { navigate: (screen: string) => vo
               <p className="r-dialog-note">
                 {t.inputNote}
               </p>
-              <button type="submit" className="r-primary">
-                {t.submitBtn}
+              {feedback.error && <p role="alert">{feedback.error}</p>}
+              <button type="submit" className="r-primary" disabled={feedback.busy}>
+                {feedback.busy ? feedback.copy.busy : t.submitBtn}
               </button>
             </form>
           )}
@@ -297,17 +287,12 @@ export function FeatureRequestsModal({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<"active" | "completed">("active");
   const [other, setOther] = useState(false);
   const [customRequest, setCustomRequest] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const feedback = useFeedbackSubmission("feature", lang);
 
-  function handleSendRequest(e: React.FormEvent) {
+  async function handleSendRequest(e: React.FormEvent) {
     e.preventDefault();
     if (!customRequest.trim()) return;
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setCustomRequest("");
-      setOther(false);
-    }, 1500);
+    if (await feedback.submit("", customRequest)) setCustomRequest("");
   }
 
   return (
@@ -323,14 +308,14 @@ export function FeatureRequestsModal({ onClose }: { onClose: () => void }) {
               className={"fb-tab-btn" + (tab === "active" ? " active" : "")}
               onClick={() => { setTab("active"); setOther(false); }}
             >
-              {lang === "vi" ? "Đang bình chọn" : lang === "zh" ? "投票中" : "Active ideas"}
+              {lang === "vi" ? "Ý tưởng" : lang === "zh" ? "想法" : "Ideas"}
             </button>
             <button
               type="button"
               className={"fb-tab-btn" + (tab === "completed" ? " active" : "")}
               onClick={() => { setTab("completed"); setOther(false); }}
             >
-              {lang === "vi" ? "Đã hoàn thành" : lang === "zh" ? "已上线" : "Completed"}
+              {t.completedTitle}
             </button>
           </div>
         </div>
@@ -359,10 +344,10 @@ export function FeatureRequestsModal({ onClose }: { onClose: () => void }) {
 
             {other ? (
               <div className="fb-features-suggest-box">
-                {submitted ? (
+                {feedback.receipt ? (
                   <div className="fb-contact-success-msg">
                     <Check size={20} />
-                    <p>{t.sentSuccess}</p>
+                    <p>{feedback.copy.saved} <code>{feedback.receipt?.id}</code></p>
                   </div>
                 ) : (
                   <form onSubmit={handleSendRequest} className="fb-contact-form">
@@ -372,6 +357,8 @@ export function FeatureRequestsModal({ onClose }: { onClose: () => void }) {
                         className="fb-input"
                         rows={3}
                         placeholder={t.inputPlaceholder}
+                maxLength={2000}
+                disabled={feedback.busy}
                         value={customRequest}
                         onChange={(e) => setCustomRequest(e.target.value)}
                         required
@@ -382,9 +369,10 @@ export function FeatureRequestsModal({ onClose }: { onClose: () => void }) {
                       <button type="button" className="r-button" onClick={() => setOther(false)}>
                         {lang === "vi" ? "Hủy" : lang === "zh" ? "取消" : "Cancel"}
                       </button>
-                      <button type="submit" className="r-primary fb-contact-submit-btn">
+                      {feedback.error && <p role="alert">{feedback.error}</p>}
+                      <button type="submit" className="r-primary fb-contact-submit-btn" disabled={feedback.busy}>
                         <Send size={15} />
-                        <span>{t.submitBtn}</span>
+                        <span>{feedback.busy ? feedback.copy.busy : t.submitBtn}</span>
                       </button>
                     </div>
                   </form>
@@ -395,7 +383,7 @@ export function FeatureRequestsModal({ onClose }: { onClose: () => void }) {
                 <button type="button" className="r-button" onClick={onClose}>
                   {lang === "vi" ? "Đóng" : lang === "zh" ? "关闭" : "Close"}
                 </button>
-                <button type="button" className="r-primary" onClick={() => setOther(true)}>
+                <button type="button" className="r-primary" onClick={() => { feedback.reset(); setOther(true); }}>
                   <Plus size={16} />
                   <span>{t.suggestBtn}</span>
                 </button>

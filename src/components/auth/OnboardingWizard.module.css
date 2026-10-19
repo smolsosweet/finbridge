@@ -44,6 +44,10 @@
 .bills { display: flex; flex-direction: column; gap: 10px; }
 .bills li { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: #f8fafc; border-radius: 12px; }
 .bills small { display: block; color: #64748b; }
+.walletItem { cursor: pointer; border: 1.5px solid transparent; transition: border-color .15s ease, background-color .15s ease; }
+.walletItem:hover { background: #f1f5f9; }
+.activeWallet { border-color: #7b40f2 !important; background: #f5f3ff !important; }
+.activeWallet:hover { background: #efe9fe !important; }
 @media(max-width:600px) { .header { align-items: flex-start; gap: 10px; } .headerControls { flex-wrap: wrap; gap: 6px; } .exit { min-height: 32px; padding: 6px 8px; } }
 @media(max-width:480px) { .page { padding: 12px 16px; } .header b { font-size: 20px; } .headerControls { justify-content: flex-end; } .headerControls > span { width: 100%; text-align: right; } .intro { gap: 10px; padding: 10px 0; } .intro h1 { font-size: 22px; } .intro small { font-size: 11px; } .card { padding: 16px; gap: 12px; border-radius: 20px; } .row { flex-wrap: nowrap; } .row label { flex-basis: auto; } .footer { gap: 8px; } .footer button[type="submit"] { min-width: 0; font-size: 13px; padding: 12px 14px; } }
 @media(max-height:680px) { .page { padding-top: 8px; padding-bottom: 8px; } .intro { padding: 4px 0; } .intro > :first-child, .intro p, .intro small { display: none; } .intro h1 { margin: 0; } .card { padding-top: 12px; padding-bottom: 12px; } }

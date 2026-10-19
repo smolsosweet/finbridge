@@ -3,43 +3,25 @@ import { database } from "@/lib/database";
 import { handleTransferReference } from "@/lib/transfer-reference-handler";
 import { createInMemoryReferenceRepository, transferReferenceRepository } from "@/lib/transfer-reference-repository";
 
+import { isLocalDemoRequest } from "@/lib/local-demo";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function localDemo(request: Request) {
-  if (process.env.NODE_ENV !== "development" || process.env.FINBRIDGE_DEMO_MODE !== "true") return false;
-  const host = request.headers.get("host")?.split(":")[0];
-  const origin = request.headers.get("origin");
-  try {
-    return (host === "localhost" || host === "127.0.0.1") && (!origin || new URL(origin).host === request.headers.get("host"));
-  } catch {
-    return false;
-  }
-}
-
-let inMemoryRepo: ReturnType<typeof createInMemoryReferenceRepository> | null = null;
-function getRepository() {
-  try {
-    return transferReferenceRepository(database());
-  } catch {
-    return (inMemoryRepo ??= createInMemoryReferenceRepository());
-  }
-}
+let demoRepository: ReturnType<typeof createInMemoryReferenceRepository> | undefined;
 
 async function handle(request: Request) {
-  const session = await getSession();
-  const isDemo = !session && localDemo(request);
-  if (!session && !isDemo) {
-    return Response.json({ error: "UNAUTHENTICATED" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  try {
+    const session = await getSession();
+    const demo = !session && isLocalDemoRequest(request);
+    if (!session && !demo) return Response.json({ error: "UNAUTHENTICATED" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+    // Database/configuration failures never downgrade an authenticated account.
+    const repository = demo ? (demoRepository ??= createInMemoryReferenceRepository()) : transferReferenceRepository(database());
+    const owner = session?.user.id || "finbridge-local-demo";
+    const origin = demo ? new URL(request.url).origin : new URL(process.env.BETTER_AUTH_URL!).origin;
+    return await handleTransferReference(request, owner, origin, repository);
+  } catch {
+    return Response.json({ error: "UNAVAILABLE" }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
-
-  const owner = session?.user.id || "finbridge-local-demo";
-  const origin = process.env.BETTER_AUTH_URL
-    ? new URL(process.env.BETTER_AUTH_URL).origin
-    : request.headers.get("origin") || (request.headers.get("host") ? `http://${request.headers.get("host")}` : "http://localhost:3000");
-
-  return handleTransferReference(request, owner, origin, getRepository());
 }
-
 export const GET = handle;
 export const POST = handle;

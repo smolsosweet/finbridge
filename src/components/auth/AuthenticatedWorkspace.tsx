@@ -6,7 +6,8 @@ import { DatabaseWorkspace } from "./DatabaseWorkspace";
 import { authClient } from "@/lib/auth-client";
 import { AuthenticatedUserContext, type AuthenticatedUser } from "./AuthenticatedUser";
 import { SafetyProvider } from "@/components/safety/SafetyProvider";
-import { activateUserWorkspace, clearUserWorkspace, subscribeWorkspace, workspaceOwner } from "@/components/sites/rolly/replica/store";
+import { activateUserWorkspace, clearUserWorkspace, subscribeWorkspace, workspaceOwner, useAppState } from "@/components/sites/rolly/replica/store";
+import { resolveLanguage } from "@/lib/i18n";
 
 export function AuthenticatedWorkspace({ user, children, demoMode = false }: { user: AuthenticatedUser; children: ReactNode; demoMode?: boolean }) {
   if (demoMode) return <LocalDemoWorkspace user={user}>{children}</LocalDemoWorkspace>;
@@ -14,13 +15,19 @@ export function AuthenticatedWorkspace({ user, children, demoMode = false }: { u
 }
 
 function LocalDemoWorkspace({ user, children }: { user: AuthenticatedUser; children: ReactNode }) {
+  const state = useAppState();
+  const notice = {
+    vi: "Demo cục bộ: dữ liệu trên thiết bị và bộ nhớ tạm, không đồng bộ database.",
+    en: "Local demo: device storage and temporary server memory, without database sync.",
+    zh: "本地演示：数据使用设备存储和服务器临时内存，不同步到数据库。",
+  }[resolveLanguage(state.settings.language)];
   const ready = useSyncExternalStore(subscribeWorkspace, () => workspaceOwner() === user.id, () => false);
   useEffect(() => {
     activateUserWorkspace(user.id, user.name);
     return () => clearUserWorkspace(user.id);
   }, [user.id, user.name]);
   if (!ready) return <div role="status" className="min-h-screen grid place-items-center bg-[#f3f6f6] text-[#147d78]">FinBridge…</div>;
-  return <AuthenticatedUserContext.Provider value={user}><SafetyProvider>{children}</SafetyProvider></AuthenticatedUserContext.Provider>;
+  return <AuthenticatedUserContext.Provider value={user}><SafetyProvider><div role="status" className="fb-database-status">{notice}</div>{children}</SafetyProvider></AuthenticatedUserContext.Provider>;
 }
 
 function SessionWorkspace({ user, children }: { user: AuthenticatedUser; children: ReactNode }) {

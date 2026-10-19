@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Ban, CalendarDays, Check, ChevronDown, FolderTree, Info, Lock, Pencil, Plus, ReceiptText, RotateCcw, Search, Settings, SlidersHorizontal, Trash2, Wallet, X } from "lucide-react";
 import { EmptyState, Icon, Modal } from "./Ui";
@@ -11,6 +11,7 @@ import { WalletSettingsDirectory } from "./SettingsOverview";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
 import { FinBridgeHeader } from "./FinBridgeHeader";
 import { resolveLanguage, resolveWalletDisplayName, isSentinelWalletName, resolveCategoryDisplayName } from "@/lib/i18n";
+import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 
 type DashboardSample = {
   id: string;
@@ -955,25 +956,25 @@ function formatCompactMoney(amount: number, currency: string, lang: "vi" | "en" 
   if (amount === 0) return `0 ${curr}`;
   if (curr === "VND") {
     if (amount >= 1_000_000_000) {
-      const v = (amount / 1_000_000_000).toLocaleString(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: 1 });
+      const v = (amount / 1_000_000_000).toLocaleString("en-US", { maximumFractionDigits: 1 });
       return lang === "vi" ? `${v} tỷ VND` : lang === "zh" ? `${v}0亿 VND` : `${v}B VND`;
     }
     if (amount >= 1_000_000) {
-      const v = (amount / 1_000_000).toLocaleString(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: 1 });
+      const v = (amount / 1_000_000).toLocaleString("en-US", { maximumFractionDigits: 1 });
       return lang === "vi" ? `${v} tr VND` : lang === "zh" ? `${Math.round(amount / 10000)}万 VND` : `${v}M VND`;
     }
     if (amount >= 1_000) {
-      const v = (amount / 1_000).toLocaleString(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: 0 });
+      const v = (amount / 1_000).toLocaleString("en-US", { maximumFractionDigits: 0 });
       return lang === "vi" ? `${v} k VND` : lang === "zh" ? `${(amount / 10000).toFixed(1)}万 VND` : `${v}K VND`;
     }
-    return `${amount.toLocaleString(lang === "vi" ? "vi-VN" : "en-US")} VND`;
+    return `${amount.toLocaleString("en-US")} VND`;
   }
   if (amount >= 1_000_000) {
-    const v = (amount / 1_000_000).toLocaleString(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: 1 });
+    const v = (amount / 1_000_000).toLocaleString("en-US", { maximumFractionDigits: 1 });
     return `${v}M ${curr}`;
   }
   if (amount >= 1_000) {
-    const v = (amount / 1_000).toLocaleString(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: 1 });
+    const v = (amount / 1_000).toLocaleString("en-US", { maximumFractionDigits: 1 });
     return `${v}K ${curr}`;
   }
   return `${amount.toLocaleString("en-US")} ${curr}`;
@@ -1187,10 +1188,10 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
     const nextWallet: WalletType = {
       id: newId,
       name: newWalletName.trim(),
-      initial: Number(newWalletAmount || 0),
+      initial: parseCurrencyInput(newWalletAmount),
       currency: newWalletCurrency,
       type: newWalletType,
-      limit: newWalletType === "credit" ? Number(newWalletLimit) || undefined : undefined,
+      limit: newWalletType === "credit" ? parseCurrencyInput(newWalletLimit) || undefined : undefined,
     };
     updateState((s) => ({ ...s, wallets: [...s.wallets, nextWallet] }));
     setWalletId(newId);
@@ -1222,8 +1223,8 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
     setEditWalletName(isSentinelWalletName(target.name) ? t.mainWallet : target.name);
     setEditWalletType(target.type === "credit" ? "credit" : "cash");
     setEditWalletCurrency(target.currency || "VND");
-    setEditWalletInitial(String(target.initial || 0));
-    setEditWalletLimit(target.limit ? String(target.limit) : "");
+    setEditWalletInitial(formatCurrencyInput(target.initial || 0));
+    setEditWalletLimit(target.limit ? formatCurrencyInput(target.limit) : "");
     setManageWalletTab("details");
     setIsReconciling(false);
     setNewActualBalance("");
@@ -1234,11 +1235,17 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
     setModal("manageWallet");
   };
 
+  const openWalletFromRoute = useEffectEvent((id: string) => openManageWalletModal(id));
+
   useEffect(() => {
     if (!walletSettingsMode || !queryWallet || openedWalletFromUrl.current === queryWallet) return;
     if (!state.wallets.some((item) => item.id === queryWallet)) return;
-    openedWalletFromUrl.current = queryWallet;
-    openManageWalletModal(queryWallet);
+    // Open the route-selected modal after the current page has committed.
+    const frame = requestAnimationFrame(() => {
+      openedWalletFromUrl.current = queryWallet;
+      openWalletFromRoute(queryWallet);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [walletSettingsMode, queryWallet, state.wallets]);
 
   const openWalletHistory = (targetWalletId: string) => {
@@ -1265,9 +1272,9 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
       ...target,
       name: persistentName,
       type: editWalletType,
-      limit: editWalletType === "credit" ? Number(editWalletLimit) || undefined : undefined,
+      limit: editWalletType === "credit" ? parseCurrencyInput(editWalletLimit) || undefined : undefined,
       currency: hasTxs ? target.currency : editWalletCurrency,
-      initial: hasTxs ? target.initial : Number(editWalletInitial || 0),
+      initial: hasTxs ? target.initial : parseCurrencyInput(editWalletInitial),
     };
     updateState((s) => ({
       ...s,
@@ -1281,7 +1288,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
     const target = state.wallets.find((w) => w.id === editingWalletId);
     if (!target) return;
     const currentBal = target.initial + state.transactions.reduce((a, t) => a + (t.wallet === target.id ? (t.type === "income" ? t.amount : -t.amount) : t.targetWallet === target.id ? t.amount : 0), 0);
-    const targetBal = Number(newActualBalance);
+    const targetBal = parseCurrencyInput(newActualBalance);
     if (isNaN(targetBal)) return;
     const diff = targetBal - currentBal;
     if (Math.abs(diff) > 0.0001) {
@@ -2655,11 +2662,12 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
             </label>
             <input
               id="new-wallet-initial"
-              type="number"
-              step="any"
+              type="text"
+              inputMode="decimal"
               placeholder="0"
               value={newWalletAmount}
               onChange={(e) => setNewWalletAmount(e.target.value)}
+              onBlur={() => setNewWalletAmount(formatCurrencyInput(newWalletAmount))}
               className="fb-input"
             />
           </div>
@@ -2669,12 +2677,13 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
               <label className="fb-form-label" htmlFor="new-wallet-limit">{t.creditLimitLabel}</label>
               <input
                 id="new-wallet-limit"
-                type="number"
-                step="any"
+                type="text"
+                inputMode="decimal"
                 required
                 placeholder={t.creditLimitPlaceholder}
                 value={newWalletLimit}
                 onChange={(e) => setNewWalletLimit(e.target.value)}
+                onBlur={() => setNewWalletLimit(formatCurrencyInput(newWalletLimit))}
                 className="fb-input"
               />
             </div>
@@ -2943,13 +2952,14 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                     <label className="fb-form-label" htmlFor="edit-wallet-limit">{t.creditLimitLabel}</label>
                     <input
                       id="edit-wallet-limit"
-                      type="number"
-                      step="any"
+                      type="text"
+                      inputMode="decimal"
                       required
                       placeholder={t.creditLimitPlaceholder}
                       className="fb-input"
                       value={editWalletLimit}
                       onChange={(e) => setEditWalletLimit(e.target.value)}
+                      onBlur={() => setEditWalletLimit(formatCurrencyInput(editWalletLimit))}
                     />
                   </div>
                 )}
@@ -3005,12 +3015,13 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                   </div>
                   <input
                     id="edit-wallet-initial"
-                    type="number"
-                    step="any"
+                    type="text"
+                    inputMode="decimal"
                     disabled={hasTxs}
                     className={`fb-input ${hasTxs ? "fb-input-locked" : ""}`}
                     value={editWalletInitial}
                     onChange={(e) => setEditWalletInitial(e.target.value)}
+                    onBlur={() => setEditWalletInitial(formatCurrencyInput(editWalletInitial))}
                   />
                   {hasTxs ? (
                     <p className="fb-helper-text">
@@ -3039,7 +3050,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                         className="fb-reconcile-btn"
                         onClick={() => {
                           setIsReconciling(true);
-                          setNewActualBalance(currentBal.toString());
+                          setNewActualBalance(formatCurrencyInput(currentBal));
                         }}
                       >
                         <SlidersHorizontal size={14} />
@@ -3053,12 +3064,13 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
                           </label>
                           <input
                             id="actual-balance-input"
-                            type="number"
-                            step="any"
+                            type="text"
+                            inputMode="decimal"
                             required
                             className="fb-input"
                             value={newActualBalance}
                             onChange={(e) => setNewActualBalance(e.target.value)}
+                            onBlur={() => setNewActualBalance(formatCurrencyInput(newActualBalance))}
                             placeholder={t.reconcileActualBalancePlaceholder}
                           />
                         </div>

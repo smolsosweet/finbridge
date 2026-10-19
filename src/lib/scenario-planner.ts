@@ -741,7 +741,7 @@ export function normalizePlannerResponse(
         }));
 
         rawScenarios = [{
-          name: lang === "vi" ? `Giới hạn chi ${(newAmount ?? prevLimit?.amount ?? 0).toLocaleString("vi-VN")} ₫/ngày` : `Spend ${(newAmount ?? prevLimit?.amount ?? 0)}/day`,
+          name: lang === "vi" ? `Giới hạn chi ${(newAmount ?? prevLimit?.amount ?? 0).toLocaleString("en-US")} ₫/ngày` : `Spend ${(newAmount ?? prevLimit?.amount ?? 0)}/day`,
           dailySpendingLimits: updatedLimits,
           changes: prevScenario.changes || [],
           spendingReductions: prevScenario.spendingReductions || [],
@@ -755,7 +755,7 @@ export function normalizePlannerResponse(
           amount: newAmount,
         } : change);
         rawScenarios = [{
-          name: lang === "vi" ? `Khoản chi ${newAmount.toLocaleString("vi-VN")} ₫` : `Expense ${newAmount}`,
+          name: lang === "vi" ? `Khoản chi ${newAmount.toLocaleString("en-US")} ₫` : `Expense ${newAmount}`,
           changes: updatedChanges,
           dailySpendingLimits: prevScenario.dailySpendingLimits || [],
           spendingReductions: prevScenario.spendingReductions || [],
@@ -768,7 +768,7 @@ export function normalizePlannerResponse(
         const isDaily = parsedExpr.isDaily;
         const horizonEnd = prevScenario.horizonEnd || getEndOfMonth(input.today);
         rawScenarios = [{
-          name: lang === "vi" ? (isDaily ? `Giới hạn chi ${amount.toLocaleString("vi-VN")} ₫/ngày` : `Khoản chi ${amount.toLocaleString("vi-VN")} ₫`) : (isDaily ? `Spend ${amount}/day` : `Expense ${amount}`),
+          name: lang === "vi" ? (isDaily ? `Giới hạn chi ${amount.toLocaleString("en-US")} ₫/ngày` : `Khoản chi ${amount.toLocaleString("en-US")} ₫`) : (isDaily ? `Spend ${amount}/day` : `Expense ${amount}`),
           actions: [{
             kind: isDaily ? "daily_limit" : "change",
             amount,
@@ -789,7 +789,7 @@ export function normalizePlannerResponse(
       const isDaily = parsedExpr.isDaily;
       const horizonEnd = getEndOfMonth(input.today);
       rawScenarios = [{
-        name: lang === "vi" ? (isDaily ? `Giới hạn chi ${amount.toLocaleString("vi-VN")} ₫/ngày` : `Khoản chi ${amount.toLocaleString("vi-VN")} ₫`) : (isDaily ? `Spend ${amount}/day` : `Expense ${amount}`),
+        name: lang === "vi" ? (isDaily ? `Giới hạn chi ${amount.toLocaleString("en-US")} ₫/ngày` : `Khoản chi ${amount.toLocaleString("en-US")} ₫`) : (isDaily ? `Spend ${amount}/day` : `Expense ${amount}`),
         actions: [{
           kind: isDaily ? "daily_limit" : "change",
           amount,

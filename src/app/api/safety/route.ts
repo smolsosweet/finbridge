@@ -1,64 +1,33 @@
 import { getSession } from "@/lib/auth-session";
 import { database } from "@/lib/database";
-import { handleSafety } from "@/lib/safety-handler";
+import { handleSafety, safetyCommand } from "@/lib/safety-handler";
 import { createInMemorySafetyRepository, safetyRepository } from "@/lib/safety-repository";
 import { safetyEmailAvailable } from "@/lib/safety-mail";
 
+import { isLocalDemoRequest } from "@/lib/local-demo";
+
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function localDemo(request: Request) {
-  if (process.env.NODE_ENV !== "development" || process.env.FINBRIDGE_DEMO_MODE !== "true") return false;
-  const host = request.headers.get("host")?.split(":")[0];
-  const origin = request.headers.get("origin");
-  try {
-    return (host === "localhost" || host === "127.0.0.1") && (!origin || new URL(origin).host === request.headers.get("host"));
-  } catch {
-    return false;
-  }
-}
-
-let inMemoryRepo: ReturnType<typeof createInMemorySafetyRepository> | null = null;
-function getRepository() {
-  try {
-    return safetyRepository(database());
-  } catch {
-    return (inMemoryRepo ??= createInMemorySafetyRepository());
-  }
-}
+let demoRepository: ReturnType<typeof createInMemorySafetyRepository> | undefined;
 
 async function handle(request: Request) {
-  const session = await getSession();
-  const isDemo = !session && localDemo(request);
-  if (!session && !isDemo) {
-    return Response.json({ error: "UNAUTHENTICATED" }, { status: 401 });
-  }
-
-  const userId = session?.user.id || "finbridge-local-demo";
-  const origin = process.env.BETTER_AUTH_URL
-    ? new URL(process.env.BETTER_AUTH_URL).origin
-    : request.headers.get("origin") || (request.headers.get("host") ? `http://${request.headers.get("host")}` : "http://localhost:3000");
-
-  const repo = getRepository();
-
-  if (isDemo && repo.ensureSnapshotTargets && request.method === "POST") {
-    try {
-      const cloned = await request.clone().json();
-      if (cloned && typeof cloned === "object") {
-        const payload = cloned as { action?: string; rule?: any; rules?: any[] };
-        if (payload.action === "save" && payload.rule) {
-          repo.ensureSnapshotTargets(userId, [payload.rule]);
-        } else if (payload.action === "saveGroup" && Array.isArray(payload.rules)) {
-          repo.ensureSnapshotTargets(userId, payload.rules);
-        }
-      }
-    } catch {
-      // Body will be parsed and validated by handleSafety
+  try {
+    const session = await getSession();
+    const demo = !session && isLocalDemoRequest(request);
+    if (!session && !demo) return Response.json({ error: "UNAUTHENTICATED" }, { status: 401, headers: { "Cache-Control": "no-store" } });
+    // Database/configuration failures never downgrade an authenticated account.
+    const repository = demo ? (demoRepository ??= createInMemorySafetyRepository()) : safetyRepository(database());
+    const owner = session?.user.id || "finbridge-local-demo";
+    const origin = demo ? new URL(request.url).origin : new URL(process.env.BETTER_AUTH_URL!).origin;
+    if (demo && repository.ensureSnapshotTargets && request.method === "POST" && request.headers.get("x-finbridge-workspace-owner") === owner) {
+      const parsed = safetyCommand.safeParse(await request.clone().json().catch(() => null));
+      if (parsed.success && parsed.data.action === "save") repository.ensureSnapshotTargets(owner, [parsed.data.rule]);
+      if (parsed.success && parsed.data.action === "saveGroup") repository.ensureSnapshotTargets(owner, parsed.data.rules);
     }
+    return await handleSafety(request, owner, origin, repository, !demo && safetyEmailAvailable());
+  } catch {
+    return Response.json({ error: "UNAVAILABLE" }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
-
-  return handleSafety(request, userId, origin, repo, safetyEmailAvailable());
 }
-
 export const GET = handle;
 export const POST = handle;

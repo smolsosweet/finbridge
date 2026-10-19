@@ -228,9 +228,9 @@ test("normalizes explicit shorthand and currency amounts without mixing their IS
   assert.deepEqual(parseTransactionAmounts("mua đồ hết 5 tệ"), [{ amount: 5, currency: "CNY" }]);
   assert.deepEqual(parseTransactionAmounts("paid $1,250.50"), [{ amount: 1_250.5, currency: "USD" }]);
   assert.deepEqual(parseTransactionAmounts("chi 25k USD"), [{ amount: 25_000, currency: "USD" }]);
-  assert.equal(formatTransactionMoney(350_000, "VND"), "350.000 VND");
-  assert.equal(formatTransactionMoney(20, "USD"), "20,00 USD");
-  assert.equal(formatTransactionMoney(5, "CNY"), "5,00 CNY");
+  assert.equal(formatTransactionMoney(350_000, "VND"), "350,000 VND");
+  assert.equal(formatTransactionMoney(20, "USD"), "20.00 USD");
+  assert.equal(formatTransactionMoney(5, "CNY"), "5.00 CNY");
 });
 
 test("binds each explicit amount to its draft and asks for review when counts do not match", () => {
@@ -317,17 +317,17 @@ test("ranks this-month categories and calculates a contextual 20% reduction from
   const app = financialFixture();
   const top = answerFinancialQuery({ action: "top_category", walletId: "vnd", scope: "selected", periodStart: "2026-10-01", periodEnd: "2026-10-18", category: null, searchTerm: null, transactionType: "expense" }, app, "vnd", "2026-10-18");
   assert.match(top, /Thức ăn & Đồ uống/);
-  assert.match(top, /627\.000/);
+  assert.match(top, /627,000/);
   assert.match(top, /7/);
   assert.match(top, /76%/);
   const autoPeriod = answerFinancialQuery({ action: "top_category", walletId: "vnd", scope: "selected", periodStart: null, periodEnd: null, category: null, searchTerm: null, transactionType: "expense" }, app, "vnd", "2026-10-18");
   assert.match(autoPeriod, /2026-10-01.*2026-10-18/);
   const savings20 = answerFinancialQuery({ action: "category_savings", walletId: "vnd", scope: "selected", periodStart: "2026-10-01", periodEnd: "2026-10-18", category: "Thức ăn & Đồ uống", searchTerm: null, transactionType: "expense", percentage: 20 }, app, "vnd", "2026-10-18");
-  assert.match(savings20, /125\.400/);
-  assert.match(savings20, /501\.600/);
+  assert.match(savings20, /125,400/);
+  assert.match(savings20, /501,600/);
   const savings10 = answerFinancialQuery({ action: "category_savings", walletId: "vnd", scope: "selected", periodStart: "2026-10-01", periodEnd: "2026-10-18", category: "Thức ăn & Đồ uống", searchTerm: null, transactionType: "expense", percentage: 10 }, app, "vnd", "2026-10-18");
-  assert.match(savings10, /62\.700/);
-  assert.match(savings10, /564\.300/);
+  assert.match(savings10, /62,700/);
+  assert.match(savings10, /564,300/);
 });
 
 test("enumerates balances by wallet and keeps different currencies separate", () => {
@@ -349,7 +349,7 @@ test("enumerates balances by wallet and keeps different currencies separate", ()
 
 test("follow-up context keeps category and period references but does not send prior computed amounts", () => {
   const history = modelHistory([
-    { role: "assistant", text: "Thức ăn & Đồ uống · 627.000 VND", localOnly: true, financialContext: { action: "top_category", category: "Thức ăn & Đồ uống", periodStart: "2026-10-01", periodEnd: "2026-10-18" } },
+    { role: "assistant", text: "Thức ăn & Đồ uống · 627,000 VND", localOnly: true, financialContext: { action: "top_category", category: "Thức ăn & Đồ uống", periodStart: "2026-10-01", periodEnd: "2026-10-18" } },
     { role: "user", text: "Nếu giảm danh mục đó 20% thì sao?" },
   ]);
   assert.equal(history.length, 2);
@@ -368,9 +368,9 @@ test("category follow-ups change the tool, preserve the period and show every re
     assert.equal(resolved.action, "category_breakdown", text);
     assert.equal(resolved.category, null); assert.equal(resolved.periodStart, "2026-10-01");
     const answer = answerFinancialQuery(resolved, app, "vnd", "2026-10-18");
-    assert.match(answer, /Thức ăn & Đồ uống: \*\*627\.000 VND/);
-    assert.match(answer, /Mua sắm: \*\*200\.000 VND/);
-    assert.match(answer, /Tổng đã chi: \*\*827\.000 VND/);
+    assert.match(answer, /Thức ăn & Đồ uống: \*\*627,000 VND/);
+    assert.match(answer, /Mua sắm: \*\*200,000 VND/);
+    assert.match(answer, /Tổng đã chi: \*\*827,000 VND/);
     assert.doesNotMatch(answer, /AmericaBank|USD|Tổng hợp thu chi|₫/);
   }
   assert.deepEqual(app, before);
@@ -386,7 +386,7 @@ test("category breakdown lists more than five categories and isolates wallets an
   const query = { action: "category_breakdown", walletId: null, scope: "all", periodStart: "2026-10-01", periodEnd: "2026-10-18", category: null, searchTerm: null, transactionType: "expense" };
   const answer = answerFinancialQuery(query, app, "vnd", "2026-10-18");
   for (let i = 0; i < 6; i++) assert.ok(answer.includes(`Danh mục ${i}:`));
-  assert.match(answer, /833\.000 VND/); assert.match(answer, /12 USD/);
+  assert.match(answer, /833,000 VND/); assert.match(answer, /12 USD/);
   assert.doesNotMatch(answer, /833\.012/);
 });
 
@@ -399,9 +399,9 @@ test("spending answers count actual expenses only, format each language and resp
   );
   const query = { action: "spending_summary", walletId: "vnd", scope: "selected", periodStart: "2026-10-01", periodEnd: "2026-10-31", category: null, searchTerm: null, transactionType: null };
   let answer = answerFinancialQuery(query, app, "vnd", "2026-10-18");
-  assert.match(answer, /827\.000 VND/); assert.match(answer, /8 khoản chi/);
-  assert.match(answer, /5\.000\.000 VND/); assert.match(answer, /2026-10-18/);
-  assert.doesNotMatch(answer, /927\.000|9 khoản chi|₫|USD/);
+  assert.match(answer, /827,000 VND/); assert.match(answer, /8 khoản chi/);
+  assert.match(answer, /5,000,000 VND/); assert.match(answer, /2026-10-18/);
+  assert.doesNotMatch(answer, /927,000|9 khoản chi|₫|USD/);
   app.settings.language = "English";
   answer = answerFinancialQuery(query, app, "vnd", "2026-10-18");
   assert.match(answer, /827,000 VND/); assert.match(answer, /8 expenses/); assert.doesNotMatch(answer, /Bạn|khoản chi/);

@@ -1,6 +1,7 @@
 import type { AppState } from "../components/sites/rolly/replica/store";
 import { budgetSummary, currencyScale, occurrencePayment, plannedOccurrences } from "../components/sites/rolly/replica/planningModel";
 import { trackedBalance } from "./financial-outlook";
+import { balanceAfterObligation } from "./financial-obligation-query";
 
 const normalizeVietnameseMessage = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("vi").replace(/đ/g, "d").trim();
 export function asksForAllWalletBalances(message: string): boolean {
@@ -16,7 +17,7 @@ const copy: Record<Language, { conclusion: string; figures: string; analysis: st
   zh: { conclusion: "结论", figures: "相关数据", analysis: "分析", suggestions: "建议", limits: "假设/限制", noWallet: "没有可用于计算的活跃钱包。", noTransactions: "此时间段没有符合条件的交易。", noBudgets: "所选钱包没有符合条件的预算。", assumptions: "根据 FinBridge 已保存的数据计算；不同币种的钱包分别计算，不进行换算。", balanceConclusion: "余额根据钱包初始余额和已保存交易计算。", income: "收入", expense: "支出", transferOut: "转出", transferIn: "转入", incomplete: "跨币种转账缺少收款金额；此余额不完整", malformed: "已跳过金额无效的交易", period: "期间", wallet: "钱包", summary: (range) => `${range}的已记录收入与支出。`, totalIncome: "收入", totalExpense: "支出", noBudgetSuggestion: "请在计划页面创建预算以跟踪限额和固定支出。", budgetConclusion: "当前周期的预算和固定支出情况。", budgetLimit: "限额", spent: "已支出", fixed: "预计固定支出", afterFixed: "扣除固定支出后剩余", over: "可能超出限额", upcoming: "即将到期", extraFixed: "未来30天内未关联预算的固定支出", budgetAnalysis: "预算限额不等于钱包余额。固定支出与已记录支出分开显示。" },
 };
 export type FinancialState = Pick<AppState, "wallets" | "transactions" | "goals" | "fixedExpenses" | "settings">;
-export type FinancialAction = "balance" | "spending_summary" | "category_breakdown" | "top_category" | "category_savings" | "transactions" | "budget_status" | "safe_daily_allowance" | "upcoming_obligations" | "goals" | "spending_trend" | "anomalies" | "explain" | "unknown";
+export type FinancialAction = "balance" | "balance_after_obligation" | "spending_summary" | "category_breakdown" | "top_category" | "category_savings" | "transactions" | "budget_status" | "safe_daily_allowance" | "upcoming_obligations" | "goals" | "spending_trend" | "anomalies" | "explain" | "unknown";
 export interface FinancialQuery {
   action: FinancialAction;
   actions?: FinancialAction[];
@@ -35,6 +36,11 @@ export interface FinancialHighlight { label: string; amount: number; currency: s
  * action. Other financial intents remain the structured model's responsibility. */
 export function resolveFinancialFollowup(message: string, query: FinancialQuery, history: Array<{ role: string; text: string }> = []): FinancialQuery {
   const text = normalizeVietnameseMessage(message);
+  // Conditional payments must not return an unchanged actual balance.
+  const afterPayment = /(?:sau khi|neu|after|if|支付后|付完|如果).*(?:dong|tra|thanh toan|pay|paid|payment|支付|付)/.test(text);
+  if (afterPayment && query.action === "balance" && (!query.actions?.length || query.actions.every(action => action === "balance"))) {
+    return { ...query, action: "balance_after_obligation", actions: ["balance_after_obligation"] };
+  }
   const breakdown = /\b(?:chi(?: tieu)? (?:cho|vao|theo) (?:nhung |cac )?(?:danh )?muc (?:gi|nao)|chi (?:cho )?(?:nhung |cac )?danh muc nao|chi gom (?:nhung |cac )?(?:cai|muc) gi|danh muc (?:da chi|chi tieu)|spending (?:by|breakdown)|(?:which|what) categories|where did my money go)\b|支出类别|按类别/.test(text);
   if (!breakdown || !["spending_summary", "category_breakdown", "top_category", "explain", "unknown"].includes(query.action)) return query;
   if (query.actions && new Set(query.actions).size > 1) return query;
@@ -188,7 +194,9 @@ function answerFinancialQuerySection(
   lang: Language
 ): QuerySectionResult {
   const labels = copy[lang];
-  const money = (amount: number, currency: string) => `${new Intl.NumberFormat(lang === "vi" ? "vi-VN" : lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: Math.round(Math.log10(currencyScale(currency))) }).format(amount)} ${currency}`;
+  const money = (amount: number, currency: string) => `${new Intl.NumberFormat("en-US", { maximumFractionDigits: Math.round(Math.log10(currencyScale(currency))) }).format(amount)} ${currency}`;
+
+  if (action === "balance_after_obligation") return { conclusion: balanceAfterObligation(query, state, wallets, today, lang) };
 
   if (action === "balance") {
     const figures = wallets.map((wallet) => {

@@ -11,6 +11,7 @@ import { signOutGoogle } from "@/lib/sign-out";
 import { LanguageSelector } from "@/components/sites/rolly/LanguageSelector";
 import type { AppState } from "@/components/sites/rolly/replica/store";
 import { getWorkspaceState, updateState, workspacePersistence } from "@/components/sites/rolly/replica/store";
+import { formatCurrency, formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 import theme from "@/components/sites/rolly/WelcomeScreen.module.css";
 import styles from "./OnboardingWizard.module.css";
 
@@ -48,6 +49,8 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
   const lang = data.language, t = SETUP_COPY[lang];
   const [step, setStep] = useState(0), [walletIndex, setWalletIndex] = useState(0), [custom, setCustom] = useState("");
   const [hasFixed, setHasFixed] = useState(data.commitments.length > 0), [error, setError] = useState("");
+  const [walletInitialInputs, setWalletInitialInputs] = useState<Record<string, string>>({});
+  const [reserveInputs, setReserveInputs] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false); const inFlight = useRef(false);
   const [exiting, setExiting] = useState(false), [exitError, setExitError] = useState("");
   const exitText = EXIT_COPY[lang];
@@ -57,6 +60,26 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
   useEffect(() => { if (workspacePersistence() === "database") updateState(s => ({ ...s, onboardingDraft: data })); else { try { localStorage.setItem(key, JSON.stringify(data)); } catch { /* Demo setup remains editable. */ } } }, [data, key]);
   const wallet = data.wallets[walletIndex];
   const updateWallet = (patch: Partial<OnboardingData["wallets"][number]>) => setData(d => ({ ...d, wallets: d.wallets.map((w, i) => i === walletIndex ? { ...w, ...patch } : w) }));
+  const removeWallet = (walletId: string) => {
+    setData(d => ({
+      ...d,
+      wallets: d.wallets.filter(w => w.id !== walletId),
+      reserves: d.reserves.filter(r => r.walletId !== walletId),
+      commitments: d.commitments.filter(c => c.walletId !== walletId),
+    }));
+    setWalletInitialInputs(prev => {
+      const next = { ...prev };
+      delete next[walletId];
+      return next;
+    });
+    setWalletIndex(prev => {
+      const targetIdx = data.wallets.findIndex(w => w.id === walletId);
+      if (targetIdx === -1) return prev;
+      if (prev > targetIdx) return prev - 1;
+      if (prev === targetIdx) return Math.max(0, Math.min(prev, data.wallets.length - 2));
+      return prev;
+    });
+  };
   const setReserve = (walletId: string, value: number) => setData(d => ({ ...d, reserves: [...d.reserves.filter(r => r.walletId !== walletId), { walletId, amount: value }] }));
   const toggle = (field: "expenseCategories" | "incomeCategories", value: string) => setData(d => ({ ...d, [field]: d[field].some(c => categoryKey(c) === categoryKey(value)) ? d[field].filter(c => categoryKey(c) !== categoryKey(value)) : [...d[field], formatCategoryName(value)] }));
   function addCategory() {
@@ -76,7 +99,7 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
     const typedCategory = formatCategoryName(bill.category === OTHER_CATEGORY ? customBillCategory : bill.category);
     const normalizedCategory = categoryKey(typedCategory);
     const category = data.expenseCategories.find(item => categoryKey(item) === normalizedCategory) || typedCategory;
-    const commitment = { ...bill, id: crypto.randomUUID(), amount: Number(bill.amount), title: bill.title.trim(), category, dueDate };
+    const commitment = { ...bill, id: crypto.randomUUID(), amount: parseCurrencyInput(bill.amount), title: bill.title.trim(), category, dueDate };
     const sourceWallet = data.wallets.find(wallet => wallet.id === commitment.walletId);
     const allocated = data.commitments.filter(item => item.walletId === commitment.walletId).reduce((total, item) => total + item.amount, 0);
     const check = onboardingSchema.shape.commitments.safeParse([...data.commitments, commitment]);
@@ -123,7 +146,7 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
   const field = step === 3 ? "expenseCategories" : "incomeCategories";
   const selectedBillWallet = data.wallets.find(wallet => wallet.id === bill.walletId);
   const availableForFixed = selectedBillWallet ? Math.max(0, selectedBillWallet.initial - data.commitments.filter(item => item.walletId === selectedBillWallet.id).reduce((total, item) => total + item.amount, 0)) : 0;
-  const enteredBillAmount = Number(bill.amount);
+  const enteredBillAmount = parseCurrencyInput(bill.amount);
   const billAmountExceedsBalance = bill.amount !== "" && Number.isFinite(enteredBillAmount) && enteredBillAmount > availableForFixed + 0.000001;
   const hasFixedDraft = Boolean(bill.title.trim() || bill.amount || bill.category || customBillCategory.trim() || bill.dueDate);
   const billFieldError = (field: string) => billIssue?.field === field ? <span role="alert" className={styles.fieldError}>{billIssue.message}</span> : null;
@@ -136,7 +159,7 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
       <form onSubmit={next} onChange={() => { setBillIssue(null); setError(""); }} className={styles.card}>
         {step === 0 && <label>{t.name}<input required maxLength={80} autoComplete="given-name" value={data.displayName} onChange={e => setData(d => ({ ...d, displayName: e.target.value }))} /></label>}
         {step === 1 && <fieldset><legend>{t.occupation}</legend><div className={styles.options}>{OCCUPATIONS.map((job, i) => <button key={job} type="button" aria-pressed={data.occupation === job} onClick={() => setData(d => ({ ...d, occupation: job }))}>{t.jobs[i] || (lang === "vi" ? "Chưa muốn trả lời" : lang === "zh" ? "暂不提供" : "Prefer not to say")}{data.occupation === job && <Check size={16} />}</button>)}</div></fieldset>}
-        {step === 2 && wallet && <><p>{t.walletHint}</p>{!isStarterWorkspace(state) && <p className={styles.hint}>{t.existing}</p>}<label>{t.wallet} {walletIndex + 1}<input maxLength={80} required value={wallet.name} onChange={e => updateWallet({ name: e.target.value })} placeholder="Techcombank, Momo, Alipay…" /></label><div className={styles.row}><label>{t.balance}<input type="number" min={-1e12} max={1e12} step="0.01" required value={wallet.initial} onChange={e => updateWallet({ initial: e.target.valueAsNumber })} /></label><label>{t.currency}<select disabled={state.transactions.some(t => t.wallet === wallet.id || t.targetWallet === wallet.id)} value={wallet.currency} onChange={e => updateWallet({ currency: e.target.value as typeof wallet.currency })}>{Array.from(new Set([...SETUP_CURRENCIES, wallet.currency])).map(c => <option key={c}>{c}</option>)}</select></label></div><div className={styles.row}><button type="button" disabled={walletIndex === 0} onClick={() => setWalletIndex(i => i - 1)}>{t.previousWallet}</button><button type="button" disabled={walletIndex === data.wallets.length - 1} onClick={() => setWalletIndex(i => i + 1)}>{t.nextWallet}</button></div><button type="button" className={styles.outline} disabled={!wallet.name.trim() || data.wallets.length >= 30} onClick={() => { setData(d => ({ ...d, wallets: [...d.wallets, { id: crypto.randomUUID(), name: "", currency: wallet.currency, initial: 0 }] })); setWalletIndex(data.wallets.length); }}><Plus size={16} />{t.addWallet}</button>{data.wallets.length > 1 && !state.wallets.some(w => w.id === wallet.id) && <button type="button" onClick={() => { setData(d => ({ ...d, wallets: d.wallets.filter(w => w.id !== wallet.id), reserves: d.reserves.filter(r => r.walletId !== wallet.id), commitments: d.commitments.filter(c => c.walletId !== wallet.id) })); setWalletIndex(0); }}><Trash2 size={14} />{t.remove}</button>}</>}
+        {step === 2 && wallet && <><p>{t.walletHint}</p>{!isStarterWorkspace(state) && <p className={styles.hint}>{t.existing}</p>}<label>{t.wallet} {walletIndex + 1}<input maxLength={80} required value={wallet.name} onChange={e => updateWallet({ name: e.target.value })} placeholder="Techcombank, Momo, Alipay…" /></label><div className={styles.row}><label>{t.balance}<input type="text" inputMode="decimal" required value={walletInitialInputs[wallet.id] ?? (wallet.initial === 0 ? "0" : formatCurrencyInput(wallet.initial))} onChange={e => { const val = e.target.value; setWalletInitialInputs(prev => ({ ...prev, [wallet.id]: val })); updateWallet({ initial: parseCurrencyInput(val) }); }} onBlur={e => { const formatted = formatCurrencyInput(e.target.value); setWalletInitialInputs(prev => ({ ...prev, [wallet.id]: formatted })); updateWallet({ initial: parseCurrencyInput(formatted) }); }} /></label><label>{t.currency}<select disabled={state.transactions.some(t => t.wallet === wallet.id || t.targetWallet === wallet.id)} value={wallet.currency} onChange={e => updateWallet({ currency: e.target.value as typeof wallet.currency })}>{Array.from(new Set([...SETUP_CURRENCIES, wallet.currency])).map(c => <option key={c}>{c}</option>)}</select></label></div><div className={styles.row}><button type="button" disabled={walletIndex === 0} onClick={() => setWalletIndex(i => i - 1)}>{t.previousWallet}</button><button type="button" disabled={walletIndex === data.wallets.length - 1} onClick={() => setWalletIndex(i => i + 1)}>{t.nextWallet}</button></div><button type="button" className={styles.outline} disabled={!wallet.name.trim() || data.wallets.length >= 30} onClick={() => { setData(d => ({ ...d, wallets: [...d.wallets, { id: crypto.randomUUID(), name: "", currency: wallet.currency, initial: 0 }] })); setWalletIndex(data.wallets.length); }}><Plus size={16} />{t.addWallet}</button>{(data.wallets.length > 1 || Boolean(data.wallets[0]?.name.trim())) && <ul className={styles.bills}>{data.wallets.map((w, idx) => <li key={w.id} className={`${styles.walletItem} ${idx === walletIndex ? styles.activeWallet : ""}`} onClick={() => setWalletIndex(idx)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setWalletIndex(idx); } }}><span><b>{w.name.trim() || `${t.wallet} ${idx + 1}`}</b><small>{t.balance}: {formatCurrency(w.initial, w.currency)}</small></span>{data.wallets.length > 1 && !state.wallets.some(existing => existing.id === w.id) && <button type="button" aria-label={`${t.remove} ${w.name || `${t.wallet} ${idx + 1}`}`} onClick={e => { e.stopPropagation(); removeWallet(w.id); }}><Trash2 size={16} /></button>}</li>)}</ul>}</>}
         {(step === 3 || step === 4) && <><div className={styles.options}>{Array.from(new Set([...(step === 3 ? t.expense : t.income), ...data[field]].map(formatCategoryName))).map(c => <button key={c} type="button" aria-pressed={data[field].includes(c)} onClick={() => toggle(field, c)}>{c}{data[field].includes(c) && <Check size={16} />}</button>)}</div><div className={styles.row}><label>{t.custom}<input maxLength={80} value={custom} onBlur={() => setCustom(formatCategoryName(custom))} onChange={e => setCustom(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCategory(); } }} /></label><button type="button" className={styles.outline} onClick={addCategory}>{t.addCategory}</button></div></>}
         {step === 5 && <>
           <fieldset><legend>{t.fixed}</legend><div className={styles.options}><button type="button" aria-pressed={!hasFixed} onClick={() => setHasFixed(false)}>{t.no}</button><button type="button" aria-pressed={hasFixed} onClick={() => setHasFixed(true)}>{t.yes}</button></div></fieldset>
@@ -144,7 +167,7 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
             <label>{t.titleLabel}<input maxLength={80} value={bill.title} aria-invalid={billIssue?.field === "title"} onChange={e => setBill(b => ({ ...b, title: e.target.value }))} />{billFieldError("title")}</label>
             <div className={styles.row}>
               <label>{t.source}<select value={bill.walletId} onChange={e => { setBill(b => ({ ...b, walletId: e.target.value, amount: "" })); setError(""); }}>{data.wallets.map(w => <option value={w.id} key={w.id}>{w.name} · {w.currency}</option>)}</select></label>
-              <label>{t.amount}<input type="number" min="0.01" max={availableForFixed} step="0.01" value={bill.amount} aria-invalid={billAmountExceedsBalance || billIssue?.field === "amount"} aria-describedby={billAmountExceedsBalance ? "fixed-expense-amount-error" : undefined} onChange={e => { setBill(b => ({ ...b, amount: e.target.value })); setError(""); }} />{!billAmountExceedsBalance && billFieldError("amount")}</label>
+              <label>{t.amount}<input type="text" inputMode="decimal" value={bill.amount} aria-invalid={billAmountExceedsBalance || billIssue?.field === "amount"} aria-describedby={billAmountExceedsBalance ? "fixed-expense-amount-error" : undefined} onChange={e => { setBill(b => ({ ...b, amount: e.target.value })); setError(""); }} onBlur={e => setBill(b => ({ ...b, amount: formatCurrencyInput(e.target.value) }))} />{!billAmountExceedsBalance && billFieldError("amount")}</label>
             </div>
             {billAmountExceedsBalance && <p id="fixed-expense-amount-error" role="alert" className={styles.fieldError}>{FIXED_BALANCE_COPY[lang].exceeds}</p>}
             <label>{t.category}<select value={bill.category} aria-invalid={billIssue?.field === "category"} onChange={e => { const category = e.target.value; setBill(b => ({ ...b, category })); if (category !== OTHER_CATEGORY) setCustomBillCategory(""); setError(""); }}><option value="">—</option>{data.expenseCategories.map(c => <option key={c} value={c}>{c}</option>)}<option value={OTHER_CATEGORY}>{FIXED_BALANCE_COPY[lang].other}</option></select>{bill.category !== OTHER_CATEGORY && billFieldError("category")}</label>
@@ -154,11 +177,14 @@ export function OnboardingWizard({ userId, name, state, onComplete }: { userId: 
             <button type="button" className={styles.outline} disabled={billAmountExceedsBalance} onClick={addBill}><Plus size={16} />{t.addFixed}</button>
             {hasFixedDraft && <p role="status">{FIXED_STEP_COPY[lang].draft}</p>}
             {billIssue && !["title", "amount", "category", "dueDate"].includes(billIssue.field) && <p role="alert" className={styles.fieldError}>{billIssue.message}</p>}
-            <ul className={styles.bills}>{data.commitments.map(c => <li key={c.id}><span><b>{c.title}</b><small>{c.amount.toLocaleString()} {data.wallets.find(w => w.id === c.walletId)?.currency} · {c.dueDate} · {c.intervalMonths} {t.interval}</small></span><button type="button" aria-label={`${t.remove} ${c.title}`} onClick={() => setData(d => ({ ...d, commitments: d.commitments.filter(item => item.id !== c.id) }))}><Trash2 size={16} /></button></li>)}</ul>
+            <ul className={styles.bills}>{data.commitments.map(c => <li key={c.id}><span><b>{c.title}</b><small>{c.amount.toLocaleString("en-US")} {data.wallets.find(w => w.id === c.walletId)?.currency} · {c.dueDate} · {c.intervalMonths} {t.interval}</small></span><button type="button" aria-label={`${t.remove} ${c.title}`} onClick={() => setData(d => ({ ...d, commitments: d.commitments.filter(item => item.id !== c.id) }))}><Trash2 size={16} /></button></li>)}</ul>
             <p className={styles.hint}>{t.planned}</p>
           </>}
         </>}
-        {step === 6 && <><p>{t.reserveHint}</p>{data.wallets.map(w => <label key={w.id}>{t.reserve} · {w.name} ({w.currency})<input type="number" min={0} max={1e12} step="0.01" value={data.reserves.find(r => r.walletId === w.id)?.amount ?? 0} onChange={e => setReserve(w.id, e.target.valueAsNumber)} /></label>)}<small>{t.zero}</small></>}
+        {step === 6 && <><p>{t.reserveHint}</p>{data.wallets.map(w => {
+          const currentVal = data.reserves.find(r => r.walletId === w.id)?.amount ?? 0;
+          return <label key={w.id}>{t.reserve} · {w.name} ({w.currency})<input type="text" inputMode="decimal" value={reserveInputs[w.id] ?? (currentVal === 0 ? "0" : formatCurrencyInput(currentVal))} onChange={e => { const val = e.target.value; setReserveInputs(prev => ({ ...prev, [w.id]: val })); setReserve(w.id, parseCurrencyInput(val)); }} onBlur={e => { const formatted = formatCurrencyInput(e.target.value); setReserveInputs(prev => ({ ...prev, [w.id]: formatted })); setReserve(w.id, parseCurrencyInput(formatted)); }} /></label>;
+        })}<small>{t.zero}</small></>}
         {error && <p role="alert" className={styles.error}>{error}</p>}
         <footer className={styles.footer}><button type="button" disabled={step === 0 || saving} onClick={() => { setError(""); setStep(s => s - 1); }}><ArrowLeft size={16} />{t.back}</button><button type="submit" className={theme.start} disabled={saving || (step === 5 && hasFixed && billAmountExceedsBalance)}>{saving ? t.saving : step === 6 ? t.finish : t.next}<ArrowRight size={16} /></button></footer>
       </form>

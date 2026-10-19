@@ -28,6 +28,7 @@ import planStyles from "./FinancialOutlook.module.css";
 import { tools } from "./Tools";
 import { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName, type AppLanguage } from "@/lib/i18n";
 import { findTransactionsForDeletion, type TransactionDeletionCriteria } from "@/lib/transaction-deletion";
+import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 
 const lockedDeletionConfirmations = new Set<string>();
 
@@ -233,7 +234,7 @@ export function TransactionForm({
   const requestedWallet = state.wallets.find(w => !w.archived && w.currency === calendarParams.get("currency"));
   const [type, setType] = useState<"expense" | "income">(existing?.type === "income" ? "income" : "expense");
   const [title, setTitle] = useState(existing?.title || "");
-  const [amount, setAmount] = useState(existing ? String(existing.amount) : "");
+  const [amount, setAmount] = useState(existing ? formatCurrencyInput(existing.amount) : "");
   const [date, setDate] = useState((existing && ledgerDateKey(existing.date)) || requestedDate || today());
   const [category, setCategory] = useState(existing?.category || state.categories[0]);
   const [wallet, setWallet] = useState(existing?.wallet || requestedWallet?.id || state.wallets.find(w => !w.archived)?.id || "");
@@ -248,13 +249,14 @@ export function TransactionForm({
 
   const save = (e: FormEvent) => {
     e.preventDefault();
-    if (Number(amount) <= 0) return;
+    const parsedAmount = parseCurrencyInput(amount);
+    if (parsedAmount <= 0) return;
     const item: Transaction = {
       ...existing,
       id: existing?.id || crypto.randomUUID(),
       type,
       title,
-      amount: Number(amount),
+      amount: parsedAmount,
       date,
       category,
       subcategory,
@@ -309,11 +311,11 @@ export function TransactionForm({
         aria-label={t.amount}
         placeholder={t.amount}
         required
-        min="0.01"
-        step="any"
-        type="number"
+        type="text"
+        inputMode="decimal"
         value={amount}
         onChange={(e) => setAmount(e.target.value)}
+        onBlur={() => setAmount(formatCurrencyInput(amount))}
       />
 
       <Field label={t.category}>
@@ -1069,7 +1071,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         return;
       }
       if (ai.intent === "financial") {
-        const allowedActions: FinancialAction[] = ["balance", "spending_summary", "category_breakdown", "top_category", "category_savings", "transactions", "budget_status", "safe_daily_allowance", "upcoming_obligations", "goals", "spending_trend", "anomalies", "explain", "unknown"];
+        const allowedActions: FinancialAction[] = ["balance", "balance_after_obligation", "spending_summary", "category_breakdown", "top_category", "category_savings", "transactions", "budget_status", "safe_daily_allowance", "upcoming_obligations", "goals", "spending_trend", "anomalies", "explain", "unknown"];
         const actions = (ai.actions || [ai.action]).filter((action): action is FinancialAction => allowedActions.includes(action as FinancialAction));
         const localAnswer = answerFinancialQuery({
           action: allowedActions.includes(ai.action as FinancialAction) ? ai.action as FinancialAction : "unknown",
@@ -1082,6 +1084,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         const answer = typeof ai.financialAnswer === "string" ? ai.financialAnswer : localAnswer;
         setClarifyingDraftId(activeDraftId);
         setMessages((previous) => [...previous, { role: "assistant", text: answer, localOnly: true, financialContext: {
+          walletId: ai.walletId || wallet || null, scope: ai.scope === "all" ? "all" : "selected", searchTerm: ai.searchTerm || null,
           action: ai.action || "unknown", category: ai.category || null, periodStart: ai.periodStart || null,
           periodEnd: ai.periodEnd || null, percentage: ai.percentage ?? null,
         } }]);
@@ -1625,7 +1628,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
                 return <label key={transaction.id}>
                   <input type="checkbox" checked={deletion.selectedIds.includes(transaction.id)} disabled={!!deletingId} onChange={(event) => selectTransactionForDeletion(deletion.confirmationId, transaction.id, event.target.checked)} />
                   <span><b>{transaction.title}</b><small>{transaction.date.slice(0, 10)} · {transaction.category} · {transactionWallet?.name || "Ví"}</small></span>
-                  <strong>{transactionWallet ? formatTransactionMoney(transaction.amount, transactionWallet.currency) : `${transaction.amount.toLocaleString("vi-VN")} · Chưa rõ tiền tệ`}</strong>
+                  <strong>{transactionWallet ? formatTransactionMoney(transaction.amount, transactionWallet.currency) : `${transaction.amount.toLocaleString("en-US")} · Chưa rõ tiền tệ`}</strong>
                 </label>;
               })}</div> : <p>{copy.empty}</p>}
               <small>{deletion.selectedIds.length} {copy.selected.toLocaleLowerCase()}</small>
@@ -1639,7 +1642,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         {message.retryReceipt && failedReceiptFile && <button type="button" className="r-ai-clarify-button" disabled={busy} onClick={() => void readReceipt(failedReceiptFile)}>Thử lại ảnh</button>}
         {message.transaction && <button type="button" className="r-chat-record" onClick={() => navigate("editTransaction?id=" + message.transaction?.id)}>
           <small>Đã ghi: {message.transaction.type === "income" ? "Thu nhập" : "Chi phí"}</small><b>{message.transaction.category}</b>
-          <span>{(() => { const currency = state.wallets.find((item) => item.id === message.transaction?.wallet)?.currency; return currency ? formatTransactionMoney(message.transaction!.amount, currency) : `${message.transaction!.amount.toLocaleString("vi-VN")} · Chưa rõ tiền tệ`; })()}</span><small>{message.transaction.title}</small>
+          <span>{(() => { const currency = state.wallets.find((item) => item.id === message.transaction?.wallet)?.currency; return currency ? formatTransactionMoney(message.transaction!.amount, currency) : `${message.transaction!.amount.toLocaleString("en-US")} · Chưa rõ tiền tệ`; })()}</span><small>{message.transaction.title}</small>
         </button>}
         {message.walletChoiceDraftIds?.map((id) => {
           const pending = drafts.find((draft) => draft.id === id);
@@ -1725,7 +1728,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     {editingDraft && <Modal title="Chỉnh sửa bản nháp" sheet onClose={() => setEditingDraftId(null)}><div className="r-form">
       <p>Những thay đổi này chỉ sửa bản nháp. Giao dịch chỉ được lưu khi bạn bấm “Xác nhận” trong câu trả lời.</p>
       <label>Mô tả<input aria-label="Mô tả bản nháp" maxLength={160} value={editingDraft.title} onChange={(event) => editDraft(editingDraft.id, { title: event.target.value })} /></label>
-      <label>Số tiền<input aria-label="Số tiền bản nháp" type="number" min="0.01" step="any" value={editingDraft.amount ?? ""} onChange={(event) => editDraft(editingDraft.id, { amount: event.target.value ? Number(event.target.value) : null })} /></label>
+      <label>Số tiền<input aria-label="Số tiền bản nháp" type="text" inputMode="decimal" value={editingDraft.amount !== null && editingDraft.amount !== undefined ? formatCurrencyInput(editingDraft.amount) : ""} onChange={(event) => editDraft(editingDraft.id, { amount: parseCurrencyInput(event.target.value) || null })} onBlur={(event) => editDraft(editingDraft.id, { amount: parseCurrencyInput(event.target.value) || null })} /></label>
       <Field label="Loại"><select aria-label="Loại bản nháp" value={editingDraft.type || ""} onChange={(event) => editDraft(editingDraft.id, { type: event.target.value ? event.target.value as "expense" | "income" : null, category: null })}><option value="">Chọn loại</option><option value="expense">Chi phí</option><option value="income">Thu nhập</option></select></Field>
       <Field label="Danh mục"><select aria-label="Danh mục bản nháp" value={editingDraft.category || ""} onChange={(event) => editDraft(editingDraft.id, { category: event.target.value || null })}><option value="">Chọn danh mục</option>{state.categories.filter((name) => !state.categoryMeta[name]?.archived && (state.categoryMeta[name]?.type || "expense") === editingDraft.type).map((name) => <option key={name} value={name}>{name}</option>)}</select></Field>
       {!addingCategory ? <button type="button" className="r-ai-clarify-button" onClick={() => { setAddingCategory(true); setCategoryError(""); }}>+ Thêm danh mục mới</button> : <div className="r-ai-new-category"><input aria-label="Tên danh mục mới" maxLength={100} placeholder="Ví dụ: Y tế, Đi lại" value={newCategoryName} onChange={(event) => { setNewCategoryName(event.target.value); setCategoryError(""); }} /><button type="button" className="r-primary" disabled={!newCategoryName.trim()} onClick={createDraftCategory}>Tạo và chọn</button><button type="button" className="r-secondary" onClick={() => { setAddingCategory(false); setNewCategoryName(""); setCategoryError(""); }}>Hủy</button>{categoryError && <small role="alert">{categoryError}</small>}{similarDraftCategories(newCategoryName, state.categories.filter((name) => !state.categoryMeta[name]?.archived && (state.categoryMeta[name]?.type || "expense") === editingDraft.type)).map((name) => <button type="button" key={name} className="r-secondary" onClick={() => { editDraft(editingDraft.id, { category: name }); setAddingCategory(false); setNewCategoryName(""); setCategoryError(""); }}>Dùng danh mục gần giống: {name}</button>)}</div>}
@@ -1750,5 +1753,5 @@ function TransferForm({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState("");
   const [date, setDate] = useState("2026-10-12");
   const [error, setError] = useState("");
-  return <Modal title="Di chuyển Quỹ" sheet onClose={onClose}><p>Chuyển tiền đến ví khác</p><div className="r-type-pills r-align-left">{["Chuyển khoản", "Tiết kiệm", "Món nợ", "Lend/Borrow", "Thử thách"].map((type) => <button type="button" key={type} className={type === targetType ? "active" : ""} onClick={() => { setTargetType(type); setTarget(""); }}>{type}</button>)}</div><form className="r-form" onSubmit={(e) => { e.preventDefault(); if (targetType === "Chuyển khoản" && (!target || wallet === target)) { setError("Vui lòng chọn hai ví khác nhau."); return; } if (!target) { setError("Vui lòng tạo mục tiêu trước khi chuyển tiền."); return; } updateState((s) => ({ ...s, transactions: [...s.transactions, { id: crypto.randomUUID(), type: "transfer", title, amount: Number(amount), category: targetType, date, wallet, targetWallet: targetType === "Chuyển khoản" ? target : undefined, note }], goals: targetType === "Chuyển khoản" ? s.goals : s.goals.map((g) => g.id === target ? { ...g, saved: g.saved + Number(amount) } : g) })); onClose(); }}><Field label="Chọn ví"><select value={wallet} onChange={(e) => setWallet(e.target.value)}>{state.wallets.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field><Field label="Đến ví"><select value={target} onChange={(e) => setTarget(e.target.value)} required><option value="">Chọn</option>{targetType === "Chuyển khoản" ? state.wallets.map((w) => <option key={w.id} value={w.id}>{w.name}</option>) : state.goals.filter((g) => g.kind === tools.find((t) => t.name === targetType || (targetType === "Lend/Borrow" && t.path === "loanList"))?.path).map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}</select></Field><input aria-label="Mục" placeholder="Mục" value={title} onChange={(e) => setTitle(e.target.value)} /><input aria-label="Số tiền" placeholder={"Số tiền (" + currencySymbol(state.wallets.find((w) => w.id === wallet)?.currency || "USD") + ")"} required type="number" min="0.01" step="any" value={amount} onChange={(e) => setAmount(e.target.value)} /><Field label="Ngày"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field><textarea aria-label="Ghi chú" placeholder="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} />{error && <p className="r-expense" role="alert">{error}</p>}<button className="r-primary">Lưu</button></form></Modal>;
+  return <Modal title="Di chuyển Quỹ" sheet onClose={onClose}><p>Chuyển tiền đến ví khác</p><div className="r-type-pills r-align-left">{["Chuyển khoản", "Tiết kiệm", "Món nợ", "Lend/Borrow", "Thử thách"].map((type) => <button type="button" key={type} className={type === targetType ? "active" : ""} onClick={() => { setTargetType(type); setTarget(""); }}>{type}</button>)}</div><form className="r-form" onSubmit={(e) => { e.preventDefault(); const parsedAmount = parseCurrencyInput(amount); if (targetType === "Chuyển khoản" && (!target || wallet === target)) { setError("Vui lòng chọn hai ví khác nhau."); return; } if (!target) { setError("Vui lòng tạo mục tiêu trước khi chuyển tiền."); return; } updateState((s) => ({ ...s, transactions: [...s.transactions, { id: crypto.randomUUID(), type: "transfer", title, amount: parsedAmount, category: targetType, date, wallet, targetWallet: targetType === "Chuyển khoản" ? target : undefined, note }], goals: targetType === "Chuyển khoản" ? s.goals : s.goals.map((g) => g.id === target ? { ...g, saved: g.saved + parsedAmount } : g) })); onClose(); }}><Field label="Chọn ví"><select value={wallet} onChange={(e) => setWallet(e.target.value)}>{state.wallets.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field><Field label="Đến ví"><select value={target} onChange={(e) => setTarget(e.target.value)} required><option value="">Chọn</option>{targetType === "Chuyển khoản" ? state.wallets.map((w) => <option key={w.id} value={w.id}>{w.name}</option>) : state.goals.filter((g) => g.kind === tools.find((t) => t.name === targetType || (targetType === "Lend/Borrow" && t.path === "loanList"))?.path).map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}</select></Field><input aria-label="Mục" placeholder="Mục" value={title} onChange={(e) => setTitle(e.target.value)} /><input aria-label="Số tiền" placeholder={"Số tiền (" + currencySymbol(state.wallets.find((w) => w.id === wallet)?.currency || "USD") + ")"} required type="text" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} onBlur={() => setAmount(formatCurrencyInput(amount))} /><Field label="Ngày"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field><textarea aria-label="Ghi chú" placeholder="Ghi chú" value={note} onChange={(e) => setNote(e.target.value)} />{error && <p className="r-expense" role="alert">{error}</p>}<button className="r-primary">Lưu</button></form></Modal>;
 }

@@ -5,6 +5,7 @@ import { initializeAccountLifecycle } from "../src/lib/account-lifecycle.ts";
 import { SAFETY_SQL } from "../src/lib/safety-repository.ts";
 import { WORKSPACE_SQL } from "../src/lib/workspace-repository.ts";
 import { FINANCE_TABLES_SQL } from "../src/lib/finance-tables.ts";
+import { FEEDBACK_SQL } from "../src/lib/feedback-repository.ts";
 export const financeTables = ["finbridge_fixed_expense_recipients", "finbridge_alert_rules", "finbridge_onboarding_drafts", "finbridge_transaction_drafts", "finbridge_chat_messages", "finbridge_conversations", "finbridge_preferences", "finbridge_categorization_rules", "finbridge_recurring_transactions", "finbridge_transactions", "finbridge_fixed_expenses", "finbridge_budgets", "finbridge_goals", "finbridge_category_children", "finbridge_wallet_categories", "finbridge_categories", "finbridge_wallets", "finbridge_workspace_revisions", "finbridge_workspace_limits", "finbridge_workspaces", "finbridge_safety_events", "finbridge_safety_changes", "finbridge_safety_limits", "finbridge_safety", "finbridge_account_lifecycle"];
 export async function testPool() {
   nextEnv.loadEnvConfig(process.cwd());
@@ -14,15 +15,17 @@ export async function testPool() {
   if (!["localhost", "127.0.0.1"].includes(url.hostname) || url.pathname !== "/finbridge_auth_test") throw new Error("Only isolated finbridge_auth_test is allowed");
   const pool = new Pool({ connectionString, max: 4 });
   await initializeAccountLifecycle(pool);
-  await pool.query(SAFETY_SQL); await pool.query(WORKSPACE_SQL); await pool.query(FINANCE_TABLES_SQL);
+  await pool.query(SAFETY_SQL); await pool.query(WORKSPACE_SQL); await pool.query(FINANCE_TABLES_SQL); await pool.query(FEEDBACK_SQL);
   return pool;
 }
 export async function syntheticUser(pool) {
   const id = "finance-test-" + randomUUID();
-  await pool.query('INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt") VALUES($1,$2,$3,true,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)', [id, "Synthetic finance test", id + "@example.invalid"]);
+  // Better Auth applies role defaults in its API; its generated SQL schema has no column default.
+  await pool.query('INSERT INTO "user"(id,name,email,"emailVerified","createdAt","updatedAt",role) VALUES($1,$2,$3,true,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,$4)', [id, "Synthetic finance test", id + "@example.invalid", "user"]);
   return id;
 }
 export async function cleanupFinance(pool, owners) {
+  for (const table of ["finbridge_feedback", "finbridge_feedback_limits"]) await pool.query(`DELETE FROM ${table} WHERE user_id=ANY($1::text[])`, [owners]);
   for (const table of financeTables) await pool.query(`DELETE FROM ${table} WHERE user_id=ANY($1::text[])`, [owners]);
   await pool.query('DELETE FROM "user" WHERE id=ANY($1::text[])', [owners]);
 }

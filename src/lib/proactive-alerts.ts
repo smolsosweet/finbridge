@@ -29,9 +29,8 @@ const addDays = (value: string, count: number) => {
   date.setDate(date.getDate() + count);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 };
-function formatMoney(amount: number, currency: string, language: string) {
-  const locale = /中文|zh/i.test(language) ? "zh-CN" : /English|en/i.test(language) ? "en-US" : "vi-VN";
-  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: new Intl.NumberFormat(locale, { style: "currency", currency }).resolvedOptions().maximumFractionDigits }).format(amount)} ${currency}`;
+function formatMoney(amount: number, currency: string, _language?: string) {
+  return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: new Intl.NumberFormat("en-US", { style: "currency", currency }).resolvedOptions().maximumFractionDigits }).format(amount)} ${currency}`;
 }
 function validAmount(amount: number) { return Number.isFinite(amount) && amount >= 0; }
 function validDate(value: string) {
