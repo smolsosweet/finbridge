@@ -16,6 +16,7 @@ import { financialConversationEntities, resolveObligationReference } from "@/lib
 import { assistantScenarioSchema, answerPresentationSchema, isDeferredAssistantReply, resolveAssistantScenario } from "@/lib/assistant-response";
 import { calculateScenario, scenarioContext } from "@/lib/scenario-planner";
 import { explicitPlanningDeletion, planningDeleteRequestSchema, planningDeletionCopy, planningEntities, preparePlanningDeletion } from "@/lib/planning-deletion";
+import { isFixedExpensePaymentMessage, isFixedExpenseStatusMessage, isPlanningEditMessage, prepareFixedExpensePayment, prepareFixedExpenseStatus, preparePlanningEdit, fixedExpensePaymentCopy, fixedExpenseStatusCopy, planningEditCopy } from "@/lib/planning-actions";
 import { workspaceSchema } from "@/lib/workspace-model";
 
 export const runtime = "nodejs";
@@ -256,6 +257,42 @@ export async function POST(request: Request) {
       try { proposal = preparePlanningDeletion(deletionState, deleteRequest, input.batchId); }
       catch { proposal = { ...preparePlanningDeletion(deletionState, { kind, ids: [], searchTerm: null, scope: "matching" }, input.batchId), selectedIds: [] }; }
       return Response.json({ intent: operationIntent, operationIntent, planningDeletion: proposal, drafts: [], reply: !proposal.targets.length ? planningDeletionCopy[language].empty : proposal.selectedIds.length ? planningDeletionCopy[language].review : planningDeletionCopy[language].choose });
+    }
+    const paymentRequested = deletionState && isFixedExpensePaymentMessage(input.message, deletionState);
+    if (paymentRequested) {
+      const language = /zh|中文/.test(String(authorizedWorkspace?.settings.language)) ? "zh" : /en|English/.test(String(authorizedWorkspace?.settings.language)) ? "en" : "vi";
+      const { proposal, clarification } = prepareFixedExpensePayment(deletionState, input.message, input.today, input.batchId);
+      return Response.json({
+        intent: "pay_fixed_expense",
+        operationIntent: "pay_fixed_expense",
+        fixedExpensePayment: proposal || null,
+        drafts: [],
+        reply: proposal ? fixedExpensePaymentCopy[language].note : (clarification || fixedExpensePaymentCopy[language].failed),
+      });
+    }
+    const statusRequested = deletionState && isFixedExpenseStatusMessage(input.message, deletionState);
+    if (statusRequested) {
+      const language = /zh|中文/.test(String(authorizedWorkspace?.settings.language)) ? "zh" : /en|English/.test(String(authorizedWorkspace?.settings.language)) ? "en" : "vi";
+      const { proposal, clarification } = prepareFixedExpenseStatus(deletionState, input.message, input.batchId);
+      return Response.json({
+        intent: statusRequested === "pause" ? "pause_fixed_expense" : "resume_fixed_expense",
+        operationIntent: statusRequested === "pause" ? "pause_fixed_expense" : "resume_fixed_expense",
+        fixedExpenseStatus: proposal || null,
+        drafts: [],
+        reply: proposal ? (proposal.action === "pause" ? fixedExpenseStatusCopy[language].pauseNote : fixedExpenseStatusCopy[language].resumeNote) : (clarification || fixedExpenseStatusCopy[language].failed),
+      });
+    }
+    const editRequested = deletionState && isPlanningEditMessage(input.message, deletionState);
+    if (editRequested) {
+      const language = /zh|中文/.test(String(authorizedWorkspace?.settings.language)) ? "zh" : /en|English/.test(String(authorizedWorkspace?.settings.language)) ? "en" : "vi";
+      const { proposal, clarification } = preparePlanningEdit(deletionState, input.message, input.batchId);
+      return Response.json({
+        intent: editRequested === "budget" ? "edit_budget" : "edit_fixed_expense",
+        operationIntent: editRequested === "budget" ? "edit_budget" : "edit_fixed_expense",
+        planningEdit: proposal || null,
+        drafts: [],
+        reply: proposal ? planningEditCopy[language].note : (clarification || planningEditCopy[language].failed),
+      });
     }
     if (isCategoryManagementMessage(input.message) && operationIntent === "delete_transactions") operationIntent = "unsupported_or_ambiguous_request";
     if (isClearlyNewTransaction(input.message) && ["update_pending_transaction", "answer_clarification"].includes(operationIntent)) operationIntent = "create_transaction";
