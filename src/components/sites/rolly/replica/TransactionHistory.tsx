@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowDownLeft, ArrowDownRight, ArrowRightLeft, ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Plus, ReceiptText, RotateCcw, Search, X } from "lucide-react";
+import { ArrowDownLeft, ArrowDownRight, ArrowRightLeft, ArrowUpRight, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Pencil, Plus, ReceiptText, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { DASHBOARD_SAMPLE } from "./Dashboard";
 import { localDateKey } from "./chartWeek";
 import { HistoryPeriodPicker, matchesHistoryPeriod, type HistoryPeriod } from "./HistoryPeriodPicker";
 import { CalendarLedgerModal } from "./CalendarLedgerModal";
-import { useAppState } from "./store";
+import { updateState, useAppState } from "./store";
 import { setSetting } from "./store";
 import { FinBridgeHeader } from "./FinBridgeHeader";
+import { Modal } from "./Ui";
 
 export { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName } from "@/lib/i18n";
 import { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName } from "@/lib/i18n";
@@ -93,6 +94,13 @@ const COPY = {
     colCategory: "Danh mục",
     colWallet: "Tài khoản",
     colAmount: "Số tiền",
+    colActions: "Thao tác",
+    edit: "Sửa",
+    delete: "Xóa",
+    editTransaction: "Sửa giao dịch",
+    deleteConfirmTitle: "Xóa giao dịch?",
+    deleteConfirmMessage: "Giao dịch này sẽ bị xóa khỏi lịch sử và số dư liên quan sẽ được tính lại.",
+    cancel: "Quay lại",
   },
   en: {
     title: "Transaction history",
@@ -153,6 +161,13 @@ const COPY = {
     colCategory: "Category",
     colWallet: "Account",
     colAmount: "Amount",
+    colActions: "Actions",
+    edit: "Edit",
+    delete: "Delete",
+    editTransaction: "Edit transaction",
+    deleteConfirmTitle: "Delete transaction?",
+    deleteConfirmMessage: "This transaction will be removed from the history and the related balances will be recalculated.",
+    cancel: "Cancel",
   },
   zh: {
     title: "交易记录",
@@ -213,6 +228,13 @@ const COPY = {
     colCategory: "类别",
     colWallet: "账户",
     colAmount: "金额",
+    colActions: "操作",
+    edit: "编辑",
+    delete: "删除",
+    editTransaction: "编辑交易",
+    deleteConfirmTitle: "删除交易？",
+    deleteConfirmMessage: "该交易将从历史记录中删除，相关余额会重新计算。",
+    cancel: "取消",
   },
 };
 
@@ -237,6 +259,7 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
   const [page, setPage] = useState(1);
   const [visibleLimit, setVisibleLimit] = useState(5);
   const [calendarLedgerOpen, setCalendarLedgerOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<HistoryRecord | null>(null);
   const nameOfWallet = (id?: string) => {
     const item = state.wallets.find((wallet) => wallet.id === id);
     return item ? resolveWalletDisplayName(item.name, lang) : text.missingWallet;
@@ -305,6 +328,15 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
 
   const handleToggleTheme = () => setSetting("theme", state.settings.theme === "dark" ? "light" : "dark");
   const handleSelectLanguage = (value: string) => setSetting("language", value);
+  const deleteTransaction = () => {
+    if (!deleteTarget || sample) return;
+    const id = deleteTarget.id;
+    updateState((current) => ({
+      ...current,
+      transactions: current.transactions.filter((transaction) => transaction.id !== id),
+    }));
+    setDeleteTarget(null);
+  };
 
   return <main className="r-dashboard fb-home fb-history">
     <FinBridgeHeader
@@ -458,6 +490,7 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
         <span className="fb-th-col fb-th-category">{text.colCategory}</span>
         <span className="fb-th-col fb-th-wallet">{text.colWallet}</span>
         <span className="fb-th-col fb-th-amount">{text.colAmount}</span>
+        {!sample && <span className="fb-th-col fb-th-actions">{text.colActions}</span>}
       </div>
       {visible.length === 0 ? (
         <div className="fb-history-empty">
@@ -507,6 +540,29 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
                 <b className="fb-history-amount">{sign}{amount(Math.abs(record.amount), currencyOf(record))}</b>
                 <span className="fb-history-recorded">{text.recorded}</span>
               </div>
+
+              {!sample && (
+                <div className="fb-history-col-actions" aria-label={`${text.colActions}: ${record.title || resolveCategoryDisplayName(record.category, lang, text.noCategory)}`}>
+                  <button
+                    type="button"
+                    className="fb-history-row-action"
+                    onClick={() => navigate(`editTransaction?id=${encodeURIComponent(record.id)}`)}
+                    aria-label={`${text.editTransaction}: ${record.title || resolveCategoryDisplayName(record.category, lang, text.noCategory)}`}
+                  >
+                    <Pencil size={14} aria-hidden="true" />
+                    <span>{text.edit}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="fb-history-row-action fb-history-row-delete"
+                    onClick={() => setDeleteTarget(record)}
+                    aria-label={`${text.delete}: ${record.title || resolveCategoryDisplayName(record.category, lang, text.noCategory)}`}
+                  >
+                    <Trash2 size={14} aria-hidden="true" />
+                    <span>{text.delete}</span>
+                  </button>
+                </div>
+              )}
 
               <div className="fb-history-details">
                 <details>
@@ -575,6 +631,17 @@ export function TransactionHistory({ navigate, defaultSearch = "" }: { navigate:
         onClose={() => setCalendarLedgerOpen(false)}
         navigate={navigate}
       />
+    )}
+    {deleteTarget && !sample && (
+      <Modal title={text.deleteConfirmTitle} onClose={() => setDeleteTarget(null)}>
+        <div className="r-form">
+          <p>{text.deleteConfirmMessage}</p>
+          <div className="r-two-options">
+            <button type="button" className="r-secondary" onClick={() => setDeleteTarget(null)}>{text.cancel}</button>
+            <button type="button" className="r-danger" onClick={deleteTransaction}>{text.delete}</button>
+          </div>
+        </div>
+      </Modal>
     )}
   </main>;
 }
