@@ -24,6 +24,30 @@ import { asksForCalculationExplanation, scenarioCalculationExplanation } from "@
 import { scenarioAnswer } from "@/lib/scenario-answer";
 import { applyPlanningDeletion, explicitPlanningDeletion, planningConfirmationReply, planningDeletionCopy, planningDeletionSchema, planningEntities, planningReferencesSchema, planningSelectionReply, type PlanningDeletion } from "@/lib/planning-deletion";
 import { PlanningDeletionCard } from "./PlanningDeletionCard";
+import { FixedExpensePaymentCard } from "./FixedExpensePaymentCard";
+import { FixedExpenseStatusCard } from "./FixedExpenseStatusCard";
+import { PlanningEditCard } from "./PlanningEditCard";
+import {
+  fixedExpensePaymentProposalSchema,
+  type FixedExpensePaymentProposal,
+  fixedExpenseStatusProposalSchema,
+  type FixedExpenseStatusProposal,
+  planningEditProposalSchema,
+  type PlanningEditProposal,
+  fixedExpensePaymentCopy,
+  fixedExpenseStatusCopy,
+  planningEditCopy,
+  isFixedExpensePaymentMessage,
+  isFixedExpenseStatusMessage,
+  isPlanningEditMessage,
+  prepareFixedExpensePayment,
+  prepareFixedExpenseStatus,
+  preparePlanningEdit,
+  applyFixedExpensePayment,
+  applyFixedExpenseStatus,
+  applyPlanningEdit,
+  planningActionConfirmationReply,
+} from "@/lib/planning-actions";
 import { hasCompatibleDraftWallet, unavailableWalletReply } from "@/lib/transaction-drafts";
 import { WorkspaceActionCard } from "./WorkspaceActionCard";
 import { applyWorkspaceProposal, inspectWorkspaceProposal, isWorkspaceCreationRequest, workspaceActionCopy, workspaceProposalSchema, type ActionField, type WorkspaceProposal } from "@/lib/workspace-actions";
@@ -33,6 +57,8 @@ import { tools } from "./Tools";
 import { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName, type AppLanguage } from "@/lib/i18n";
 import { findTransactionsForDeletion, type TransactionDeletionCriteria } from "@/lib/transaction-deletion";
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
+import { draftAmountWarnings } from "@/lib/draft-amount-warnings";
+import { DraftAmountWarnings } from "./DraftAmountWarnings";
 
 const lockedDeletionConfirmations = new Set<string>();
 const CATEGORY_FLOW_COPY = {
@@ -774,6 +800,119 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (workspaceOwner() === owner && conversationGeneration.current === generation) markPlanningDeletion(id, { status: "failed", applied, error: !applied && error instanceof Error && error.message === "PLANNING_DATA_CHANGED" ? t.stale : t.failed });
     } finally { workspaceCreationLock.current = false; setCommitting(false); }
   }
+  function markFixedExpensePayment(id: string, patch: Partial<FixedExpensePaymentProposal>) {
+    setMessages(previous => previous.map(item => item.fixedExpensePayment?.id === id ? { ...item, fixedExpensePayment: { ...item.fixedExpensePayment, ...patch } } : item));
+  }
+  function cancelFixedExpensePayment(id: string) {
+    if (busy || committing) return;
+    const proposal = [...messages].reverse().find(m => m.fixedExpensePayment?.id === id)?.fixedExpensePayment;
+    if (!proposal || proposal.applied || !["pending", "failed"].includes(proposal.status)) return;
+    markFixedExpensePayment(id, { status: "cancelled", error: undefined });
+  }
+  async function confirmFixedExpensePayment(id: string) {
+    if (workspaceCreationLock.current || busy || committing || categoryBusy || deletingId) return;
+    const proposal = [...messages].reverse().find(m => m.fixedExpensePayment?.id === id)?.fixedExpensePayment;
+    if (!proposal || !["pending", "failed"].includes(proposal.status)) return;
+    const owner = workspaceOwner(), generation = conversationGeneration.current;
+    const t = fixedExpensePaymentCopy[resolveLanguage(state.settings.language)];
+    let applied = !!proposal.applied;
+    workspaceCreationLock.current = true; setCommitting(true); markFixedExpensePayment(id, { status: "saving", error: undefined });
+    try {
+      if (!applied) {
+        await flushWorkspace(true);
+        if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+        updateState(current => {
+          if (workspaceOwner() !== owner) throw new Error("ACCOUNT_CHANGED");
+          const next = applyFixedExpensePayment(current, proposal, today());
+          const chat = next.transactionChat || { messages, drafts, clarifyingDraftId };
+          return { ...next, transactionChat: { ...chat, messages: chat.messages.map(item => item.fixedExpensePayment?.id === id ? { ...item, fixedExpensePayment: { ...item.fixedExpensePayment, status: "saving", applied: true } } : item) } };
+        });
+        applied = true; markFixedExpensePayment(id, { applied: true, status: "saving" });
+      }
+      await flushWorkspace(true);
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+      markFixedExpensePayment(id, { status: "confirmed", applied: true, error: undefined });
+      setMessages(previous => [...previous, { role: "assistant", text: t.saved }]);
+    } catch {
+      if (workspaceOwner() === owner && conversationGeneration.current === generation) markFixedExpensePayment(id, { status: "failed", applied, error: t.failed });
+    } finally { workspaceCreationLock.current = false; setCommitting(false); }
+  }
+
+  function markFixedExpenseStatus(id: string, patch: Partial<FixedExpenseStatusProposal>) {
+    setMessages(previous => previous.map(item => item.fixedExpenseStatus?.id === id ? { ...item, fixedExpenseStatus: { ...item.fixedExpenseStatus, ...patch } } : item));
+  }
+  function cancelFixedExpenseStatus(id: string) {
+    if (busy || committing) return;
+    const proposal = [...messages].reverse().find(m => m.fixedExpenseStatus?.id === id)?.fixedExpenseStatus;
+    if (!proposal || proposal.applied || !["pending", "failed"].includes(proposal.status)) return;
+    markFixedExpenseStatus(id, { status: "cancelled", error: undefined });
+  }
+  async function confirmFixedExpenseStatus(id: string) {
+    if (workspaceCreationLock.current || busy || committing || categoryBusy || deletingId) return;
+    const proposal = [...messages].reverse().find(m => m.fixedExpenseStatus?.id === id)?.fixedExpenseStatus;
+    if (!proposal || !["pending", "failed"].includes(proposal.status)) return;
+    const owner = workspaceOwner(), generation = conversationGeneration.current;
+    const t = fixedExpenseStatusCopy[resolveLanguage(state.settings.language)];
+    let applied = !!proposal.applied;
+    workspaceCreationLock.current = true; setCommitting(true); markFixedExpenseStatus(id, { status: "saving", error: undefined });
+    try {
+      if (!applied) {
+        await flushWorkspace(true);
+        if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+        updateState(current => {
+          if (workspaceOwner() !== owner) throw new Error("ACCOUNT_CHANGED");
+          const next = applyFixedExpenseStatus(current, proposal);
+          const chat = next.transactionChat || { messages, drafts, clarifyingDraftId };
+          return { ...next, transactionChat: { ...chat, messages: chat.messages.map(item => item.fixedExpenseStatus?.id === id ? { ...item, fixedExpenseStatus: { ...item.fixedExpenseStatus, status: "saving", applied: true } } : item) } };
+        });
+        applied = true; markFixedExpenseStatus(id, { applied: true, status: "saving" });
+      }
+      await flushWorkspace(true);
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+      markFixedExpenseStatus(id, { status: "confirmed", applied: true, error: undefined });
+      setMessages(previous => [...previous, { role: "assistant", text: t.saved }]);
+    } catch {
+      if (workspaceOwner() === owner && conversationGeneration.current === generation) markFixedExpenseStatus(id, { status: "failed", applied, error: t.failed });
+    } finally { workspaceCreationLock.current = false; setCommitting(false); }
+  }
+
+  function markPlanningEdit(id: string, patch: Partial<PlanningEditProposal>) {
+    setMessages(previous => previous.map(item => item.planningEdit?.id === id ? { ...item, planningEdit: { ...item.planningEdit, ...patch } } : item));
+  }
+  function cancelPlanningEdit(id: string) {
+    if (busy || committing) return;
+    const proposal = [...messages].reverse().find(m => m.planningEdit?.id === id)?.planningEdit;
+    if (!proposal || proposal.applied || !["pending", "failed"].includes(proposal.status)) return;
+    markPlanningEdit(id, { status: "cancelled", error: undefined });
+  }
+  async function confirmPlanningEdit(id: string) {
+    if (workspaceCreationLock.current || busy || committing || categoryBusy || deletingId) return;
+    const proposal = [...messages].reverse().find(m => m.planningEdit?.id === id)?.planningEdit;
+    if (!proposal || !["pending", "failed"].includes(proposal.status)) return;
+    const owner = workspaceOwner(), generation = conversationGeneration.current;
+    const t = planningEditCopy[resolveLanguage(state.settings.language)];
+    let applied = !!proposal.applied;
+    workspaceCreationLock.current = true; setCommitting(true); markPlanningEdit(id, { status: "saving", error: undefined });
+    try {
+      if (!applied) {
+        await flushWorkspace(true);
+        if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+        updateState(current => {
+          if (workspaceOwner() !== owner) throw new Error("ACCOUNT_CHANGED");
+          const next = applyPlanningEdit(current, proposal);
+          const chat = next.transactionChat || { messages, drafts, clarifyingDraftId };
+          return { ...next, transactionChat: { ...chat, messages: chat.messages.map(item => item.planningEdit?.id === id ? { ...item, planningEdit: { ...item.planningEdit, status: "saving", applied: true } } : item) } };
+        });
+        applied = true; markPlanningEdit(id, { applied: true, status: "saving" });
+      }
+      await flushWorkspace(true);
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+      markPlanningEdit(id, { status: "confirmed", applied: true, error: undefined });
+      setMessages(previous => [...previous, { role: "assistant", text: t.saved }]);
+    } catch {
+      if (workspaceOwner() === owner && conversationGeneration.current === generation) markPlanningEdit(id, { status: "failed", applied, error: t.failed });
+    } finally { workspaceCreationLock.current = false; setCommitting(false); }
+  }
   function cancelWorkspaceProposal(id: string) {
     if (busy || committing) return;
     const proposal = [...messages].reverse().find(item => item.workspaceProposal?.id === id)?.workspaceProposal;
@@ -909,6 +1048,67 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         setText(""); setMessages(previous => [...previous.map(m => m.planningDeletion?.id === pendingPlanningDeletion.id ? { ...m, planningDeletion: { ...m.planningDeletion, status: "cancelled" as const } } : m), { role: "user", text: message }, { role: "assistant", text: planningDeletionCopy[resolveLanguage(state.settings.language)].review, planningDeletion: { ...pendingPlanningDeletion, id: crypto.randomUUID(), selectedIds: [selection], status: "pending" } }]); return;
       }
     }
+    const pendingFixedExpensePayment = recentAssistant?.fixedExpensePayment;
+    if (pendingFixedExpensePayment && ["pending", "failed"].includes(pendingFixedExpensePayment.status)) {
+      const reply = planningActionConfirmationReply(message);
+      if (reply === "confirm") {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); await confirmFixedExpensePayment(pendingFixedExpensePayment.id); return;
+      }
+      if (reply === "cancel") {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); cancelFixedExpensePayment(pendingFixedExpensePayment.id); return;
+      }
+    }
+    const pendingFixedExpenseStatus = recentAssistant?.fixedExpenseStatus;
+    if (pendingFixedExpenseStatus && ["pending", "failed"].includes(pendingFixedExpenseStatus.status)) {
+      const reply = planningActionConfirmationReply(message);
+      if (reply === "confirm") {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); await confirmFixedExpenseStatus(pendingFixedExpenseStatus.id); return;
+      }
+      if (reply === "cancel") {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); cancelFixedExpenseStatus(pendingFixedExpenseStatus.id); return;
+      }
+    }
+    const pendingPlanningEdit = recentAssistant?.planningEdit;
+    if (pendingPlanningEdit && ["pending", "failed"].includes(pendingPlanningEdit.status)) {
+      const reply = planningActionConfirmationReply(message);
+      if (reply === "confirm") {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); await confirmPlanningEdit(pendingPlanningEdit.id); return;
+      }
+      if (reply === "cancel") {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); cancelPlanningEdit(pendingPlanningEdit.id); return;
+      }
+    }
+    const currentLang = resolveLanguage(state.settings.language);
+    if (!requestedDraftId && isFixedExpensePaymentMessage(message, state)) {
+      setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
+      const { proposal, clarification } = prepareFixedExpensePayment(state, message, today(), crypto.randomUUID());
+      if (proposal) {
+        setMessages(previous => [...previous, { role: "assistant", text: fixedExpensePaymentCopy[currentLang].note, fixedExpensePayment: proposal, localOnly: true }]);
+      } else {
+        setMessages(previous => [...previous, { role: "assistant", text: clarification || fixedExpensePaymentCopy[currentLang].failed, localOnly: true }]);
+      }
+      return;
+    }
+    if (!requestedDraftId && isFixedExpenseStatusMessage(message, state)) {
+      setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
+      const { proposal, clarification } = prepareFixedExpenseStatus(state, message, crypto.randomUUID());
+      if (proposal) {
+        setMessages(previous => [...previous, { role: "assistant", text: proposal.action === "pause" ? fixedExpenseStatusCopy[currentLang].pauseNote : fixedExpenseStatusCopy[currentLang].resumeNote, fixedExpenseStatus: proposal, localOnly: true }]);
+      } else {
+        setMessages(previous => [...previous, { role: "assistant", text: clarification || fixedExpenseStatusCopy[currentLang].failed, localOnly: true }]);
+      }
+      return;
+    }
+    if (!requestedDraftId && isPlanningEditMessage(message, state)) {
+      setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
+      const { proposal, clarification } = preparePlanningEdit(state, message, crypto.randomUUID());
+      if (proposal) {
+        setMessages(previous => [...previous, { role: "assistant", text: planningEditCopy[currentLang].note, planningEdit: proposal, localOnly: true }]);
+      } else {
+        setMessages(previous => [...previous, { role: "assistant", text: clarification || planningEditCopy[currentLang].failed, localOnly: true }]);
+      }
+      return;
+    }
     const outstanding = latestDrafts.current;
     if (!requestedDraftId && outstanding.length === 1 && /^(?:(?:huy|bo)(?:\s+(?:ban nhap|giao dich nay|giao dich do))?|cancel(?:\s+(?:draft|this draft))?|取消(?:草稿)?)[.!\s]*$/i.test(normalizeVietnameseMessage(message))) {
       setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); removeDraft(outstanding[0].id); return;
@@ -930,7 +1130,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (await requestWorkspaceCreation(message)) return;
     }
     const pendingDrafts = drafts.filter(d => !state.transactions.some(t => t.id === d.id));
-    const explicitlyNew = isClearlyNewTransaction(message);
+    const explicitlyNew = isClearlyNewTransaction(message, state);
     const categoryManagement = isCategoryManagementMessage(message);
     const deletionRequest = !categoryManagement && /\b(?:xoa|delete|remove|clear)\b/.test(normalizeVietnameseMessage(message));
     const target = explicitlyNew ? null : resolvePendingDraft(message, pendingDrafts, null, requestedDraftId || focusedDraftId || (pendingDrafts.length === 1 ? clarifyingDraftId : null));
@@ -1068,6 +1268,27 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         if (!parsed.success) throw new Error(serviceCopy.unavailable);
         setMessages(previous => [...previous, { role: "assistant", text: parsed.data.targets.length ? "" : planningDeletionCopy[resolveLanguage(state.settings.language)].empty, ...(parsed.data.targets.length ? { planningDeletion: parsed.data } : {}) }]);
         return;
+      }
+      if (ai.operationIntent === "pay_fixed_expense" && (result as { fixedExpensePayment?: unknown }).fixedExpensePayment) {
+        const parsed = fixedExpensePaymentProposalSchema.safeParse((result as { fixedExpensePayment?: unknown }).fixedExpensePayment);
+        if (parsed.success) {
+          setMessages(previous => [...previous, { role: "assistant", text: ai.reply || "", fixedExpensePayment: parsed.data }]);
+          return;
+        }
+      }
+      if ((ai.operationIntent === "pause_fixed_expense" || ai.operationIntent === "resume_fixed_expense") && (result as { fixedExpenseStatus?: unknown }).fixedExpenseStatus) {
+        const parsed = fixedExpenseStatusProposalSchema.safeParse((result as { fixedExpenseStatus?: unknown }).fixedExpenseStatus);
+        if (parsed.success) {
+          setMessages(previous => [...previous, { role: "assistant", text: ai.reply || "", fixedExpenseStatus: parsed.data }]);
+          return;
+        }
+      }
+      if ((ai.operationIntent === "edit_budget" || ai.operationIntent === "edit_fixed_expense") && (result as { planningEdit?: unknown }).planningEdit) {
+        const parsed = planningEditProposalSchema.safeParse((result as { planningEdit?: unknown }).planningEdit);
+        if (parsed.success) {
+          setMessages(previous => [...previous, { role: "assistant", text: ai.reply || "", planningEdit: parsed.data }]);
+          return;
+        }
       }
       if (shouldBlockNewDraft(message, latestDrafts.current, ai.intent)) {
         setMessages(previous => [...previous, pendingDraftInterruption(message, latestDrafts.current, resolveLanguage(state.settings.language))]);
@@ -1688,6 +1909,21 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           return parsed.success ? <PlanningDeletionCard proposal={parsed.data} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
             onSelect={(id, selected) => selectPlanningDeletion(parsed.data.id, id, selected)} onConfirm={() => void confirmPlanningDeletion(parsed.data.id)} onCancel={() => cancelPlanningDeletion(parsed.data.id)} /> : null;
         })()}
+        {message.fixedExpensePayment && !messages.slice(index + 1).some(item => item.fixedExpensePayment?.id === message.fixedExpensePayment?.id) && (() => {
+          const parsed = fixedExpensePaymentProposalSchema.safeParse(message.fixedExpensePayment);
+          return parsed.success ? <FixedExpensePaymentCard proposal={parsed.data} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
+            onConfirm={() => void confirmFixedExpensePayment(parsed.data.id)} onCancel={() => cancelFixedExpensePayment(parsed.data.id)} /> : null;
+        })()}
+        {message.fixedExpenseStatus && !messages.slice(index + 1).some(item => item.fixedExpenseStatus?.id === message.fixedExpenseStatus?.id) && (() => {
+          const parsed = fixedExpenseStatusProposalSchema.safeParse(message.fixedExpenseStatus);
+          return parsed.success ? <FixedExpenseStatusCard proposal={parsed.data} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
+            onConfirm={() => void confirmFixedExpenseStatus(parsed.data.id)} onCancel={() => cancelFixedExpenseStatus(parsed.data.id)} /> : null;
+        })()}
+        {message.planningEdit && !messages.slice(index + 1).some(item => item.planningEdit?.id === message.planningEdit?.id) && (() => {
+          const parsed = planningEditProposalSchema.safeParse(message.planningEdit);
+          return parsed.success ? <PlanningEditCard proposal={parsed.data} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
+            onConfirm={() => void confirmPlanningEdit(parsed.data.id)} onCancel={() => cancelPlanningEdit(parsed.data.id)} /> : null;
+        })()}
         {message.workspaceProposal && !messages.slice(index + 1).some(item => item.workspaceProposal?.id === message.workspaceProposal?.id) && (() => {
           const parsed = workspaceProposalSchema.safeParse(message.workspaceProposal);
           return parsed.success ? <WorkspaceActionCard proposal={parsed.data} state={state} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
@@ -1744,7 +1980,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
               <small>{deletion.selectedIds.length} {copy.selected.toLocaleLowerCase()}</small>
               <div className="r-two-options">
                 <button type="button" className="r-secondary" disabled={!!deletingId} onClick={() => cancelTransactionDeletion(deletion.confirmationId)}>{copy.cancel}</button>
-                <button type="button" className="r-danger" disabled={!!deletingId || !deletion.selectedIds.length || !candidates.length} onClick={() => void confirmTransactionDeletion(deletion.confirmationId)}>{copy.confirm} ({deletion.selectedIds.length})</button>
+                <button type="button" className="r-primary" disabled={!!deletingId || !deletion.selectedIds.length || !candidates.length} onClick={() => void confirmTransactionDeletion(deletion.confirmationId)}>{copy.confirm} ({deletion.selectedIds.length})</button>
               </div>
             </>}
           </section>;
@@ -1816,6 +2052,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
             {receiptImageUrls[id] && <div className="r-ai-receipt-thumb" role="img" aria-label="Ảnh hóa đơn đính kèm bản nháp" style={{ backgroundImage: `url("${receiptImageUrls[id]}")` }} />}
             <div className="r-ai-draft-summary"><b>{draft.title.trim() || "Chưa có mô tả"}</b>{" "}<strong>{draft.amount !== null && draft.currency ? formatTransactionMoney(draft.amount, draft.currency) : "Chưa rõ số tiền/tiền tệ"}</strong></div>
             <p className="r-ai-draft-details">{draft.category || draft.newCategory?.name || "Chưa chọn danh mục"} · {draft.date || "Chưa rõ ngày"} · {draftWallet ? `${draftWallet.name} (${draftWallet.currency})` : draft.currency ? `Chưa chọn ví · ${draft.currency}` : "Chưa chọn ví/tiền tệ"}</p>
+            <DraftAmountWarnings warnings={draftAmountWarnings(draft, state, today())} language={resolveLanguage(state.settings.language)} />
             {needsReview.length > 0 && <small className="r-ai-draft-review">Cần xem lại: {needsReview.join(", ")}</small>}
             {draft.needsReview.includes("wallet") && !messages.some((item) => item.walletChoiceDraftIds?.includes(id)) && <label className="r-ai-draft-details">
               {{ en: "Payment wallet", vi: "Ví thanh toán", zh: "付款钱包" }[resolveLanguage(state.settings.language)]}
