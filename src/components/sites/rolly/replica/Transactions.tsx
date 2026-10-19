@@ -1063,7 +1063,16 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           explanations.push(scenarioCalculationExplanation(result, scenario, snapshot.wallets, input.today, input.preferredLanguage));
           const paceNote = { vi: "Dự kiến nếu giữ nhịp chi hiện tại; chưa cộng thu nhập mới ngoài kịch bản.", en: "Estimate at the same spending pace; no new income outside the scenario is added.", zh: "假设保持当前支出速度；不增加情景以外的新收入。" }[input.preferredLanguage];
           const missingNote = { vi: "Chưa đủ lịch sử cho một phần dự báo chi tiêu.", en: "Some spending could not be forecast from the available history.", zh: "部分支出缺少足够的历史数据。" }[input.preferredLanguage];
-          return [scenario.name, ...result.wallets.map(w => `${snapshot.wallets.find(item => item.id === w.walletId)?.name || w.walletId}: ${labels.now} ${formatTransactionMoney(w.balanceNow, w.currency)} → ${labels.projected} **${formatTransactionMoney(w.projectedBalance, w.currency)}**${w.shortfall > 0 ? ` · ${labels.risk} ${formatTransactionMoney(w.shortfall, w.currency)}` : ""}`), ...(result.includesPaceForecast ? [paceNote] : []), ...(result.unavailableEstimates.length ? [missingNote] : [])].join("\n");
+          // Build verdict from aggregate projected balances across all wallets in this scenario
+          const allPositive = result.wallets.every(w => w.projectedBalance >= 0);
+          const anyShortfall = result.wallets.some(w => w.shortfall > 0);
+          const verdictLine = anyShortfall
+            ? { vi: "⚠️ Có thể thiếu tiền — xem chi tiết bên dưới", en: "⚠️ Potential shortfall — see details below", zh: "⚠️ 可能资金不足 — 详见下方" }[input.preferredLanguage]
+            : allPositive
+              ? { vi: "✅ Còn đủ — dự kiến cuối kỳ vẫn dương", en: "✅ On track — projected balance stays positive", zh: "✅ 资金充足 — 预计期末余额为正" }[input.preferredLanguage]
+              : { vi: "⚠️ Dự kiến âm cuối kỳ — xem chi tiết", en: "⚠️ Projected negative balance — see details", zh: "⚠️ 预计期末余额为负 — 详见下方" }[input.preferredLanguage];
+          const walletLines = result.wallets.map(w => `${snapshot.wallets.find(item => item.id === w.walletId)?.name || w.walletId}: ${labels.now} ${formatTransactionMoney(w.balanceNow, w.currency)} → ${labels.projected} **${formatTransactionMoney(w.projectedBalance, w.currency)}**${w.shortfall > 0 ? ` · ${labels.risk} ${formatTransactionMoney(w.shortfall, w.currency)}` : ""}`);
+          return [scenario.name, verdictLine, ...walletLines, ...(result.includesPaceForecast ? [paceNote] : []), ...(result.unavailableEstimates.length ? [missingNote] : [])].join("\n");
         });
         setMessages(previous => [...previous, { role: "assistant", text: parts.length ? parts.join("\n\n") : plan.clarification || plan.reply || serviceCopy.unavailable, scenarios: plan.scenarios, scenarioExplanation: explanations.length ? explanations.join("\n\n") : undefined, localOnly: true }]);
         return;

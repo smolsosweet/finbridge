@@ -434,7 +434,21 @@ function answerFinancialQuerySection(
       return plannedOccurrences(expense, today, addDays(today, 30)).map((date) => `• ${date} · ${expense.title} · ${money(expense.amount, wallet.currency)} · ${walletName(wallet.name, lang)}`);
     });
     if (!figures && !extraFixed.length) return { conclusion: labels.noBudgets, figures: query.category ? `• ${query.category}` : undefined, suggestions: labels.noBudgetSuggestion, limits: labels.assumptions };
-    return { conclusion: labels.budgetConclusion, figures: [figures, extraFixed.length ? `${labels.extraFixed}:\n${extraFixed.join("\n")}` : ""].filter(Boolean).join("\n"), analysis: labels.budgetAnalysis, limits: labels.assumptions };
+    // Build a direct verdict: sum total remaining across all valid budgets per currency
+    const remainderByCurrency = summaries.reduce<Record<string, { remainder: number; over: boolean }>>((acc, { budget, matchingCurrency, actual, planned }) => {
+      if (!matchingCurrency) return acc;
+      const r = budget.amount - actual - planned;
+      const existing = acc[budget.currency] ?? { remainder: 0, over: false };
+      acc[budget.currency] = { remainder: existing.remainder + r, over: existing.over || r < 0 };
+      return acc;
+    }, {});
+    const verdictLines = Object.entries(remainderByCurrency).map(([currency, { remainder, over }]) =>
+      over
+        ? localized(lang, `⚠️ Ngân sách ${currency} có thể vượt hạn mức — còn lại sau khoản cố định: ${money(remainder, currency)}`, `⚠️ ${currency} budget may exceed the limit — remaining after fixed expenses: ${money(remainder, currency)}`, `⚠️ ${currency}预算可能超出限额 — 扣除固定支出后剩余：${money(remainder, currency)}`)
+        : localized(lang, `✅ Còn lại ${money(remainder, currency)} sau chi cố định`, `✅ Remaining: ${money(remainder, currency)} after fixed expenses`, `✅ 扣除固定支出后剩余：${money(remainder, currency)}`)
+    );
+    const dynamicConclusion = verdictLines.length ? verdictLines.join(" · ") : labels.budgetConclusion;
+    return { conclusion: dynamicConclusion, figures: [figures, extraFixed.length ? `${labels.extraFixed}:\n${extraFixed.join("\n")}` : ""].filter(Boolean).join("\n"), analysis: labels.budgetAnalysis, limits: labels.assumptions };
   }
 
   if (action === "safe_daily_allowance") {

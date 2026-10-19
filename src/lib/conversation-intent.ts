@@ -21,7 +21,19 @@ export function isDraftCorrection(message: string) {
   return /\b(nham|sua|cap nhat|khong phai|y (?:toi|minh)|doi (?:lai|so tien|ngay|vi|danh muc)|khoan (?:do|nay)|giao dich (?:do|nay)|actually|i meant|correct|change|update|that (?:one|transaction))\b|改成|修改|刚才那笔/.test(normalizeVietnameseMessage(message));
 }
 export function isHypotheticalMessage(message: string) {
-  return /\b(neu|gia su|gia dinh|what if|if i|simulate|simulation)\b|如果|假设/.test(normalizeVietnameseMessage(message));
+  const text = normalizeVietnameseMessage(message);
+  // Explicit hypothetical markers
+  if (/\b(neu|gia su|gia dinh|what if|if i|simulate|simulation)\b|如果|假设/.test(text)) return true;
+  // "mua X thì còn đủ không" — implicit purchase-then-check-balance pattern without "nếu"
+  if (/\b(mua|chi|tieu|mua them|mua mot)\b/.test(text) && /\b(thi|then)\b/.test(text) && /\b(con|du|bao nhieu|het|cuoi thang|cuoi ky)\b/.test(text)) return true;
+  // "cuối tháng còn X không" — end-of-period balance questions that need projection
+  if (isEndOfPeriodQuestion(text)) return true;
+  return false;
+}
+export function isEndOfPeriodQuestion(message: string): boolean {
+  const text = normalizeVietnameseMessage(message);
+  return /\b(cuoi thang|cuoi ky|het thang|den cuoi thang|end of month|end of period)\b/.test(text)
+    && /\b(con|du|bao nhieu|con lai|tien|money|left|remain)\b/.test(text);
 }
 export function isClearlyNewTransaction(message: string) {
   if (isWorkspaceCreationRequest(message) || isCategoryManagementMessage(message) || isDraftCorrection(message) || isHypotheticalMessage(message)) return false;
