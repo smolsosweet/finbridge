@@ -41,9 +41,11 @@ test("Brevo requires a key and a verified-sender address shape; unknown modes ar
   assert.equal(mail.readMailConfig({ AUTH_EMAIL_MODE: "brevo", BREVO_API_KEY: "synthetic", AUTH_EMAIL_FROM: "sender@example.invalid" }).mode, "brevo");
 });
 test("Brevo sends only a transactional message over HTTPS and rejects provider errors without retry", async () => {
-  const originalFetch = global.fetch; let requests = 0;
+  const originalFetch = global.fetch, originalConsoleError = console.error; let requests = 0;
+  const diagnostics = [];
   const sender = mail.createMailSender({ AUTH_EMAIL_MODE: "brevo", BREVO_API_KEY: "synthetic-only", AUTH_EMAIL_FROM: "sender@example.invalid" });
   try {
+    console.error = (...args) => diagnostics.push(args);
     global.fetch = async (url, options) => {
       requests++; assert.equal(url, "https://api.brevo.com/v3/smtp/email"); assert.equal(options.method, "POST"); assert.equal(options.redirect, "error");
       assert.equal(options.headers["api-key"], "synthetic-only");
@@ -56,7 +58,9 @@ test("Brevo sends only a transactional message over HTTPS and rejects provider e
     };
     const message = { to: "recipient@example.invalid", kind: "verify", url: "https://finbridge.example/verify" };
     await sender(message); await assert.rejects(() => sender(message), /AUTH_EMAIL_DELIVERY_FAILED/); assert.equal(requests, 2);
-  } finally { global.fetch = originalFetch; }
+    assert.deepEqual(diagnostics, [["AUTH_MAIL_BREVO_DELIVERY_FAILED", { provider: "brevo", status: 429, retryAfter: null }]]);
+    assert.doesNotMatch(JSON.stringify(diagnostics), /synthetic-only|recipient@example\.invalid|finbridge\.example/);
+  } finally { global.fetch = originalFetch; console.error = originalConsoleError; }
 });
 test("authentication email gives a usable action, expiry and safe fallback link", () => {
   const verify = mail.renderAuthEmail({ kind: "verify", url: "https://finbridge.example/verify?token=a&next=b" });
