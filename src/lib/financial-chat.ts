@@ -2,6 +2,8 @@ import type { AppState } from "../components/sites/rolly/replica/store";
 import { budgetSummary, currencyScale, occurrencePayment, plannedOccurrences } from "../components/sites/rolly/replica/planningModel";
 import { trackedBalance } from "./financial-outlook";
 import { balanceAfterObligation } from "./financial-obligation-query";
+import type { AnswerPresentation } from "./assistant-response";
+import { unpaidOccurrences } from "./fixed-expense-payments";
 
 const normalizeVietnameseMessage = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("vi").replace(/đ/g, "d").trim();
 export function asksForAllWalletBalances(message: string): boolean {
@@ -175,12 +177,13 @@ function addDays(date: string, amount: number) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
 function periodLabel(start: string, end: string, lang: Language) { return start === end ? start : `${start} ${lang === "vi" ? "đến" : lang === "zh" ? "至" : "to"} ${end}`; }
-function render(lang: Language, sections: Partial<Record<"conclusion" | "figures" | "analysis" | "suggestions" | "limits", string>>) {
+function render(lang: Language, sections: Partial<Record<"conclusion" | "figures" | "analysis" | "suggestions" | "limits", string>>, presentation?: AnswerPresentation) {
   const labels = copy[lang];
   const lines = [sections.conclusion];
-  if (sections.figures) lines.push(`${labels.figures}:\n${sections.figures}`);
-  if (sections.analysis) lines.push(`${labels.analysis}: ${sections.analysis}`);
-  if (sections.suggestions) lines.push(`${labels.suggestions}: ${sections.suggestions}`);
+  const headings = presentation?.detail === "detailed" || presentation?.layout === "comparison";
+  if (sections.figures) lines.push(headings ? `${labels.figures}:\n${sections.figures}` : sections.figures);
+  if (sections.analysis) lines.push(headings ? `${labels.analysis}: ${sections.analysis}` : sections.analysis);
+  if (sections.suggestions) lines.push(headings ? `${labels.suggestions}: ${sections.suggestions}` : sections.suggestions);
   if (sections.limits && sections.limits !== labels.assumptions) lines.push(sections.limits);
   return lines.filter(Boolean).join("\n\n");
 }
@@ -207,12 +210,13 @@ function answerFinancialQuerySection(
   if (action === "balance_after_obligation") return { conclusion: balanceAfterObligation(query, state, wallets, today, lang) };
 
   if (action === "balance") {
+    const ledger = state.transactions.filter(item => item.date.slice(0, 10) <= today);
     const figures = wallets.map((wallet) => {
-      const malformed = state.transactions.filter((item) => item.wallet === wallet.id && !validAmount(item.amount)).length;
-      const income = total(state.transactions.filter((item) => item.wallet === wallet.id && item.type === "income" && validAmount(item.amount)), wallet.currency);
-      const expense = total(state.transactions.filter((item) => item.wallet === wallet.id && item.type === "expense" && validAmount(item.amount)), wallet.currency);
-      const transferOut = total(state.transactions.filter((item) => item.wallet === wallet.id && item.type === "transfer" && validAmount(item.amount)), wallet.currency);
-      const transferIn = total(state.transactions.filter((item) => item.targetWallet === wallet.id && item.type === "transfer" && validAmount(item.amount)
+      const malformed = ledger.filter((item) => item.wallet === wallet.id && !validAmount(item.amount)).length;
+      const income = total(ledger.filter((item) => item.wallet === wallet.id && item.type === "income" && validAmount(item.amount)), wallet.currency);
+      const expense = total(ledger.filter((item) => item.wallet === wallet.id && item.type === "expense" && validAmount(item.amount)), wallet.currency);
+      const transferOut = total(ledger.filter((item) => item.wallet === wallet.id && item.type === "transfer" && validAmount(item.amount)), wallet.currency);
+      const transferIn = total(ledger.filter((item) => item.targetWallet === wallet.id && item.type === "transfer" && validAmount(item.amount)
         && state.wallets.find((source) => source.id === item.wallet)?.currency === wallet.currency), wallet.currency);
       const balance = trackedBalance(state, wallet.id, today);
       return { wallet, balance: balance.amount, income, expense, transferOut, transferIn, malformed, incomplete: !balance.complete };
@@ -308,19 +312,23 @@ function answerFinancialQuerySection(
 
   if (action === "anomalies") {
     const currentExpenses = records.filter((item) => item.type === "expense" && (!query.category || normalizeVietnameseMessage(item.category).includes(normalizeVietnameseMessage(query.category))));
+    if (!currentExpenses.length) return { conclusion: localized(lang, `Chưa có khoản chi nào trong ${range} để Finn kiểm tra.`, `There are no expenses in ${range} for Finn to check.`, `${range}没有可供 Finn 检查的支出。`) };
+    let comparable = 0;
     const findings = currentExpenses.flatMap((item) => {
       const historyStart = addDays(start, -90);
       const prior = state.transactions.filter((other) => other.type === "expense" && other.wallet === item.wallet && other.category === item.category && validAmount(other.amount) && other.date.slice(0, 10) >= historyStart && other.date.slice(0, 10) < start).map((other) => other.amount).sort((a, b) => a - b);
       if (prior.length < 5) return [];
       const middle = Math.floor(prior.length / 2);
       const median = prior.length % 2 ? prior[middle] : (prior[middle - 1] + prior[middle]) / 2;
+      if (median > 0) comparable++;
       const wallet = state.wallets.find((itemWallet) => itemWallet.id === item.wallet);
       return median > 0 && item.amount >= median * 3 && wallet ? [{ transaction: item, wallet, median, samples: prior.length }] : [];
     });
-    const threshold = localized(lang, "Chỉ so sánh khi có ít nhất 5 giao dịch cùng danh mục và ví trong 90 ngày trước kỳ; ngưỡng là ít nhất 3 lần trung vị. Đây không phải kết luận gian lận.", "Requires at least 5 same-category, same-wallet expenses in the prior 90 days; threshold is at least 3× the median. This is not a fraud finding.", "需要过去90天同钱包、同类别至少5笔交易；阈值为中位数的3倍。这不代表欺诈判断。");
-    if (!findings.length) return { conclusion: localized(lang, "Không phát hiện khoản chi lớn bất thường theo quy tắc so sánh hiện tại.", "No unusually large expenses were detected by the current comparison rule.", "按当前比较规则，未发现明显偏大的支出。"), limits: threshold };
-    const lines = findings.slice(0, 20).map(({ transaction, wallet, median, samples }) => "• " + transaction.date.slice(0, 10) + " · " + transaction.title + " · " + transaction.category + " · " + money(transaction.amount, wallet.currency) + " (" + localized(lang, "trung vị trước kỳ", "prior median", "此前中位数") + " " + money(median, wallet.currency) + ", n=" + samples + ")");
-    return { conclusion: localized(lang, "Có " + findings.length + " khoản chi cao ít nhất 3 lần trung vị cùng danh mục trong 90 ngày trước kỳ.", findings.length + " expenses are at least 3× the prior 90-day median for the same category and wallet.", "有" + findings.length + "笔支出至少为过去90天同类别、同钱包中位数的3倍。"), figures: lines.join("\n"), limits: localized(lang, "Đây là điểm cần người dùng xem lại, không khẳng định giao dịch sai hoặc gian lận.", "These are review flags, not claims of error or fraud.", "这些仅供用户复核，不代表交易错误或欺诈。") };
+    if (!comparable) return { conclusion: localized(lang, "Finn chưa có đủ lịch sử chi tiêu để biết khoản nào cao hơn thói quen của bạn. Chưa thể kết luận là có hay không có khoản bất thường nhé.", "Finn needs more spending history to tell which expenses differ from your usual habits. I cannot yet conclude whether there are unusual expenses.", "Finn 还需要更多支出历史，才能判断哪些项目高于你的日常习惯，目前无法确定是否存在异常支出。"), suggestions: localized(lang, "Bạn cứ tiếp tục ghi nhận chi tiêu; Finn sẽ có cơ sở so sánh rõ hơn.", "Keep recording spending so Finn has a clearer basis for comparison.", "请继续记录支出，以便 Finn 有更充分的比较依据。") };
+    const partial = comparable < currentExpenses.length ? localized(lang, "Một số khoản chưa có đủ lịch sử để so sánh.", "Some expenses do not yet have enough history for comparison.", "部分支出的历史还不足以比较。") : undefined;
+    if (!findings.length) return { conclusion: localized(lang, "Trong những khoản có đủ lịch sử để so sánh, Finn chưa thấy khoản nào tăng đột biến so với trước đây.", "Among expenses with enough history to compare, Finn hasn't found any sharp increases from your usual spending.", "在历史足够的支出中，Finn 暂未发现比以往明显增加的项目。"), limits: partial };
+    const lines = findings.slice(0, 20).map(({ transaction, wallet, median }) => `• ${transaction.title} · **${money(transaction.amount, wallet.currency)}** · ${walletName(wallet.name, lang)} (${transaction.date.slice(0, 10)})\n  ${localized(lang, "Mức thường gặp trước đây khoảng", "Your usual recorded amount was around", "以前常见的记录金额约为")} **${money(median, wallet.currency)}**.`);
+    return { conclusion: localized(lang, `Có ${findings.length} khoản cao hơn hẳn mức bạn thường chi, đáng để xem lại:`, `There are ${findings.length} expenses well above your usual spending that are worth a look:`, `有${findings.length}笔支出明显高于平时，值得查看：`), figures: lines.join("\n"), suggestions: localized(lang, "Bạn kiểm tra xem đây là khoản mua lớn có chủ đích hay giao dịch ghi nhầm nhé.", "Check whether these were planned large purchases or recording mistakes.", "请确认这是计划内的大额购买，还是记录有误。"), limits: partial };
   }
 
   if (action === "explain" || action === "top_category" || action === "category_breakdown") {
@@ -418,37 +426,24 @@ function answerFinancialQuerySection(
       const matchingCurrency = !!wallet && wallet.currency === budget.currency;
       const actual = matchingCurrency ? summary.actual : 0;
       const expenses = (state.fixedExpenses || []).filter((item) => item.active && item.budgetId === budget.id);
-      const planned = matchingCurrency ? summary.planned : 0;
-      const due = expenses.flatMap((expense) => plannedOccurrences(expense, today, window.end).map((date) => ({ title: expense.title, amount: expense.amount, date }))).sort((a, b) => a.date.localeCompare(b.date));
+      const planned = matchingCurrency ? summary.unpaidPlanned : 0;
+      const due = expenses.flatMap((expense) => unpaidOccurrences(state, expense, window.start, window.end).map((date) => ({ title: expense.title, amount: expense.amount, date }))).sort((a, b) => a.date.localeCompare(b.date));
       return { budget, window, wallet, matchingCurrency, actual, planned, due };
     });
     const figures = summaries.map(({ budget, window, wallet, matchingCurrency, actual, planned, due }) => {
       if (!matchingCurrency || !wallet) return `• ${budget.title}: ${localized(lang, "ví không tồn tại hoặc tiền tệ ngân sách không khớp; chưa tính số đã chi.", "wallet missing or budget currency mismatch; spending was not calculated.", "钱包不存在或预算币种不一致；未计算支出。")}`;
       const remainder = budget.amount - actual - planned;
-      return `• ${budget.title} · ${walletName(wallet.name, lang)} · ${wallet.currency} (${window.start}–${window.end})\n  ${labels.budgetLimit} ${money(budget.amount, budget.currency)} · ${labels.spent} ${money(actual, budget.currency)} · ${labels.fixed} ${money(planned, budget.currency)} · ${labels.afterFixed} ${money(remainder, budget.currency)}${remainder < 0 ? ` · ${labels.over}` : ""}${due.length ? `\n  ${labels.upcoming}: ${due.slice(0, 5).map((item) => `${item.date} ${item.title} ${money(item.amount, budget.currency)}`).join("; ")}` : ""}`;
+      return `• **${budget.title}** · ${walletName(wallet.name, lang)} · ${wallet.currency}\n  ${labels.spent}: **${money(actual, budget.currency)}** / ${labels.budgetLimit.toLowerCase()} ${money(budget.amount, budget.currency)}\n  ${localized(lang, "Khoản cố định chưa trả", "Unpaid fixed expenses", "未付固定支出")}: ${money(planned, budget.currency)}\n  ${localized(lang, "Hạn mức còn sau các khoản này", "Budget limit left after these items", "扣除这些项目后的预算余额")}: **${money(remainder, budget.currency)}**${remainder < 0 ? ` · ${labels.over}` : ""}\n  ${labels.period}: ${window.start}–${window.end}${due.length ? `\n  ${localized(lang, "Khoản cần trả gần nhất", "Next unpaid bill", "最近待付账单")}: ${due[0].title} · ${due[0].date} · ${money(due[0].amount, budget.currency)}` : ""}`;
     }).join("\n");
     const walletFixed = (state.fixedExpenses || []).filter((expense) => expense.active && !expense.budgetId && wallets.some((wallet) => wallet.id === (expense.walletId || "")));
     const extraFixed = walletFixed.flatMap((expense) => {
       const wallet = wallets.find((item) => item.id === expense.walletId);
       if (!wallet || !validAmount(expense.amount)) return [];
-      return plannedOccurrences(expense, today, addDays(today, 30)).map((date) => `• ${date} · ${expense.title} · ${money(expense.amount, wallet.currency)} · ${walletName(wallet.name, lang)}`);
+      return unpaidOccurrences(state, expense, expense.dueDate, addDays(today, 30)).map((date) => `• ${date} · ${expense.title} · ${money(expense.amount, wallet.currency)} · ${walletName(wallet.name, lang)}`);
     });
     if (!figures && !extraFixed.length) return { conclusion: labels.noBudgets, figures: query.category ? `• ${query.category}` : undefined, suggestions: labels.noBudgetSuggestion, limits: labels.assumptions };
-    // Build a direct verdict: sum total remaining across all valid budgets per currency
-    const remainderByCurrency = summaries.reduce<Record<string, { remainder: number; over: boolean }>>((acc, { budget, matchingCurrency, actual, planned }) => {
-      if (!matchingCurrency) return acc;
-      const r = budget.amount - actual - planned;
-      const existing = acc[budget.currency] ?? { remainder: 0, over: false };
-      acc[budget.currency] = { remainder: existing.remainder + r, over: existing.over || r < 0 };
-      return acc;
-    }, {});
-    const verdictLines = Object.entries(remainderByCurrency).map(([currency, { remainder, over }]) =>
-      over
-        ? localized(lang, `⚠️ Ngân sách ${currency} có thể vượt hạn mức — còn lại sau khoản cố định: ${money(remainder, currency)}`, `⚠️ ${currency} budget may exceed the limit — remaining after fixed expenses: ${money(remainder, currency)}`, `⚠️ ${currency}预算可能超出限额 — 扣除固定支出后剩余：${money(remainder, currency)}`)
-        : localized(lang, `✅ Còn lại ${money(remainder, currency)} sau chi cố định`, `✅ Remaining: ${money(remainder, currency)} after fixed expenses`, `✅ 扣除固定支出后剩余：${money(remainder, currency)}`)
-    );
-    const dynamicConclusion = verdictLines.length ? verdictLines.join(" · ") : labels.budgetConclusion;
-    return { conclusion: dynamicConclusion, figures: [figures, extraFixed.length ? `${labels.extraFixed}:\n${extraFixed.join("\n")}` : ""].filter(Boolean).join("\n"), analysis: labels.budgetAnalysis, limits: labels.assumptions };
+    const dynamicConclusion = summaries.length ? localized(lang, `Bạn đang có ${summaries.length} ngân sách trong phạm vi đã chọn:`, `You have ${summaries.length} ${summaries.length === 1 ? "budget" : "budgets"} in the selected scope:`, `所选范围内有${summaries.length}项预算：`) : labels.budgetConclusion;
+    return { conclusion: dynamicConclusion, figures: [figures, extraFixed.length ? `${labels.extraFixed}:\n${extraFixed.join("\n")}` : ""].filter(Boolean).join("\n"), limits: labels.assumptions };
   }
 
   if (action === "safe_daily_allowance") {
@@ -469,7 +464,7 @@ function answerFinancialQuerySection(
   return { conclusion: localized(lang, "Mình chưa xử lý được câu hỏi này.", "I couldn't process this question.", "暂时无法处理这个问题。") };
 }
 
-export function answerFinancialQuery(query: FinancialQuery, state: FinancialState, selectedWalletId: string, today: string): string {
+export function answerFinancialQuery(query: FinancialQuery, state: FinancialState, selectedWalletId: string, today: string, presentation?: AnswerPresentation): string {
   const lang = getLanguage(state), labels = copy[lang];
   const activeWallets = state.wallets.filter((wallet) => !wallet.archived);
   const selectedWallet = activeWallets.find((wallet) => wallet.id === (query.walletId || selectedWalletId));
@@ -479,10 +474,11 @@ export function answerFinancialQuery(query: FinancialQuery, state: FinancialStat
   const actions = query.actions && query.actions.length > 0 ? query.actions : [query.action];
   if (actions.length === 1) {
     const section = answerFinancialQuerySection(actions[0], query, wallets, state, today, lang);
+    if (actions[0] === "balance" && presentation?.detail !== "detailed") return render(lang, { ...section, conclusion: undefined }, presentation);
     if (actions[0] === "spending_summary" || actions[0] === "category_breakdown") {
       return [section.conclusion, section.figures, section.analysis, section.limits !== labels.assumptions ? section.limits : null].filter(Boolean).join("\n\n");
     }
-    return render(lang, section);
+    return render(lang, section, presentation);
   }
 
   // Compound query: execute each action and combine results cleanly
@@ -499,5 +495,5 @@ export function answerFinancialQuery(query: FinancialQuery, state: FinancialStat
     analysis: analysis || undefined,
     suggestions: suggestions || undefined,
     limits: limits || labels.assumptions,
-  });
+  }, presentation);
 }

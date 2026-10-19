@@ -1,6 +1,7 @@
 import type { AppState } from "../components/sites/rolly/replica/store";
-import { budgetSummary } from "../components/sites/rolly/replica/planningModel";
+import { budgetSummary, currencyScale } from "../components/sites/rolly/replica/planningModel";
 import { unpaidOccurrences } from "./fixed-expense-payments";
+import { trackedBalance } from "./financial-outlook";
 import type { FinancialAction, FinancialQuery } from "./financial-chat";
 
 export interface ScenarioChange {
@@ -32,6 +33,7 @@ export interface DailySpendingLimit {
 }
 
 export interface FinancialScenario {
+  walletIds?: string[];
   id: string;
   name: string;
   changes: ScenarioChange[];
@@ -44,9 +46,9 @@ export interface FinancialScenario {
 
 export interface ScenarioResult {
   scenarioId: string;
-  wallets: Array<{ walletId: string; currency: string; balanceNow: number; projectedBalance: number; shortfall: number }>;
-  budgets: Array<{ budgetId: string; currency: string; actualRemaining: number; afterScenario: number; unallocatedAfterScenario: number; projectedSpend: number; projectedRemaining: number; plannedAmount: number; paceAmount: number; dailyFlexibleLimit: number; forecastEnd: string; forecastAvailable: boolean }>;
-  plannedBills: Array<{ title: string; amount: number; currency: string; date: string }>;
+  wallets: Array<{ walletId: string; currency: string; balanceNow: number; projectedBalance: number; shortfall: number; components?: { unpaidBills: number; paceSpending: number; dailyLimitSpending: number; hypotheticalIncome: number; hypotheticalExpense: number; reducedCategorySpending: number } }>;
+  budgets: Array<{ budgetId: string; title?: string; currency: string; actualRemaining: number; afterScenario: number; unallocatedAfterScenario: number; projectedSpend: number; projectedRemaining: number; plannedAmount: number; paceAmount: number; dailyFlexibleLimit: number; forecastEnd: string; forecastAvailable: boolean }>;
+  plannedBills: Array<{ walletId?: string; title: string; amount: number; currency: string; date: string }>;
   estimatedSpending: Array<{ walletId: string; currency: string; amount: number; dailyAverage: number; days: number; basis: "current-month-pace" | "historical-average" }>;
   savings: Array<{ walletId: string; currency: string; category: string; percent: number; baselineAmount: number; savedAmount: number; days: number; startDate: string; endDate: string }>;
   unavailableEstimates: string[];
@@ -136,7 +138,8 @@ export function findPreviousScenarioFromHistory(
   if (!history || !history.length) return null;
   for (let i = history.length - 1; i >= 0; i--) {
     const item = history[i];
-    const marker = "Previous hypothetical scenario parameters: ";
+    const marker = ["Previous hypothetical scenario parameters: ", "Previous hypothetical assumptions only (recalculate from current data): "].find(value => item.text.includes(value));
+    if (!marker) continue;
     const idx = item.text.indexOf(marker);
     if (idx !== -1) {
       try {
@@ -147,6 +150,7 @@ export function findPreviousScenarioFromHistory(
           return {
             id: s.id || "prev-scenario",
             name: s.name || "Previous scenario",
+            ...(Array.isArray(s.walletIds) ? { walletIds: s.walletIds.filter((id: unknown): id is string => typeof id === "string") } : {}),
             changes: Array.isArray(s.changes) ? s.changes : [],
             spendingReductions: Array.isArray(s.spendingReductions) ? s.spendingReductions : [],
             dailySpendingLimits: Array.isArray(s.dailySpendingLimits) ? s.dailySpendingLimits : [],
@@ -361,17 +365,18 @@ function nextDate(key: string) {
 }
 
 export function calculateScenario(state: AppState, scenario: FinancialScenario, today: string): ScenarioResult {
+  // Historical balance and payment links must use the same as-of ledger.
+  state = { ...state, transactions: state.transactions.filter(t => t.date.slice(0, 10) <= today) };
+  const activeWallets = state.wallets.filter(w => !w.archived && (!scenario.walletIds || scenario.walletIds.includes(w.id)));
+  const scopedWalletIds = new Set(activeWallets.map(w => w.id));
+  const isLinkedPayment = (t: AppState["transactions"][number]) => !!t.fixedExpenseId && !!t.fixedExpenseDueDate && t.paymentConfirmation === "user";
   const assumptions = [...scenario.assumptions];
   const changes = scenario.changes.filter((change): change is ScenarioChange & { amount: number; walletId: string; currency: string; date: string } => Number.isFinite(change.amount) && change.amount! > 0 && !!change.walletId && !!change.currency && validDateKey(change.date) && change.date >= today && (!scenario.horizonEnd || change.date <= scenario.horizonEnd) && state.wallets.some((wallet) => wallet.id === change.walletId && wallet.currency === change.currency && !wallet.archived));
   const dailyLimits = (scenario.dailySpendingLimits || []).filter((limit): limit is DailySpendingLimit & { amount: number; walletId: string; currency: string; startDate: string; endDate: string } => Number.isFinite(limit.amount) && limit.amount! >= 0 && !!limit.walletId && !!limit.currency && validDateKey(limit.startDate) && validDateKey(limit.endDate) && limit.startDate >= today && limit.endDate >= limit.startDate && state.wallets.some((wallet) => wallet.id === limit.walletId && wallet.currency === limit.currency && !wallet.archived));
   const walletTotals = new Map<string, number>();
-  for (const wallet of state.wallets.filter((item) => !item.archived)) {
-    const balance = state.transactions.reduce((sum, item) => {
-      if (item.wallet === wallet.id) return sum + (item.type === "income" ? cents(item.amount) : -cents(item.amount));
-      if (item.type === "transfer" && item.targetWallet === wallet.id) return sum + cents(item.amount);
-      return sum;
-    }, cents(wallet.initial));
-    walletTotals.set(wallet.id, balance);
+  for (const wallet of activeWallets) {
+    const balance = trackedBalance(state, wallet.id, today);
+    walletTotals.set(wallet.id, cents(balance.amount));
   }
 
   const changeHorizon = [
@@ -388,9 +393,9 @@ export function calculateScenario(state: AppState, scenario: FinancialScenario, 
     if (!expense.active) continue;
     const budget = state.goals.find((goal) => goal.id === expense.budgetId && goal.kind === "budget");
     const wallet = state.wallets.find((item) => item.id === (budget?.wallet || expense.walletId) && !item.archived);
-    if (!wallet || (expense.budgetId && !budget) || (budget && wallet.currency !== budget.currency)) continue;
-    for (const dueDate of unpaidOccurrences(state, expense, nextDate(today), end)) {
-      plannedBills.push({ title: expense.title, amount: expense.amount, currency: wallet.currency, date: dueDate });
+    if (!wallet || !scopedWalletIds.has(wallet.id) || (expense.budgetId && !budget) || (budget && wallet.currency !== budget.currency)) continue;
+    for (const dueDate of unpaidOccurrences(state, expense, expense.dueDate, end)) {
+      plannedBills.push({ walletId: wallet.id, title: expense.title, amount: expense.amount, currency: wallet.currency, date: dueDate });
       plannedByWallet.set(wallet.id, (plannedByWallet.get(wallet.id) || 0) + cents(expense.amount));
     }
   }
@@ -408,8 +413,8 @@ export function calculateScenario(state: AppState, scenario: FinancialScenario, 
   }
   const savings: ScenarioResult["savings"] = [];
   const unavailableEstimates: string[] = [];
+  for (const wallet of activeWallets) if (!trackedBalance(state, wallet.id, today).complete) unavailableEstimates.push(`Wallet ${wallet.id} has incomplete or inconsistent balance data; a reliable affordability conclusion is unavailable.`);
   const forecastCategoriesByWallet = new Map<string, Set<string>>();
-  const reducedCategories = new Set((state.fixedExpenses || []).filter((item) => item.active).map((item) => item.category));
   for (const reduction of scenario.spendingReductions || []) {
     const wallet = state.wallets.find((item) => item.id === reduction.walletId && !item.archived && item.currency === reduction.currency);
     if (!wallet || !reduction.category || !validDateKey(reduction.startDate) || !validDateKey(reduction.endDate) || reduction.startDate < today || reduction.endDate < reduction.startDate || !Number.isFinite(reduction.percent) || reduction.percent <= 0 || reduction.percent > 100) {
@@ -421,7 +426,7 @@ export function calculateScenario(state: AppState, scenario: FinancialScenario, 
     startDate.setMonth(startDate.getMonth() - 3);
     const historyStart = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}-01`;
     const currentMonthStart = `${new Date(`${today}T12:00:00`).getFullYear()}-${String(new Date(`${today}T12:00:00`).getMonth() + 1).padStart(2, "0")}-01`;
-    const history = state.transactions.filter((item) => item.wallet === wallet.id && item.type === "expense" && item.category === reduction.category && item.date.slice(0, 10) >= historyStart && item.date.slice(0, 10) < currentMonthStart && !reducedCategories.has(item.category));
+    const history = state.transactions.filter((item) => item.wallet === wallet.id && item.type === "expense" && item.category === reduction.category && item.date.slice(0, 10) >= historyStart && item.date.slice(0, 10) < currentMonthStart && !isLinkedPayment(item));
     const activeMonths = new Set(history.map((item) => item.date.slice(0, 7)));
     if (activeMonths.size < 2) {
       unavailableEstimates.push(`Not enough history to estimate savings for ${reduction.category}; at least two of the previous three complete months need recorded spending.`);
@@ -444,41 +449,43 @@ export function calculateScenario(state: AppState, scenario: FinancialScenario, 
   const elapsedMonthDays = Math.max(1, Number(today.slice(8, 10)));
   const daysToForecastEnd = Math.max(0, Math.round((Date.parse(`${end}T12:00:00`) - Date.parse(`${today}T12:00:00`)) / 86_400_000));
   if (scenario.estimateSpending && days > 0) {
-    for (const wallet of state.wallets.filter((item) => !item.archived)) {
+    for (const wallet of activeWallets) {
       if (dailyLimitWalletIds.has(wallet.id)) continue;
       const startDate = new Date(`${today}T12:00:00`);
       startDate.setDate(1);
       startDate.setMonth(startDate.getMonth() - 3);
       const historyStart = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}-${String(startDate.getDate()).padStart(2, "0")}`;
-      const excludedCategories = new Set([...reducedCategories, ...(forecastCategoriesByWallet.get(wallet.id) || [])]);
-      const monthToDate = state.transactions.filter((item) => item.wallet === wallet.id && item.type === "expense" && item.date.slice(0, 10) >= currentMonthStart && item.date.slice(0, 10) <= today && !excludedCategories.has(item.category));
-      if (monthToDate.length && daysToForecastEnd > 0) {
+      const excludedCategories = forecastCategoriesByWallet.get(wallet.id) || new Set<string>();
+      const monthToDate = state.transactions.filter((item) => item.wallet === wallet.id && item.type === "expense" && item.date.slice(0, 10) >= currentMonthStart && item.date.slice(0, 10) <= today && !isLinkedPayment(item) && !excludedCategories.has(item.category));
+      if (monthToDate.length && elapsedMonthDays >= 3 && daysToForecastEnd > 0) {
         const monthTotalCents = monthToDate.reduce((sum, item) => sum + cents(item.amount), 0);
         const dailyCents = monthTotalCents / elapsedMonthDays;
-        const estimateCents = Math.round(dailyCents * daysToForecastEnd);
+        const scale = currencyScale(wallet.currency);
+        const estimateCents = cents(Math.round(dailyCents / 100 * daysToForecastEnd * scale) / scale);
         spendingEstimates.push({ walletId: wallet.id, currency: wallet.currency, amount: estimateCents / 100, dailyAverage: Math.round(dailyCents) / 100, days: daysToForecastEnd, basis: "current-month-pace" });
         walletTotals.set(wallet.id, (walletTotals.get(wallet.id) || 0) - estimateCents);
         continue;
       }
-      const history = state.transactions.filter((item) => item.wallet === wallet.id && item.type === "expense" && item.date.slice(0, 10) >= historyStart && item.date.slice(0, 10) < currentMonthStart && !excludedCategories.has(item.category));
+      const history = state.transactions.filter((item) => item.wallet === wallet.id && item.type === "expense" && item.date.slice(0, 10) >= historyStart && item.date.slice(0, 10) < currentMonthStart && !isLinkedPayment(item) && !excludedCategories.has(item.category));
       const activeMonths = new Set(history.map((item) => item.date.slice(0, 7)));
       if (activeMonths.size < 2) continue;
       const elapsedDays = Math.max(1, Math.round((Date.parse(`${currentMonthStart}T12:00:00`) - Date.parse(`${historyStart}T12:00:00`)) / 86_400_000));
       const dailyCents = history.reduce((sum, item) => sum + cents(item.amount), 0) / elapsedDays;
-      const estimateCents = Math.round(dailyCents * days);
+      const scale = currencyScale(wallet.currency);
+      const estimateCents = cents(Math.round(dailyCents / 100 * days * scale) / scale);
       spendingEstimates.push({ walletId: wallet.id, currency: wallet.currency, amount: estimateCents / 100, dailyAverage: Math.round(dailyCents) / 100, days, basis: "historical-average" });
       walletTotals.set(wallet.id, (walletTotals.get(wallet.id) || 0) - estimateCents);
     }
     const hasCurrentPace = spendingEstimates.some((e) => e.basis === "current-month-pace");
     const hasHistoricalAvg = spendingEstimates.some((e) => e.basis === "historical-average");
     if (hasCurrentPace && !hasHistoricalAvg) {
-      assumptions.push("Flexible spending uses this month's recorded daily pace. Fixed-expense categories are excluded from the pace and scheduled fixed payments are counted separately.");
+      assumptions.push("Flexible spending uses this month's recorded daily pace. Only explicitly linked fixed payments are excluded from the pace; unpaid bills, including overdue ones, are counted separately.");
     } else if (hasHistoricalAvg && !hasCurrentPace) {
-      assumptions.push("Flexible spending uses the average daily spending from the previous three complete months. Fixed-expense categories are excluded from the pace and scheduled fixed payments are counted separately.");
+      assumptions.push("Flexible spending uses the average daily spending from the previous three complete months with at least two months of recorded history. Only explicitly linked fixed payments are excluded from the pace; unpaid bills, including overdue ones, are counted separately.");
     } else {
-      assumptions.push("Flexible spending uses this month's recorded daily pace when available; otherwise it falls back to the average from the previous three complete months. Fixed-expense categories are excluded from the pace and scheduled fixed payments are counted separately.");
+      assumptions.push("Flexible spending uses this month's recorded daily pace after at least three elapsed days; otherwise it falls back to the average from the previous three complete months with at least two months of history. Only explicitly linked fixed payments are excluded from the pace; unpaid scheduled occurrences, including overdue ones, are counted separately.");
     }
-    if (state.wallets.some((wallet) => !wallet.archived && !dailyLimitWalletIds.has(wallet.id) && !spendingEstimates.some((estimate) => estimate.walletId === wallet.id))) {
+    if (activeWallets.some((wallet) => !dailyLimitWalletIds.has(wallet.id) && !spendingEstimates.some((estimate) => estimate.walletId === wallet.id))) {
       unavailableEstimates.push("There is not enough current-month or prior-month expense history to estimate a spending pace for at least one wallet; only the known balance, scenario changes and scheduled fixed expenses are included there.");
     }
   }
@@ -493,19 +500,25 @@ export function calculateScenario(state: AppState, scenario: FinancialScenario, 
   }
 
   const touchedWallets = new Set([...changes.flatMap((change) => change.walletId ? [change.walletId] : []), ...(scenario.spendingReductions || []).flatMap((item) => item.walletId ? [item.walletId] : []), ...dailyLimits.map((item) => item.walletId), ...plannedByWallet.keys(), ...spendingEstimates.map((item) => item.walletId)]);
-  const wallets = [...touchedWallets].map((walletId) => {
+  if (scenario.walletIds || scenario.estimateSpending) activeWallets.forEach(w => touchedWallets.add(w.id));
+  const wallets = [...touchedWallets].filter(id => scopedWalletIds.has(id)).map((walletId) => {
     const wallet = state.wallets.find((item) => item.id === walletId)!;
-    const balanceNow = state.wallets.find((item) => item.id === walletId) ? (() => {
-      const item = state.wallets.find((entry) => entry.id === walletId)!;
-      return state.transactions.reduce((sum, transaction) => transaction.wallet === walletId ? sum + (transaction.type === "income" ? cents(transaction.amount) : -cents(transaction.amount)) : transaction.type === "transfer" && transaction.targetWallet === walletId ? sum + cents(transaction.amount) : sum, cents(item.initial)) / 100;
-    })() : 0;
+    const balanceNow = trackedBalance(state, walletId, today).amount;
     const projectedBalance = (walletTotals.get(walletId) || 0) / 100;
-    return { walletId, currency: wallet.currency, balanceNow, projectedBalance, shortfall: Math.max(0, -projectedBalance) };
+    const components = {
+      unpaidBills: (plannedByWallet.get(walletId) || 0) / 100,
+      paceSpending: spendingEstimates.filter(e => e.walletId === walletId).reduce((sum, e) => sum + cents(e.amount), 0) / 100,
+      dailyLimitSpending: (dailyLimitByWallet.get(walletId) || 0) / 100,
+      hypotheticalIncome: changes.filter(c => c.walletId === walletId && c.direction === "income").reduce((sum, c) => sum + cents(c.amount), 0) / 100,
+      hypotheticalExpense: changes.filter(c => c.walletId === walletId && c.direction === "expense").reduce((sum, c) => sum + cents(c.amount), 0) / 100,
+      reducedCategorySpending: savings.filter(s => s.walletId === walletId).reduce((sum, s) => sum + cents(s.baselineAmount) - cents(s.savedAmount), 0) / 100,
+    };
+    return { walletId, currency: wallet.currency, balanceNow, projectedBalance, shortfall: Math.max(0, -projectedBalance), components };
   });
 
   const budgets = state.goals.filter((goal) => goal.kind === "budget").flatMap((budget) => {
     const wallet = state.wallets.find((item) => item.id === budget.wallet && !item.archived);
-    if (!wallet || wallet.currency !== budget.currency) return [];
+    if (!wallet || !scopedWalletIds.has(wallet.id) || wallet.currency !== budget.currency) return [];
     const summary = budgetSummary(state, budget, today);
     const scenarioSpend = changes.filter((change) => change.direction === "expense" && change.walletId === budget.wallet && change.date >= summary.start && change.date <= summary.end && (!budget.category || change.category === budget.category)).reduce((sum, change) => sum + cents(change.amount), 0);
     const savingsCents = savings.filter((item) => item.walletId === budget.wallet && item.endDate >= summary.start && item.startDate <= summary.end && (!budget.category || item.category === budget.category)).reduce((sum, item) => {
@@ -517,10 +530,9 @@ export function calculateScenario(state: AppState, scenario: FinancialScenario, 
     }, 0);
     const forecastEnd = end < summary.end ? end : summary.end;
     const actualToDateCents = state.transactions.filter((item) => item.wallet === budget.wallet && item.type === "expense" && (!budget.category || item.category === budget.category) && item.date.slice(0, 10) >= summary.start && item.date.slice(0, 10) <= today).reduce((sum, item) => sum + cents(item.amount), 0);
-    const plannedAmountCents = (state.fixedExpenses || []).filter((item) => item.active && item.budgetId === budget.id).reduce((sum, item) => sum + unpaidOccurrences(state, item, nextDate(today), forecastEnd).length * cents(item.amount), 0);
-    const fixedCategories = new Set((state.fixedExpenses || []).filter((item) => item.active && item.budgetId === budget.id).map((item) => item.category));
+    const plannedAmountCents = (state.fixedExpenses || []).filter((item) => item.active && item.budgetId === budget.id).reduce((sum, item) => sum + unpaidOccurrences(state, item, item.dueDate, forecastEnd).length * cents(item.amount), 0);
     const budgetMonthStart = summary.start > currentMonthStart ? summary.start : currentMonthStart;
-    const monthSpendCents = state.transactions.filter((item) => item.wallet === budget.wallet && item.type === "expense" && (!budget.category || item.category === budget.category) && !fixedCategories.has(item.category) && item.date.slice(0, 10) >= budgetMonthStart && item.date.slice(0, 10) <= today).reduce((sum, item) => sum + cents(item.amount), 0);
+    const monthSpendCents = state.transactions.filter((item) => item.wallet === budget.wallet && item.type === "expense" && (!budget.category || item.category === budget.category) && !isLinkedPayment(item) && item.date.slice(0, 10) >= budgetMonthStart && item.date.slice(0, 10) <= today).reduce((sum, item) => sum + cents(item.amount), 0);
     const futureDays = Math.max(0, Math.round((Date.parse(`${forecastEnd}T12:00:00`) - Date.parse(`${today}T12:00:00`)) / 86_400_000));
     const budgetDailyLimits = dailyLimits.filter((limit) => limit.walletId === budget.wallet && (!budget.category || limit.category === budget.category));
     const dailyLimitAmountCents = budgetDailyLimits.reduce((sum, limit) => {
@@ -535,7 +547,7 @@ export function calculateScenario(state: AppState, scenario: FinancialScenario, 
     const projectedSpendCents = actualToDateCents + plannedAmountCents + paceAmountCents + forecastScenarioSpend - savingsCents;
     const dailyFlexibleLimitCents = futureDays > 0 ? Math.max(0, Math.floor((cents(budget.amount) - actualToDateCents - plannedAmountCents - forecastScenarioSpend + savingsCents) / futureDays)) : 0;
     const forecastAvailable = !scenario.estimateSpending || monthSpendCents > 0 || futureDays === 0;
-    return [{ budgetId: budget.id, currency: budget.currency, actualRemaining: summary.remaining, afterScenario: Math.round(summary.remaining * 100 - scenarioSpend + savingsCents) / 100, unallocatedAfterScenario: Math.round(summary.allocationRemaining * 100 - scenarioSpend + savingsCents) / 100, projectedSpend: projectedSpendCents / 100, projectedRemaining: (cents(budget.amount) - projectedSpendCents) / 100, plannedAmount: plannedAmountCents / 100, paceAmount: paceAmountCents / 100, dailyFlexibleLimit: dailyFlexibleLimitCents / 100, forecastEnd, forecastAvailable }];
+    return [{ budgetId: budget.id, title: budget.title, currency: budget.currency, actualRemaining: summary.remaining, afterScenario: Math.round(summary.remaining * 100 - scenarioSpend + savingsCents) / 100, unallocatedAfterScenario: Math.round(summary.allocationRemaining * 100 - scenarioSpend + savingsCents) / 100, projectedSpend: projectedSpendCents / 100, projectedRemaining: (cents(budget.amount) - projectedSpendCents) / 100, plannedAmount: plannedAmountCents / 100, paceAmount: paceAmountCents / 100, dailyFlexibleLimit: dailyFlexibleLimitCents / 100, forecastEnd, forecastAvailable }];
   });
 
   if (plannedBills.length) assumptions.push("Active fixed expenses due during the scenario period were subtracted from projected wallet balances; they remain plans, not recorded transactions.");
@@ -561,11 +573,7 @@ export function calculateScenario(state: AppState, scenario: FinancialScenario, 
       const finish = limit.endDate < end ? limit.endDate : end;
       const limitDays = Math.max(1, Math.round((Date.parse(`${finish}T12:00:00`) - Date.parse(`${start}T12:00:00`)) / 86_400_000) + 1);
       const plannedBillsCents = plannedByWallet.get(wallet.id) || 0;
-      const initialBalanceCents = state.transactions.reduce((sum, item) => {
-        if (item.wallet === wallet.id) return sum + (item.type === "income" ? cents(item.amount) : -cents(item.amount));
-        if (item.type === "transfer" && item.targetWallet === wallet.id) return sum + cents(item.amount);
-        return sum;
-      }, cents(wallet.initial));
+      const initialBalanceCents = cents(trackedBalance(state, wallet.id, today).amount);
       const availableCents = initialBalanceCents - plannedBillsCents;
       if (availableCents > 0 && limitDays > 0) {
         const safeDaily = Math.floor(availableCents / limitDays / 100);

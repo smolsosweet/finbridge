@@ -16,6 +16,7 @@ import { FixedExpenseActions } from "@/components/payments/FixedExpenseActions";
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 import { useFinancialDate } from "./useFinancialDate";
 import { fixedExpenseOccurrence, occurrenceStatusCopy } from "@/lib/fixed-expense-payments";
+import { deletePlanningRecords } from "@/lib/planning-deletion";
 
 
 const COPY = {
@@ -378,11 +379,11 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   };
   const deleteBudget = (budgetId: string) => {
     if (!window.confirm(t.deleteBudgetConfirm)) return;
-    updateState((current) => ({ ...current, goals: current.goals.filter((item) => item.id !== budgetId), fixedExpenses: (current.fixedExpenses || []).map(item => item.budgetId === budgetId ? { ...item, walletId: current.goals.find(g => g.id === budgetId)?.wallet || item.walletId, budgetId: "" } : item) }));
+    updateState(current => deletePlanningRecords(current, "budget", [budgetId]));
   };
   const deleteFixed = (expenseId: string) => {
     if (!window.confirm(t.deleteFixedConfirm)) return;
-    updateState((current) => ({ ...current, fixedExpenses: (current.fixedExpenses || []).filter((item) => item.id !== expenseId) }));
+    updateState(current => deletePlanningRecords(current, "fixed_expense", [expenseId]));
   };
   const filteredBudgets = budgets.filter((item) => walletFilter === "all" || item.wallet === walletFilter);
   const filteredFixed = fixed.filter((item) => { const parent = budgets.find((budget) => budget.id === item.budgetId); return (parentFilter === "all" || item.budgetId === parentFilter) && (walletFilter === "all" || (parent?.wallet || item.walletId) === walletFilter); });

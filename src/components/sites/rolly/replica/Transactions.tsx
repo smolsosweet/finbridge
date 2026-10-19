@@ -13,6 +13,7 @@ import { applyDraftAmountCorrection, categoryResolutionDraftIds, createTimeoutTr
 import { resolveExplicitWallet, resolveUniqueCurrencyWallet } from "@/lib/transaction-currency";
 import { answerFinancialQuery, resolveFinancialFollowup, type FinancialAction } from "@/lib/financial-chat";
 import { modelHistory } from "@/lib/chat-local-plan";
+import { answerPresentationSchema } from "@/lib/assistant-response";
 import { resolveSpendingPlanAdjustment, spendingPlanAdjustmentSchema, spendingPlanOptionsSchema, type SpendingPlanOptions } from "@/lib/financial-outlook";
 import { ChatSpendingPlan } from "./ChatSpendingPlan";
 import { FinancialChatAnswer } from "./FinancialChatAnswer";
@@ -20,10 +21,13 @@ import { prepareReceiptImage } from "@/lib/receipt-image";
 import { definitelyRejectedWorkspace, workspaceSaveErrorMessage } from "@/lib/workspace-payload";
 import { pendingDraftInterruption, pendingDraftReminder, rollbackRejectedDrafts, shouldBlockNewDraft } from "@/lib/pending-draft-policy";
 import { asksForCalculationExplanation, scenarioCalculationExplanation } from "@/lib/scenario-explanation";
+import { scenarioAnswer } from "@/lib/scenario-answer";
+import { applyPlanningDeletion, explicitPlanningDeletion, planningConfirmationReply, planningDeletionCopy, planningDeletionSchema, planningEntities, planningReferencesSchema, planningSelectionReply, type PlanningDeletion } from "@/lib/planning-deletion";
+import { PlanningDeletionCard } from "./PlanningDeletionCard";
 import { hasCompatibleDraftWallet, unavailableWalletReply } from "@/lib/transaction-drafts";
 import { WorkspaceActionCard } from "./WorkspaceActionCard";
 import { applyWorkspaceProposal, inspectWorkspaceProposal, isWorkspaceCreationRequest, workspaceActionCopy, workspaceProposalSchema, type ActionField, type WorkspaceProposal } from "@/lib/workspace-actions";
-import { calculateScenario, normalizePlannerResponse, scenarioContext, type ScenarioResult } from "@/lib/scenario-planner";
+import { calculateScenario, normalizePlannerResponse, scenarioContext, type NormalizedPlannerResponse, type ScenarioResult } from "@/lib/scenario-planner";
 import planStyles from "./FinancialOutlook.module.css";
 import { tools } from "./Tools";
 import { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName, type AppLanguage } from "@/lib/i18n";
@@ -547,6 +551,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           const restoredMessages = saved.messages.map((originalMessage) => {
             let message = { ...originalMessage, text: originalMessage.role === "assistant" && originalMessage.text === "Xin chào!👋 Hãy mô tả giao dịch; tôi sẽ tạo bản nháp để bạn kiểm tra trước khi lưu." ? "Xin chào!👋 Hãy mô tả giao dịch; Finn sẽ tạo bản nháp để bạn kiểm tra trước khi lưu." : originalMessage.text };
             if (message.workspaceProposal?.status === "saving") message = { ...message, workspaceProposal: { ...message.workspaceProposal, status: "failed" } };
+            if (message.planningDeletion?.status === "saving") message = { ...message, planningDeletion: { ...message.planningDeletion, status: "failed" } };
             if (message.categoryOperation?.status === "saving") message = { ...message, categoryOperation: { ...message.categoryOperation, status: "failed" } };
             if (message.transactionDeletion?.status === "saving") message = { ...message, transactionDeletion: { ...message.transactionDeletion, status: "failed" } };
             const blockedReferences = [...(message.draftIds || []), ...(message.walletChoiceDraftIds || []), ...(message.categoryChoiceDraftIds || [])].filter(id => blockedIds.has(id));
@@ -724,6 +729,51 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   function markWorkspaceProposal(id: string, patch: Partial<WorkspaceProposal>) {
     setMessages(previous => previous.map(item => item.workspaceProposal?.id === id ? { ...item, workspaceProposal: { ...item.workspaceProposal, ...patch } } : item));
   }
+  function markPlanningDeletion(id: string, patch: Partial<PlanningDeletion>) {
+    setMessages(previous => previous.map(item => item.planningDeletion?.id === id ? { ...item, planningDeletion: { ...item.planningDeletion, ...patch } } : item));
+  }
+  function selectPlanningDeletion(id: string, targetId: string, selected: boolean) {
+    if (busy || committing) return;
+    setMessages(previous => previous.map(item => {
+      const proposal = item.planningDeletion;
+      if (proposal?.id !== id || proposal.applied || !["pending", "failed"].includes(proposal.status) || !proposal.targets.some(t => t.id === targetId)) return item;
+      return { ...item, planningDeletion: { ...proposal, selectedIds: selected ? [...new Set([...proposal.selectedIds, targetId])] : proposal.selectedIds.filter(key => key !== targetId), error: undefined } };
+    }));
+  }
+  function cancelPlanningDeletion(id: string) {
+    if (busy || committing) return;
+    const proposal = [...messages].reverse().find(m => m.planningDeletion?.id === id)?.planningDeletion;
+    if (!proposal || proposal.applied || !["pending", "failed"].includes(proposal.status)) return;
+    markPlanningDeletion(id, { status: "cancelled", error: undefined });
+  }
+  async function confirmPlanningDeletion(id: string) {
+    if (workspaceCreationLock.current || busy || committing || categoryBusy || deletingId) return;
+    const proposal = [...messages].reverse().find(m => m.planningDeletion?.id === id)?.planningDeletion;
+    if (!proposal || !["pending", "failed"].includes(proposal.status) || !proposal.selectedIds.length) return;
+    const owner = workspaceOwner(), generation = conversationGeneration.current;
+    const t = planningDeletionCopy[resolveLanguage(state.settings.language)];
+    let applied = !!proposal.applied;
+    workspaceCreationLock.current = true; setCommitting(true); markPlanningDeletion(id, { status: "saving", error: undefined });
+    try {
+      if (!applied) {
+        await flushWorkspace(true);
+        if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+        updateState(current => {
+          if (workspaceOwner() !== owner) throw new Error("ACCOUNT_CHANGED");
+          const next = applyPlanningDeletion(current, proposal);
+          const chat = next.transactionChat || { messages, drafts, clarifyingDraftId };
+          return { ...next, transactionChat: { ...chat, messages: chat.messages.map(item => item.planningDeletion?.id === id ? { ...item, planningDeletion: { ...item.planningDeletion, status: "saving", applied: true } } : item) } };
+        });
+        applied = true; markPlanningDeletion(id, { applied: true, status: "saving" });
+      }
+      await flushWorkspace(true);
+      if (workspaceOwner() !== owner || conversationGeneration.current !== generation) return;
+      markPlanningDeletion(id, { status: "confirmed", applied: true, error: undefined });
+      setMessages(previous => [...previous, { role: "assistant", text: t.saved }]);
+    } catch (error) {
+      if (workspaceOwner() === owner && conversationGeneration.current === generation) markPlanningDeletion(id, { status: "failed", applied, error: !applied && error instanceof Error && error.message === "PLANNING_DATA_CHANGED" ? t.stale : t.failed });
+    } finally { workspaceCreationLock.current = false; setCommitting(false); }
+  }
   function cancelWorkspaceProposal(id: string) {
     if (busy || committing) return;
     const proposal = [...messages].reverse().find(item => item.workspaceProposal?.id === id)?.workspaceProposal;
@@ -846,6 +896,19 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
   async function send(value: string, requestedDraftId?: string) {
     const message = value.trim();
     if (!message || busy || aiRequestLock.current || committing || categoryBusy || deletingId) return;
+    const recentAssistant = [...messages].reverse().find(m => m.role === "assistant");
+    const pendingPlanningDeletion = recentAssistant?.planningDeletion;
+    if (pendingPlanningDeletion && ["pending", "failed"].includes(pendingPlanningDeletion.status)) {
+      const reply = planningConfirmationReply(message);
+      if (reply === "confirm" && pendingPlanningDeletion.selectedIds.length) {
+        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); await confirmPlanningDeletion(pendingPlanningDeletion.id); return;
+      }
+      if (reply === "cancel") { setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); cancelPlanningDeletion(pendingPlanningDeletion.id); return; }
+      const selection = planningSelectionReply(message, pendingPlanningDeletion);
+      if (selection && !pendingPlanningDeletion.applied) {
+        setText(""); setMessages(previous => [...previous.map(m => m.planningDeletion?.id === pendingPlanningDeletion.id ? { ...m, planningDeletion: { ...m.planningDeletion, status: "cancelled" as const } } : m), { role: "user", text: message }, { role: "assistant", text: planningDeletionCopy[resolveLanguage(state.settings.language)].review, planningDeletion: { ...pendingPlanningDeletion, id: crypto.randomUUID(), selectedIds: [selection], status: "pending" } }]); return;
+      }
+    }
     const outstanding = latestDrafts.current;
     if (!requestedDraftId && outstanding.length === 1 && /^(?:(?:huy|bo)(?:\s+(?:ban nhap|giao dich nay|giao dich do))?|cancel(?:\s+(?:draft|this draft))?|取消(?:草稿)?)[.!\s]*$/i.test(normalizeVietnameseMessage(message))) {
       setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); removeDraft(outstanding[0].id); return;
@@ -853,7 +916,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
     if (!requestedDraftId && outstanding.length === 1 && /^(?:xac nhan(?:\s+luu)?|dong y|confirm|yes|确认)[.!\s]*$/i.test(normalizeVietnameseMessage(message))) {
       setText(""); setMessages(previous => [...previous, { role: "user", text: message }]); await confirmDrafts([outstanding[0].id]); return;
     }
-    if (!requestedDraftId && shouldBlockNewDraft(message, outstanding)) {
+    if (!requestedDraftId && !explicitPlanningDeletion(message, state) && shouldBlockNewDraft(message, outstanding)) {
       setMessages(previous => [...previous, { role: "user", text: message }, pendingDraftInterruption(message, outstanding, resolveLanguage(state.settings.language))]);
       setText(message); return;
     }
@@ -863,7 +926,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
       await confirmWorkspaceProposal(pendingWorkspace.id); return;
     }
-    if (!requestedDraftId && (isWorkspaceCreationRequest(message) || pendingWorkspace)) {
+    if (!requestedDraftId && !explicitPlanningDeletion(message, state) && (isWorkspaceCreationRequest(message) || pendingWorkspace)) {
       if (await requestWorkspaceCreation(message)) return;
     }
     const pendingDrafts = drafts.filter(d => !state.transactions.some(t => t.id === d.id));
@@ -977,6 +1040,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           today: today(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           selectedWalletId,
+          ...(workspacePersistence() === "browser" ? { planningContext: { goals: state.goals, fixedExpenses: state.fixedExpenses || [] } } : {}),
           pendingDrafts: [...(activeDraft ? [activeDraft] : []), ...pendingDrafts.filter(d => d.id !== activeDraftId)].slice(0, 50),
           activeDraftId,
           referencedCategories,
@@ -999,6 +1063,12 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       const validShape = returned.every((item) => item && typeof item === "object" && typeof (item as TransactionDraft).id === "string" && typeof (item as TransactionDraft).title === "string" && Array.isArray((item as TransactionDraft).needsReview));
       if (!validShape || returned.length > 20) throw new Error("AI trả về dữ liệu chưa hợp lệ. Vui lòng thử lại.");
       const ai = result as { intent: string; operationIntent?: ConversationIntent; targetDraftId?: string | null; categoryOperation?: CategoryCommand | null; action?: string; actions?: FinancialAction[]; walletId?: string | null; scope?: "selected" | "all"; periodStart?: string | null; periodEnd?: string | null; category?: string | null; searchTerm?: string | null; transactionType?: "expense" | "income" | null; percentage?: number | null; financialAnswer?: string | null; reply?: string; deletion?: TransactionDeletionCriteria };
+      if (ai.operationIntent === "delete_budget" || ai.operationIntent === "delete_fixed_expense") {
+        const parsed = planningDeletionSchema.safeParse((result as { planningDeletion?: unknown }).planningDeletion);
+        if (!parsed.success) throw new Error(serviceCopy.unavailable);
+        setMessages(previous => [...previous, { role: "assistant", text: parsed.data.targets.length ? "" : planningDeletionCopy[resolveLanguage(state.settings.language)].empty, ...(parsed.data.targets.length ? { planningDeletion: parsed.data } : {}) }]);
+        return;
+      }
       if (shouldBlockNewDraft(message, latestDrafts.current, ai.intent)) {
         setMessages(previous => [...previous, pendingDraftInterruption(message, latestDrafts.current, resolveLanguage(state.settings.language))]);
         setText(message); return;
@@ -1045,34 +1115,26 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (ai.operationIntent === "simulate_financial_scenario") {
         const snapshot = getWorkspaceState();
         const input = { message, preferredLanguage: resolveLanguage(snapshot.settings.language), today: today(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", history: modelHistory(messages).slice(-6), selectedWalletId, context: scenarioContext(snapshot) };
-        const response = await fetch("/api/ai/scenario-planner", { method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": submissionOwner || "" }, body: JSON.stringify(input), signal: AbortSignal.any([AbortSignal.timeout(35_000), requestController.signal]) });
-        const raw: unknown = await response.json().catch(() => null);
+        // The assistant already interpreted and validated the scenario in its one
+        // provider call. Keep the legacy endpoint only for older responses.
+        const embedded = result as { scenarioResponse?: NormalizedPlannerResponse | null; calculations?: ScenarioResult[] | null; baselines?: ScenarioResult[] | null; presentation?: unknown };
+        let raw: unknown = embedded.scenarioResponse ? { ...embedded.scenarioResponse, calculations: embedded.calculations } : null;
+        if (!raw) {
+          const response = await fetch("/api/ai/scenario-planner", { method: "POST", headers: { "Content-Type": "application/json", "x-finbridge-workspace-owner": submissionOwner || "" }, body: JSON.stringify(input), signal: AbortSignal.any([AbortSignal.timeout(35_000), requestController.signal]) });
+          raw = await response.json().catch(() => null);
+          if (!response.ok) throw new Error(serviceCopy.unavailable);
+        }
         if (workspaceOwner() !== submissionOwner || conversationGeneration.current !== submissionGeneration) return;
-        if (!response.ok) throw new Error(serviceCopy.unavailable);
-        const plan = normalizePlannerResponse(raw, input);
-        const labels = {
-          vi: { now: "Hiện tại", projected: "Dự kiến cuối kỳ", risk: "Có thể thiếu", note: "Mô phỏng, không thay đổi dữ liệu thật", assumptions: "Giả định" },
-          en: { now: "Current balance", projected: "Projected balance", risk: "Potential shortfall", note: "Simulation only; actual data is unchanged", assumptions: "Assumptions" },
-          zh: { now: "当前余额", projected: "预计余额", risk: "可能短缺", note: "仅为模拟，不更改实际数据", assumptions: "假设" },
-        }[input.preferredLanguage];
+        const plan = embedded.scenarioResponse || normalizePlannerResponse(raw, input);
+        const presentation = answerPresentationSchema.safeParse(embedded.presentation);
         const explanations: string[] = [];
         const parts = plan.scenarios.map(scenario => {
           const serverCalculations = raw && typeof raw === "object" && "calculations" in raw && Array.isArray(raw.calculations) ? raw.calculations as ScenarioResult[] : [];
           const result = workspacePersistence() === "browser" ? calculateScenario(snapshot, scenario, input.today) : serverCalculations.find(c => c.scenarioId === scenario.id);
           if (!result || !Array.isArray(result.wallets) || result.wallets.some(w => !snapshot.wallets.some(wallet => wallet.id === w.walletId && wallet.currency === w.currency) || ![w.balanceNow, w.projectedBalance, w.shortfall].every(Number.isFinite))) throw new Error(serviceCopy.unavailable);
           explanations.push(scenarioCalculationExplanation(result, scenario, snapshot.wallets, input.today, input.preferredLanguage));
-          const paceNote = { vi: "Dự kiến nếu giữ nhịp chi hiện tại; chưa cộng thu nhập mới ngoài kịch bản.", en: "Estimate at the same spending pace; no new income outside the scenario is added.", zh: "假设保持当前支出速度；不增加情景以外的新收入。" }[input.preferredLanguage];
-          const missingNote = { vi: "Chưa đủ lịch sử cho một phần dự báo chi tiêu.", en: "Some spending could not be forecast from the available history.", zh: "部分支出缺少足够的历史数据。" }[input.preferredLanguage];
-          // Build verdict from aggregate projected balances across all wallets in this scenario
-          const allPositive = result.wallets.every(w => w.projectedBalance >= 0);
-          const anyShortfall = result.wallets.some(w => w.shortfall > 0);
-          const verdictLine = anyShortfall
-            ? { vi: "⚠️ Có thể thiếu tiền — xem chi tiết bên dưới", en: "⚠️ Potential shortfall — see details below", zh: "⚠️ 可能资金不足 — 详见下方" }[input.preferredLanguage]
-            : allPositive
-              ? { vi: "✅ Còn đủ — dự kiến cuối kỳ vẫn dương", en: "✅ On track — projected balance stays positive", zh: "✅ 资金充足 — 预计期末余额为正" }[input.preferredLanguage]
-              : { vi: "⚠️ Dự kiến âm cuối kỳ — xem chi tiết", en: "⚠️ Projected negative balance — see details", zh: "⚠️ 预计期末余额为负 — 详见下方" }[input.preferredLanguage];
-          const walletLines = result.wallets.map(w => `${snapshot.wallets.find(item => item.id === w.walletId)?.name || w.walletId}: ${labels.now} ${formatTransactionMoney(w.balanceNow, w.currency)} → ${labels.projected} **${formatTransactionMoney(w.projectedBalance, w.currency)}**${w.shortfall > 0 ? ` · ${labels.risk} ${formatTransactionMoney(w.shortfall, w.currency)}` : ""}`);
-          return [scenario.name, verdictLine, ...walletLines, ...(result.includesPaceForecast ? [paceNote] : []), ...(result.unavailableEstimates.length ? [missingNote] : [])].join("\n");
+          const baseline = workspacePersistence() === "browser" ? calculateScenario(snapshot, { ...scenario, changes: [], spendingReductions: [], dailySpendingLimits: [] }, input.today) : embedded.baselines?.find(b => b.scenarioId === scenario.id);
+          return scenarioAnswer(result, scenario, snapshot.wallets, input.today, input.preferredLanguage, baseline, presentation.success ? presentation.data : undefined);
         });
         setMessages(previous => [...previous, { role: "assistant", text: parts.length ? parts.join("\n\n") : plan.clarification || plan.reply || serviceCopy.unavailable, scenarios: plan.scenarios, scenarioExplanation: explanations.length ? explanations.join("\n\n") : undefined, localOnly: true }]);
         return;
@@ -1109,6 +1171,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (ai.intent === "financial") {
         const allowedActions: FinancialAction[] = ["balance", "balance_after_obligation", "spending_summary", "category_breakdown", "top_category", "category_savings", "transactions", "budget_status", "safe_daily_allowance", "upcoming_obligations", "goals", "spending_trend", "anomalies", "explain", "unknown"];
         const actions = (ai.actions || [ai.action]).filter((action): action is FinancialAction => allowedActions.includes(action as FinancialAction));
+        const presentation = answerPresentationSchema.safeParse((result as { presentation?: unknown }).presentation);
         const localAnswer = answerFinancialQuery({
           action: allowedActions.includes(ai.action as FinancialAction) ? ai.action as FinancialAction : "unknown",
           actions,
@@ -1116,10 +1179,15 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           scope: ai.scope === "all" ? "all" : "selected", periodStart: ai.periodStart || null, periodEnd: ai.periodEnd || null,
           category: state.categories.includes(ai.category || "") ? ai.category || null : null,
           searchTerm: ai.searchTerm || null, transactionType: ai.transactionType || null, percentage: ai.percentage,
-        }, state, wallet, today());
+        }, state, wallet, today(), presentation.success ? presentation.data : undefined);
         const answer = typeof ai.financialAnswer === "string" ? ai.financialAnswer : localAnswer;
         setClarifyingDraftId(activeDraftId);
-        setMessages((previous) => [...previous, { role: "assistant", text: answer, localOnly: true, financialContext: {
+        const serverEntities = planningReferencesSchema.safeParse((result as { financialEntities?: unknown }).financialEntities);
+        const financialEntities: NonNullable<ChatMessage["financialEntities"]> = workspacePersistence() !== "browser" && serverEntities.success ? serverEntities.data : actions.includes("budget_status") ? planningEntities(state, "budget").filter(t => {
+          const budget = state.goals.find(g => g.id === t.id)!;
+          return (ai.scope === "all" || budget.wallet === (ai.walletId || wallet)) && (!ai.searchTerm || budget.title.toLowerCase().includes(ai.searchTerm.toLowerCase())) && (!ai.category || (budget.category || budget.title).toLowerCase().includes(ai.category.toLowerCase()));
+        }).map(t => ({ kind: "budget", id: t.id, title: t.title })) : [];
+        setMessages((previous) => [...previous, { role: "assistant", text: answer, localOnly: true, financialEntities, financialContext: {
           walletId: ai.walletId || wallet || null, scope: ai.scope === "all" ? "all" : "selected", searchTerm: ai.searchTerm || null,
           action: ai.action || "unknown", category: ai.category || null, periodStart: ai.periodStart || null,
           periodEnd: ai.periodEnd || null, percentage: ai.percentage ?? null,
@@ -1612,9 +1680,14 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       </div>
       <span className="r-chat-date">Hôm nay</span>
       {messages.map((message, index) => <div key={index} className={"r-message " + message.role + (message.draftIds ? " r-ai-draft-message" : "")}>
-        {message.spendingPlan ? <>{message.text && <p>{message.text}</p>}<ChatSpendingPlan state={state} asOf={today()} options={message.spendingPlan} onScope={busy || committing ? undefined : (options: SpendingPlanOptions) => setMessages(previous => [...previous, { role: "assistant", text: "", spendingPlan: options, localOnly: true }])}/></> : message.role === "assistant" && (message.financialContext || message.scenarioExplanation || message.draftTargetChoices) && !/gemini|AI Studio/i.test(message.text) ? <FinancialChatAnswer text={message.text} /> : <p>{message.role === "assistant" && /gemini|AI Studio/i.test(message.text)
+        {message.spendingPlan ? <>{message.text && <p>{message.text}</p>}<ChatSpendingPlan state={state} asOf={today()} options={message.spendingPlan} onScope={busy || committing ? undefined : (options: SpendingPlanOptions) => setMessages(previous => [...previous, { role: "assistant", text: "", spendingPlan: options, localOnly: true }])}/></> : message.role === "assistant" && (message.financialContext || message.scenarioExplanation || message.draftTargetChoices) && !/gemini|AI Studio/i.test(message.text) ? <FinancialChatAnswer text={message.text} calculationDetails={message.scenarioExplanation} calculationLabel={{ vi: "Xem cách tính", en: "Calculation details", zh: "查看计算方式" }[resolveLanguage(state.settings.language)]} /> : <p>{message.role === "assistant" && /gemini|AI Studio/i.test(message.text)
           ? message.draftIds?.length ? serviceCopy.draftReady : serviceCopy.unavailable
           : message.text}</p>}
+        {message.planningDeletion && !messages.slice(index + 1).some(item => item.planningDeletion?.id === message.planningDeletion?.id) && (() => {
+          const parsed = planningDeletionSchema.safeParse(message.planningDeletion);
+          return parsed.success ? <PlanningDeletionCard proposal={parsed.data} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
+            onSelect={(id, selected) => selectPlanningDeletion(parsed.data.id, id, selected)} onConfirm={() => void confirmPlanningDeletion(parsed.data.id)} onCancel={() => cancelPlanningDeletion(parsed.data.id)} /> : null;
+        })()}
         {message.workspaceProposal && !messages.slice(index + 1).some(item => item.workspaceProposal?.id === message.workspaceProposal?.id) && (() => {
           const parsed = workspaceProposalSchema.safeParse(message.workspaceProposal);
           return parsed.success ? <WorkspaceActionCard proposal={parsed.data} state={state} language={resolveLanguage(state.settings.language)} busy={busy || committing || categoryBusy || !!deletingId}
