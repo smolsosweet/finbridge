@@ -11,7 +11,7 @@ import { localDateKey } from "./chartWeek";
 import { budgetSummary, plannedOccurrences, validBudget, validFixedExpense } from "./planningModel";
 import { flushWorkspace, updateState, useAppState, type FixedExpense, type Goal } from "./store";
 import { addBudgetCategory, expenseCategoriesForWallet } from "@/lib/budget-categories";
-import { nextExpenseDue, unpaidOccurrences, fixedExpensePaymentInsight, type FixedExpensePaymentInsight } from "@/lib/fixed-expense-payments";
+import { nextExpenseDue, fixedExpensePaymentInsight, type FixedExpensePaymentInsight } from "@/lib/fixed-expense-payments";
 import { FixedExpenseActions } from "@/components/payments/FixedExpenseActions";
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 import { useFinancialDate } from "./useFinancialDate";
@@ -144,8 +144,6 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
   const language = String(state.settings.language || "").toLowerCase();
   const lang = /zh|chinese|trung|中文/.test(language) ? "zh" : /en|english|anh/.test(language) ? "en" : "vi";
   const t = COPY[lang], today = useFinancialDate(localDateKey(new Date()), String(state.settings.timeZone || "") || undefined);
-  const horizon = new Date(today + "T12:00:00Z"); horizon.setUTCDate(horizon.getUTCDate() + 30);
-  const unpaidHorizon = horizon.toISOString().slice(0, 10);
   const budgets = state.goals.filter((item) => item.kind === "budget");
   const fixed = state.fixedExpenses || [];
   const activeWallets = state.wallets.filter((item) => !item.archived);
@@ -475,7 +473,6 @@ export function Planning({ navigate, initialTab = "budget", initialForm = "" }: 
           {!filteredFixed.length ? <div className="fb-planning-empty"><ReceiptText size={30} /><h2>{t.emptyFixed}</h2><p>{t.emptyFixedHint}</p><button type="button" className="fb-add-button" disabled={!activeWallets.length} onClick={() => open("fixed", parentFilter === "all" ? undefined : parentFilter)}><Plus size={17} />{t.addFixed}</button></div> : sortedFixed.slice(0, visibleFixedCount).map((expense) => {
             const parent = budgets.find((item) => item.id === expense.budgetId);
             const currency = parent?.currency || state.wallets.find((wallet) => wallet.id === expense.walletId)?.currency || "";
-            const unpaid = expense.active ? unpaidOccurrences(state, expense, expense.dueDate, unpaidHorizon) : [];
             const nextDue = expense.active ? nextExpenseDue(state, expense, today) : null;
             const insight = fixedExpensePaymentInsight(state, expense, today);
             const statusDisplay = getPaymentStatusDisplay(expense, insight, currency);

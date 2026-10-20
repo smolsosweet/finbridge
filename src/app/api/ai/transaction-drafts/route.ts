@@ -1,7 +1,6 @@
 import { traceAiRequest, type AiRequestTiming } from "@/lib/ai-request-timing";
 import { readAiJson } from "@/lib/ai-request";
 import { AI_JSON_BYTES } from "@/lib/ai-limits";
-import { Type } from "@google/genai";
 import { z } from "zod";
 import { requireAiSession } from "@/lib/ai-access";
 import { createQuotaGemini } from "@/lib/ai-quota-gemini";
@@ -50,28 +49,6 @@ const responseSchema = z.object({
   }).strict()).min(1).max(20),
 }).strict();
 
-const outputSchema = {
-  type: Type.OBJECT,
-  properties: {
-    drafts: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING },
-          amount: { type: Type.NUMBER, nullable: true },
-          type: { type: Type.STRING, nullable: true, enum: ["expense", "income"] },
-          category: { type: Type.STRING, nullable: true },
-          date: { type: Type.STRING, nullable: true },
-          walletId: { type: Type.STRING, nullable: true },
-          needsReview: { type: Type.ARRAY, items: { type: Type.STRING, enum: ["amount", "type", "category", "date", "wallet"] } },
-        },
-        required: ["title", "amount", "type", "category", "date", "walletId", "needsReview"],
-      },
-    },
-  },
-  required: ["drafts"],
-};
 
 function validDate(value: string | null): boolean {
   if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;

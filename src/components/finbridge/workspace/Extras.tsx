@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useFeedbackSubmission } from "@/components/auth/useFeedbackSubmission";
 import { Check, ChevronLeft, ChevronRight, Flame, Plus, RotateCcw, Send, ThumbsUp } from "lucide-react";
 import { MonthCalendar } from "./Dashboard";
-import { Icon, Mascot, Modal, PageHeader, Toggle } from "./Ui";
+import { Icon, Modal, PageHeader, Toggle } from "./Ui";
 import { setSetting, useAppState } from "./store";
 import { settingsLanguage } from "./SettingsOverview";
 

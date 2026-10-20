@@ -157,7 +157,7 @@ export function FinBridgeApp({ screen = "" }: { screen?: string }) {
 
       {!isWelcome && !hasSharedHeader && screen !== "safetyAlerts" && <NotificationCenter navigate={navigate} floating />}
 
-      {!isWelcome && screen !== "addTransactionChatMode" && screen !== "safetyAlerts" && (
+      {!isWelcome && screen !== "addTransactionChatMode" && (
         <div
           role="button"
           tabIndex={0}

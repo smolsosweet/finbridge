@@ -15,7 +15,7 @@ export const REFERENCE_COPY = {
     error: "Could not complete the request. Please try again.", auth: "Your session or account changed. Sign in again or reload this page.",
     limited: "Too many estimates. Wait a minute and try again.", mismatch: "This request changed. Update rates and create a new estimate.", invalid: "Enter an amount greater than zero, up to 1,000,000 with at most two decimal places.",
     settings: "Real-money transfers require a connected, licensed payment partner. FinBridge currently provides reference estimates and a separate test workflow.",
-    swap: "Swap currencies", from: "From", to: "To", vndAmount: "VND amount to convert", foreignAmount: "Foreign currency amount", liveEstimate: "Live estimate",
+    swap: "Swap currencies", from: "From", to: "To", vndAmount: "VND amount to convert", foreignAmount: "Foreign currency amount", liveEstimate: "Live estimate", convertAmount: "Amount to convert",
   },
   vi: {
     title: "Ước tính theo tỷ giá tham khảo", subtitle: "Dự trù số tiền VND cần cho hóa đơn ở nước ngoài.",
@@ -31,7 +31,7 @@ export const REFERENCE_COPY = {
     error: "Chưa thể hoàn tất yêu cầu. Vui lòng thử lại.", auth: "Phiên đăng nhập hoặc tài khoản đã thay đổi. Hãy đăng nhập lại hoặc tải lại trang.",
     limited: "Bạn đã lập nhiều ước tính. Hãy đợi một phút rồi thử lại.", mismatch: "Nội dung yêu cầu đã thay đổi. Hãy cập nhật tỷ giá và lập ước tính mới.", invalid: "Nhập số tiền lớn hơn 0, tối đa 1,000,000 với không quá hai chữ số thập phân.",
     settings: "Báo giá thực hiện và chuyển tiền thật chỉ khả dụng khi FinBridge kết nối với đối tác thanh toán được cấp phép.",
-    swap: "Đổi chiều chuyển đổi", from: "Từ", to: "Đến", vndAmount: "Số tiền VND cần đổi", foreignAmount: "Số tiền ngoại tệ", liveEstimate: "Ước tính quy đổi",
+    swap: "Đổi chiều chuyển đổi", from: "Từ", to: "Đến", vndAmount: "Số tiền VND cần đổi", foreignAmount: "Số tiền ngoại tệ", liveEstimate: "Ước tính quy đổi", convertAmount: "Số tiền cần đổi",
   },
   zh: {
     title: "参考汇率估算", subtitle: "估算海外账单所需的 VND 金额。",
@@ -47,6 +47,6 @@ export const REFERENCE_COPY = {
     error: "无法完成请求。请重试。", auth: "您的会话或账户已变更。请重新登录或刷新此页。",
     limited: "估算请求过多。请稍等一分钟后重试。", mismatch: "请求内容已变更。请更新汇率后创建新估算。", invalid: "请输入大于 0 且不超过 1,000,000 的金额，最多两位小数。",
     settings: "只有 FinBridge 连接受监管的支付合作方后，才能提供可执行报价和真实汇款。",
-    swap: "切换换汇方向", from: "从", to: "到", vndAmount: "要兑换的 VND 金额", foreignAmount: "外币金额", liveEstimate: "实时折算",
+    swap: "切换换汇方向", from: "从", to: "到", vndAmount: "要兑换的 VND 金额", foreignAmount: "外币金额", liveEstimate: "实时折算", convertAmount: "要兑换的金额",
   },
 } satisfies Record<AppLanguage, Record<string, string>>;
