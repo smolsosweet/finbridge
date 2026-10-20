@@ -14,25 +14,6 @@ FinBridge is a multilingual personal finance workspace for wallets, transactions
 | Source download | [Download main as ZIP](https://github.com/smolsosweet/finbridge/archive/refs/heads/main.zip) |
 | Deployed version | [Release metadata](https://finbridge-orcin-phi.vercel.app/api/release) |
 
-### Two judge accounts
-
-Use **email and password**, rather than Google sign-in, for these pre-provisioned accounts.
-
-| Profile | Login email | Starting experience | Password |
-| --- | --- | --- | --- |
-| `demo_no_data` | `demo_no_data@demo.finbridge.invalid` | Empty account; complete the normal setup wizard, then enter synthetic records. | Supplied in the private judge access sheet. |
-| `demo_with_data` | `demo_with_data@demo.finbridge.invalid` | Five VND/USD/CNY wallets, varied categories, transactions across the previous and current calendar months, budgets, fixed bills, thresholds and historical in-app alerts. | Supplied in the private judge access sheet. |
-
-The submission provides a **separate private access sheet** with both passwords. Passwords are excluded from this public repository. If the sheet is missing, contact the submitting team through the competition channel.
-
-1. Open the [login page](https://finbridge-orcin-phi.vercel.app/login).
-2. Enter the full email above and its password from the private access sheet.
-3. Start with `demo_with_data` to explore the records. Use `demo_no_data` to evaluate onboarding and manual entry.
-4. Use separate browser profiles for the two accounts. Edits to a shared demo account are visible to everyone using that same account.
-5. Sign out when finished. The team resets data between evaluation sessions; do not close a demo account during judging.
-
-The `.invalid` addresses are reserved login identities, not real mailboxes. They cannot receive verification, recovery or alert email; demo threshold email consent starts off. Test actual email delivery separately using a registered account with a real inbox.
-
 ### Suggested evaluation walkthrough
 
 - Inspect the dashboard, wallet/currency filters and transaction history.
