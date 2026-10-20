@@ -1,11 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { hashPassword } from "./password-security";
-import { parseWorkspace } from "./workspace-model";
-import { writeFinanceTables, writeAlertRules } from "./finance-tables";
-import { emptySafetyDocument, advanceSafety } from "./safety-model";
-import { databaseSafety, saveSafety } from "./safety-repository";
+import { writeFinanceTables } from "./finance-tables";
+import { emptySafetyDocument } from "./safety-model";
+import { saveSafety } from "./safety-repository";
 import { onboardingSchema } from "./onboarding";
+import { populatedDemoWorkspace, populatedDemoSafety } from "./demo-profile-data";
 
 export const DEMO_ACCOUNTS_SQL = `CREATE TABLE IF NOT EXISTS finbridge_demo_accounts (
   user_id TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE RESTRICT,
@@ -14,28 +14,10 @@ export const DEMO_ACCOUNTS_SQL = `CREATE TABLE IF NOT EXISTS finbridge_demo_acco
 );`;
 export function demoIdentity(slot: number) {
   if (![1, 2].includes(slot)) throw new Error("DEMO_SLOT_MUST_BE_1_OR_2");
-  return { id: "finbridge-demo-judge-" + slot, email: "judge-" + slot + "@demo.finbridge.invalid", name: "FinBridge Demo " + slot };
+  const name = slot === 1 ? "demo_no_data" : "demo_with_data";
+  return { id: "finbridge-demo-judge-" + slot, email: name + "@demo.finbridge.invalid", name };
 }
-export function demoWorkspace(now = new Date()) {
-  const today = now.toISOString().slice(0, 10), month = today.slice(0, 7) + "-01";
-  const due = new Date(now); due.setUTCDate(due.getUTCDate() + 3);
-  return parseWorkspace({
-    wallets: [{ id: "demo-vnd", name: "Demo VND", currency: "VND", initial: 20_000_000, type: "cash" }, { id: "demo-usd", name: "Demo USD", currency: "USD", initial: 800, type: "cash" }],
-    categories: ["Meals", "Transport", "Rent", "Salary"],
-    categoryMeta: Object.fromEntries(["Meals", "Transport", "Rent", "Salary"].map(name => [name, { type: name === "Salary" ? "income" : "expense", icon: "", children: [] }])),
-    walletCategories: { "demo-vnd": ["Meals", "Transport", "Rent", "Salary"], "demo-usd": ["Meals", "Salary"] },
-    transactions: [
-      { id: "demo-income", title: "Synthetic salary", amount: 12_000_000, type: "income", wallet: "demo-vnd", category: "Salary", date: today, note: "Synthetic demo data" },
-      { id: "demo-meal", title: "Synthetic meals this month", amount: 1_350_000, type: "expense", wallet: "demo-vnd", category: "Meals", date: today, note: "Synthetic demo data" },
-      { id: "demo-transport", title: "Synthetic transport", amount: 180_000, type: "expense", wallet: "demo-vnd", category: "Transport", date: today, note: "Synthetic demo data" },
-    ],
-    goals: [{ id: "demo-budget", kind: "budget", title: "Demo meals budget", amount: 1_500_000, saved: 0, currency: "VND", wallet: "demo-vnd", category: "Meals", date: month, cycle: "monthly", direction: "", person: "" }],
-    fixedExpenses: [{ id: "demo-rent", budgetId: "", walletId: "demo-vnd", title: "Synthetic rent", amount: 3_000_000, category: "Rent", dueDate: due.toISOString().slice(0, 10), recurrence: "monthly", intervalMonths: 1, reminderDays: 3, active: true }],
-    recurring: [], rules: [],
-    settings: { name: "FinBridge Demo", language: "English", theme: "light", timeZone: "Asia/Ho_Chi_Minh", onboardingCompleted: today },
-    transactionChat: { messages: [], drafts: [], clarifyingDraftId: null }, planningChat: [],
-  });
-}
+export const demoWorkspace = populatedDemoWorkspace;
 // Constant dependency order. Every delete is constrained by a registered demo owner.
 const resetTables = [
   "finbridge_transfer_mutations", "finbridge_transfer_audit", "finbridge_transfer_plans", "finbridge_transfer_quotes", "finbridge_transfer_bills", "finbridge_transfer_accounts", "finbridge_transfer_controls",
@@ -55,20 +37,25 @@ async function seed(client: PoolClient, owner: string, now: Date) {
   const previous = await client.query("SELECT revision FROM finbridge_workspaces WHERE user_id=$1", [owner]);
   const revision = (previous.rows[0]?.revision || 0) + 1;
   for (const table of resetTables) await client.query("DELETE FROM " + table + " WHERE user_id=$1", [owner]);
+  if (owner === demoIdentity(1).id) {
+    // Empty means genuinely unconfigured: no saved workspace or onboarding.
+    // Its first login follows the same setup path as a new verified account.
+    await client.query("UPDATE finbridge_demo_accounts SET reset_at=$2 WHERE user_id=$1", [owner, now]);
+    await client.query('UPDATE "session" SET "expiresAt"=CURRENT_TIMESTAMP WHERE "userId"=$1', [owner]);
+    return;
+  }
   const data = demoWorkspace(now), encoded = JSON.stringify(data), mutation = randomUUID();
   await client.query("INSERT INTO finbridge_workspaces(user_id,revision,data) VALUES($1,$2,$3)", [owner, revision, encoded]);
   await writeFinanceTables(client, owner, data);
   await client.query("INSERT INTO finbridge_workspace_revisions(user_id,revision,mutation_id,content_hash,data) VALUES($1,$2,$3,$4,$5)", [owner, revision, mutation, createHash("sha256").update(encoded).digest("hex"), encoded]);
-  const setup = onboardingSchema.parse({ version: 1, displayName: "FinBridge Demo", occupation: "student", language: "en",
-    wallets: data.wallets.map(({ id, name, currency, initial }) => ({ id, name, currency, initial })), expenseCategories: ["Meals", "Transport", "Rent"], incomeCategories: ["Salary"],
+  const setup = onboardingSchema.parse({ version: 1, displayName: "demo_with_data", occupation: "employee", language: "en",
+    wallets: data.wallets.map(({ id, name, currency, initial }) => ({ id, name, currency, initial })), expenseCategories: data.categories.filter(c => data.categoryMeta[c].type === "expense"), incomeCategories: data.categories.filter(c => data.categoryMeta[c].type === "income"),
     commitments: (data.fixedExpenses || []).map(e => ({ id: e.id, walletId: e.walletId!, title: e.title, amount: e.amount, category: e.category, dueDate: e.dueDate, intervalMonths: 1, monthPosition: "date", reminderDays: 3 })),
-    reserves: data.wallets.map(w => ({ walletId: w.id, amount: 0 })) });
+    reserves: data.wallets.map(w => ({ walletId: w.id, amount: JSON.parse(String(data.settings.reserveByWallet))[w.id] || 0 })) });
   await client.query("INSERT INTO finbridge_onboarding(user_id,data) VALUES($1,$2)", [owner, JSON.stringify(setup)]);
-  const safety = databaseSafety(emptySafetyDocument(), data, now);
-  safety.rules = [{ id: "demo-alert", name: "Demo meals threshold", kind: "budget", targetId: "demo-budget", basis: "actual", unit: "percent", threshold: 80, active: true, email: false }];
+  const safety = populatedDemoSafety(data, now);
   await client.query("INSERT INTO finbridge_safety(user_id,document) VALUES($1,$2)", [owner, JSON.stringify(emptySafetyDocument())]);
-  await writeAlertRules(client, owner, safety.rules);
-  await saveSafety(client, owner, advanceSafety(safety, now));
+  await saveSafety(client, owner, safety);
   await client.query("UPDATE finbridge_demo_accounts SET reset_at=$2 WHERE user_id=$1", [owner, now]);
   // Invalidate cached workspaces through new login. Never reset AI quota or global counters.
   await client.query('UPDATE "session" SET "expiresAt"=CURRENT_TIMESTAMP WHERE "userId"=$1', [owner]);

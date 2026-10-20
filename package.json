@@ -58,6 +58,8 @@
     "test:ai-quota": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-ai-quota.mjs scripts/verify-ai-quota-routes.mjs",
     "test:ai-request": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-ai-request.mjs",
     "demo:accounts": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/demo-accounts.mjs",
+    "demo:inspect": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/inspect-demo-accounts.mjs",
+    "demo:verify": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/verify-demo-deployment.mjs",
     "test:demo:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-demo-accounts-postgres.mjs",
     "test:safety-scheduler": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-safety-scheduler.mjs",
     "check:deployment": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/check-deployment.mjs",

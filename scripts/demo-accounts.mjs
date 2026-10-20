@@ -10,7 +10,7 @@ const action = option("--action"), slot = Number(option("--slot")), identity = d
 if (!["create", "reset", "rotate", "lock"].includes(action)) throw Error("Choose --action=create|reset|rotate|lock");
 if (!process.env.DEMO_DATABASE_URL) throw Error("Set DEMO_DATABASE_URL explicitly. DATABASE_URL is never used by this tool.");
 const url = new URL(process.env.DEMO_DATABASE_URL), target = url.host + url.pathname;
-console.log(JSON.stringify({ action, target, userId: identity.id, email: identity.email, applied: false }));
+console.log(JSON.stringify({ action, target, userId: identity.id, email: identity.email, profile: identity.name, applied: false }));
 if (args.includes("--apply")) {
   if (option("--confirm-target") !== target || option("--confirm-user") !== identity.id) throw Error("Confirm exact target and demo user ID before applying.");
   const password = ["create", "rotate"].includes(action) ? randomBytes(24).toString("base64url") : undefined;
