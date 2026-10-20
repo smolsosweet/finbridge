@@ -8,6 +8,14 @@ export async function handleSafetyCron(request: Request, pool: () => Pool, worke
   if (!key || key.length < 32) return response({ error: "NOT_CONFIGURED" }, 503);
   const expected = Buffer.from("Bearer " + key), supplied = Buffer.from(request.headers.get("authorization") || "");
   if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return response({ error: "UNAUTHORIZED" }, 401);
-  try { return response(await worker(pool())); }
+  try {
+    const result = await worker(pool());
+    if ("busy" in result && result.busy) {
+      const busy = response({ ...result, error: "WORKER_BUSY" }, 503);
+      busy.headers.set("Retry-After", "60");
+      return busy;
+    }
+    return response(result);
+  }
   catch { return response({ error: "WORKER_UNAVAILABLE" }, 503); }
 }

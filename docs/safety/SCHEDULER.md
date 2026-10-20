@@ -22,12 +22,17 @@ Configure BEFORE enabling email:
 
 The job needs no checkout credential write permissions, does not install packages,
 does not follow HTTP redirects and never prints the bearer secret or response text.
-Its concurrency group prevents overlapping workflow runs; the DB advisory lock also
-serializes worker calls from any source. No GET endpoint is introduced.
+Its concurrency group prevents overlapping workflow runs. A transaction advisory
+lock, held on a separate connection until the worker finishes, serializes calls
+from any source and works with Neon transaction pooling. A busy worker returns
+HTTP 503 with `Retry-After: 60`; HTTP 200 alone does not confirm mail delivery.
+The lock uses the two-integer key `(17961015, 1)` so leaked legacy session locks
+cannot block the new worker. No GET endpoint is introduced.
 
 The worker returns within a 20-second budget and the route has maxDuration=25 seconds,
 which keeps it compatible with external schedulers that allow a 30-second request.
-It evaluates at most 25 accounts and sends at most one queued message per call.
+It sends already queued mail before scanning more accounts. When no mail is queued,
+it evaluates at most 25 accounts and sends at most one queued message per call.
 For larger traffic use a dedicated queue that can acknowledge work before delivery.
 
 Until the scheduler and delivery are actually tested, keep SAFETY_EMAIL_ENABLED=false

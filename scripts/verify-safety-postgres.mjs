@@ -74,6 +74,17 @@ test("worker sends a bounded batch and never resends accepted reminders",async()
  await runSafetyWorker(pool,async()=>{calls++;return "accepted";});assert.equal(calls,2);
  const acceptedAfter=(await pool.query("SELECT id,attempts FROM finbridge_safety_events WHERE user_id=$1 AND event->>'emailStatus'='accepted'",[owner])).rows;assert.ok(acceptedBefore.every(id=>acceptedAfter.some(row=>row.id===id&&row.attempts===1)));
 });
+test("transaction worker lock excludes another worker and is released on rollback",async()=>{
+ const guard=await pool.connect();
+ try {
+  await guard.query("BEGIN");await guard.query("SELECT pg_advisory_xact_lock(17961015,1)");
+  let calls=0;const result=await runSafetyWorker(pool,async()=>{calls++;return "accepted";});assert.equal(result.busy,true);assert.equal(calls,0);
+ }finally{await guard.query("ROLLBACK");guard.release();}
+ const legacy=await pool.connect();
+ try{await legacy.query("SELECT pg_advisory_lock(17961015)");const result=await runSafetyWorker(pool,async()=>"accepted");assert.notEqual(result.busy,true);}finally{await legacy.query("SELECT pg_advisory_unlock(17961015)");legacy.release();}
+ const check=await pool.connect();
+ try{await check.query("BEGIN");assert.equal((await check.query("SELECT pg_try_advisory_xact_lock(17961015,1) AS locked")).rows[0].locked,true);}finally{await check.query("ROLLBACK");check.release();}
+});
 test("removed group conditions are archived; invalid grouped edit cannot save partially",async()=>{const old=await saved();const rules=old.rules.filter(r=>r.id!=="forecast-100");assert.equal((await request({action:"saveGroup",groupId,rules})).status,200);assert.equal((await saved()).rules.find(r=>r.id==="forecast-100").archived,true);assert.equal((await pool.query("SELECT archived FROM finbridge_alert_rules WHERE user_id=$1 AND id='forecast-100'",[owner])).rows[0].archived,true);});
 test("ambiguous email result is not blindly resent; pause cancels queued mail",async()=>{
  const r={...ruleFixture(),id:"unknown-rule",unit:"amount",threshold:760,email:true};await request({action:"save",rule:r});let calls=0;await runSafetyWorker(pool,async()=>{calls++;return "unknown";});await runSafetyWorker(pool,async()=>{calls++;return "accepted";});assert.equal(calls,1);assert.equal((await saved()).events.find(e=>e.ruleId===r.id).emailStatus,"unknown");
