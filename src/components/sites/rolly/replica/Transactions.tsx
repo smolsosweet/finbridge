@@ -11,6 +11,7 @@ import { transferChatWriteResult } from "@/lib/transfer-chat";
 import { TRANSFER_COPY } from "@/components/transfers/transfer-copy";
 import { currencySymbol, flushWorkspace, flushWorkspaceForAnalysis, getWorkspaceState, money, setSetting, today, updateState, useAppState, workspaceOwner, workspacePersistence, type AppState, type ChatMessage, type Transaction } from "./store";
 import { applyCategoryOperation, prepareCategoryOperation, renameCategoryMessageReferences, type CategoryCommand, type CategoryConfirmation } from "@/lib/category-operations";
+import { categoryDialogueSchema, type CategoryChoice } from "@/lib/category-dialogue";
 import { categoryOperationCopy, categoryOperationDescription, categoryOperationError } from "@/lib/category-operation-copy";
 import { isCategoryManagementMessage, isClearlyNewTransaction, isDraftCorrection, localCategoryCommand, resolvePendingDraft, type ConversationIntent } from "@/lib/conversation-intent";
 import { applyDraftAmountCorrection, categoryResolutionDraftIds, createTimeoutTransactionDraft, editDraftById, formatTransactionMoney, inferDraftCategory, isNewTransactionMessage, isValidDraftCategoryName, matchDraftCategoryAnswer, normalizeVietnameseMessage, readyDrafts, removeDraftById, requestedDraftCategory, similarDraftCategories, validateAndCommitDrafts, validateDraftForState, type TransactionDraft } from "@/lib/transaction-drafts";
@@ -26,6 +27,7 @@ import { definitelyRejectedWorkspace, workspaceSaveErrorMessage } from "@/lib/wo
 import { pendingDraftInterruption, pendingDraftReminder, rollbackRejectedDrafts, shouldBlockNewDraft } from "@/lib/pending-draft-policy";
 import { asksForCalculationExplanation, scenarioCalculationExplanation } from "@/lib/scenario-explanation";
 import { scenarioAnswer } from "@/lib/scenario-answer";
+import { resolveScenarioLanguage } from "@/lib/scenario-format";
 import { applyPlanningDeletion, explicitPlanningDeletion, planningConfirmationReply, planningDeletionCopy, planningDeletionSchema, planningEntities, planningReferencesSchema, planningSelectionReply, type PlanningDeletion } from "@/lib/planning-deletion";
 import { PlanningDeletionCard } from "./PlanningDeletionCard";
 import { FixedExpensePaymentCard } from "./FixedExpensePaymentCard";
@@ -59,7 +61,7 @@ import { calculateScenario, normalizePlannerResponse, scenarioContext, type Norm
 import planStyles from "./FinancialOutlook.module.css";
 import { tools } from "./Tools";
 import { resolveLanguage, resolveWalletDisplayName, resolveCategoryDisplayName, type AppLanguage, LANGUAGE_LABELS } from "@/lib/i18n";
-import { findTransactionsForDeletion, detectRelativeOrder, cleanDeletionSearchTerm, type TransactionDeletionCriteria } from "@/lib/transaction-deletion";
+import { findTransactionsForDeletion, transactionDeletionSelection, detectRelativeOrder, cleanDeletionSearchTerm, type TransactionDeletionCriteria } from "@/lib/transaction-deletion";
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 import { draftAmountWarnings } from "@/lib/draft-amount-warnings";
 import { DraftAmountWarnings } from "./DraftAmountWarnings";
@@ -1143,7 +1145,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       if (current()) updateTransfer(result.id, { status: "failed", uncertain: !!result.uncertain || !definitiveFailure, error: result.uncertain || !definitiveFailure ? ({vi:"Chưa xác định thao tác đã lưu hay chưa. Bấm thử lại cùng yêu cầu để kiểm tra, tránh tạo yêu cầu mới.",en:"The result is not confirmed. Retry this same request to recover safely instead of creating another.",zh:"结果尚未确认，请重试同一请求以安全恢复，避免重复创建。"}[language]) : error instanceof Error ? error.message : t.unavailable });
     } finally { transferRequestLock.current = false; if (current()) setTransferBusy(false); }
   }
-  async function send(value: string, requestedDraftId?: string) {
+  async function send(value: string, requestedDraftId?: string, categoryChoice?: CategoryChoice) {
     const message = value.trim();
     if (!message || busy || aiRequestLock.current || transferRequestLock.current || committing || categoryBusy || deletingId) return;
     const recentAssistant = [...messages].reverse().find(m => m.role === "assistant");
@@ -1270,19 +1272,8 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         return;
       }
       const normMsg = normalizeVietnameseMessage(message);
-      const isGenericDeletionQuestion = /^(?:toi\s+)?(?:muon\s+)?(?:xoa|huy|bo|delete|remove)\s+(?:giao\s*d[ií]ch|giao\s*diichj|gd|transactions?)[.!?\s]*$/i.test(normMsg);
-      if (isGenericDeletionQuestion) {
-        setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
-        const prompt = {
-          vi: "Bạn muốn xóa giao dịch nào? Hãy cho biết tên, số tiền, ngày hoặc danh mục; dữ liệu chưa bị thay đổi.",
-          en: "Which transaction would you like to delete? Please specify title, amount, date, or category; no data has been changed.",
-          zh: "你想删除哪笔交易？请说明名称、金额、日期或类别；尚未更改任何数据。",
-        }[currentLang];
-        setMessages(previous => [...previous, { role: "assistant", text: prompt, localOnly: true }]);
-        return;
-      }
       const relOrder = detectRelativeOrder(message);
-      if (relOrder && /\b(?:xoa|huy|bo|delete|remove)\b/i.test(normMsg)) {
+      if (workspacePersistence() === "browser" && relOrder && /\b(?:xoa|huy|bo|delete|remove)\b/i.test(normMsg)) {
         setText(""); setMessages(previous => [...previous, { role: "user", text: message }]);
         const term = cleanDeletionSearchTerm(message);
         const matches = findTransactionsForDeletion(state.transactions, {
@@ -1377,7 +1368,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       return;
     }
     const localCommand = localCategoryCommand(message, state.categories.filter(name => !state.categoryMeta[name]?.archived));
-    if (localCommand) {
+    if (localCommand && workspacePersistence() === "browser" && !recentAssistant?.categoryDialogue) {
       appendUser();
       if (localCommand === "list_categories") {
         const names = state.categories.filter(name => !state.categoryMeta[name]?.archived);
@@ -1387,7 +1378,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       return;
     }
     const createName = requestedDraftCategory(message);
-    const categoryReply = !explicitlyNew && !deletionRequest && (!categoryManagement || !!createName) && (
+    const categoryReply = !recentAssistant?.categoryDialogue && !explicitlyNew && !deletionRequest && (!categoryManagement || !!createName) && (
       /^(?:chọn|chon|danh mục|category|use|select|choose)\s/i.test(message)
       || !!createName || pendingDrafts.some(d => state.categories.some(name => normalizeVietnameseMessage(name) === normalizeVietnameseMessage(message) && (state.categoryMeta[name]?.type || "expense") === d.type)));
     const correction = !categoryManagement && !deletionRequest && isDraftCorrection(message);
@@ -1444,6 +1435,8 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         body: JSON.stringify({
           batchId,
           message,
+          ...(recentAssistant?.categoryDialogue && recentAssistant.categoryDialogue.status !== "cancelled" ? {pendingCategory:recentAssistant.categoryDialogue.command} : {}),
+          ...(categoryChoice ? {categoryChoice} : {}),
           today: today(),
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
           selectedWalletId,
@@ -1452,7 +1445,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           activeDraftId,
           referencedCategories,
           ...(activeSpendingPlan ? { spendingPlan: activeSpendingPlan } : {}),
-          language: resolveLanguage(state.settings.language),
+          language: resolveScenarioLanguage(message, resolveLanguage(state.settings.language)),
           ...(recentAssistant?.pendingScenario && assistantScenarioSchema.safeParse(recentAssistant.pendingScenario).success ? { pendingScenario: recentAssistant.pendingScenario } : {}),
           ...(recentAssistant?.transfer && recentAssistant.transfer.status !== "cancelled" ? { transferContext: recentAssistant.transfer.request } : {}),
           history: modelHistory([...messages, { role: "user" as const, text: message }]),
@@ -1555,13 +1548,15 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         return;
       }
       if (ai.operationIntent === "list_categories") {
-        const names = state.categories.filter(name => !state.categoryMeta[name]?.archived);
+        const names = workspacePersistence() === "browser" ? state.categories.filter(name => !state.categoryMeta[name]?.archived) : Array.isArray((result as {categoryList?:unknown}).categoryList) ? (result as {categoryList:string[]}).categoryList : [];
         setReferencedCategories([]);
         setMessages(previous => [...previous, { role: "assistant", text: names.length ? categoryFlowCopy.choose : categoryCommandCopy.empty, categoryList: names }]);
         return;
       }
       if (ai.operationIntent && ["create_category", "rename_category", "merge_categories", "delete_category"].includes(ai.operationIntent)) {
-        if (ai.categoryOperation) previewCategoryCommand(ai.categoryOperation);
+        const dialogue=categoryDialogueSchema.safeParse((result as {categoryDialogue?:unknown}).categoryDialogue);
+        if (dialogue.success) setMessages(previous=>[...previous,{role:"assistant",text:[dialogue.data.error,dialogue.data.question].filter(Boolean).join(" "),categoryDialogue:dialogue.data,localOnly:true}]);
+        else if (ai.categoryOperation) previewCategoryCommand(ai.categoryOperation);
         else setMessages(previous => [...previous, { role: "assistant", text: ai.reply?.trim() || categoryCommandCopy.invalid }]);
         return;
       }
@@ -1571,7 +1566,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
       }
       if (ai.operationIntent === "simulate_financial_scenario") {
         const snapshot = getWorkspaceState();
-        const input = { message, preferredLanguage: resolveLanguage(snapshot.settings.language), today: today(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", history: modelHistory(messages).slice(-6), selectedWalletId, context: scenarioContext(snapshot) };
+        const input = { message, preferredLanguage: resolveScenarioLanguage(message, resolveLanguage(snapshot.settings.language)), today: today(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC", history: modelHistory(messages).slice(-6), selectedWalletId, context: scenarioContext(snapshot) };
         // The assistant already interpreted and validated the scenario in its one
         // provider call. Keep the legacy endpoint only for older responses.
         const embedded = result as { scenarioResponse?: NormalizedPlannerResponse | null; calculations?: ScenarioResult[] | null; baselines?: ScenarioResult[] | null; presentation?: unknown };
@@ -1602,9 +1597,11 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           setMessages((previous) => [...previous, { role: "assistant", text: "Bạn muốn xóa giao dịch nào? Hãy cho biết tên, số tiền, ngày hoặc danh mục; dữ liệu chưa bị thay đổi." }]);
           return;
         }
-        const matches = findTransactionsForDeletion(state.transactions, deletion);
-        const fallbackCriteria = { ...deletion, searchTerm: null };
-        const candidates = matches.length ? matches : findTransactionsForDeletion(state.transactions, fallbackCriteria);
+        const serverSelection=(result as {transactionSelection?:ReturnType<typeof transactionDeletionSelection>|null}).transactionSelection;
+        const selection=workspacePersistence()==="browser" ? transactionDeletionSelection(state.transactions,deletion) : serverSelection;
+        if (!selection || !Array.isArray(selection.ids) || !Array.isArray(selection.matchedIds) || !Array.isArray(selection.selectedIds)) throw new Error(serviceCopy.unavailable);
+        const matches=state.transactions.filter(t=>selection.matchedIds.includes(t.id));
+        const candidates=selection.ids.flatMap(id=>{const item=state.transactions.find(t=>t.id===id);return item?[item]:[];});
         if (!candidates.length) {
           setMessages((previous) => [...previous, { role: "assistant", text: deletion.scope === "all" && !state.transactions.length
             ? "Hiện chưa có giao dịch nào để xóa."
@@ -1612,21 +1609,23 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           return;
         }
         const ids = candidates.map((transaction) => transaction.id);
-        const all = deletion.scope === "all" && !deletion.amount && !deletion.walletId && !deletion.periodStart && !deletion.periodEnd && !deletion.category && !deletion.searchTerm && !deletion.type;
+        const all = deletion.scope === "all" && deletion.amount === null && !deletion.walletId && !deletion.periodStart && !deletion.periodEnd && !deletion.category && !deletion.searchTerm && !deletion.type && !deletion.relativeOrder;
         const exactMatch = matches.length > 0;
-        const selectByDefault = exactMatch && (deletion.scope === "all" || matches.length === 1);
-        const text = all
+        const selectedIds=selection.selectedIds.filter(id=>ids.includes(id));
+        const text = selection.browse
+          ? ({vi:`Bạn muốn xóa giao dịch nào? Chọn trong ${candidates.length} giao dịch gần đây bên dưới rồi xác nhận. Chưa có giao dịch nào được chọn hay bị xóa.`,en:`Which transaction should be deleted? Choose from the ${candidates.length} recent records below, then confirm. Nothing is selected or deleted yet.`,zh:`要删除哪笔交易？请从下方最近${candidates.length}笔记录中选择并确认，目前没有选中或删除任何交易。`}[resolveScenarioLanguage(message,resolveLanguage(state.settings.language))])
+          : all
           ? `Bạn yêu cầu xóa toàn bộ ${candidates.length} giao dịch. Hãy kiểm tra danh sách và xác nhận bên dưới; hiện chưa giao dịch nào bị xóa.`
           : exactMatch
             ? `Mình tìm thấy ${matches.length} giao dịch khớp yêu cầu. Hãy chọn đúng giao dịch cần xóa rồi xác nhận; hiện chưa giao dịch nào bị xóa.`
             : `Mình chưa khớp được tên giao dịch, nhưng có ${candidates.length} giao dịch trong khoảng ngày bạn nói. Hãy chọn đúng giao dịch; chưa có dữ liệu nào bị xóa.`;
         setMessages((previous) => [...previous, { role: "assistant", text, transactionDeletion: {
-          confirmationId: crypto.randomUUID(), transactionIds: ids, selectedIds: selectByDefault ? ids : [], scope: all ? "all" : "matching", status: "pending",
+          confirmationId: crypto.randomUUID(), transactionIds: ids, selectedIds, scope: all ? "all" : "matching", status: "pending",
         } }]);
         return;
       }
       if (ai.intent === "financial") {
-        const allowedActions: FinancialAction[] = ["balance", "balance_after_obligation", "spending_summary", "category_breakdown", "top_category", "category_savings", "transactions", "budget_status", "safe_daily_allowance", "upcoming_obligations", "goals", "spending_trend", "anomalies", "explain", "unknown"];
+        const allowedActions: FinancialAction[] = ["balance", "balance_after_obligation", "spending_summary", "category_breakdown", "top_category", "category_savings", "transactions", "largest_transaction", "budget_status", "safe_daily_allowance", "upcoming_obligations", "goals", "spending_trend", "anomalies", "explain", "unknown"];
         const actions = (ai.actions || [ai.action]).filter((action): action is FinancialAction => allowedActions.includes(action as FinancialAction));
         const presentation = answerPresentationSchema.safeParse((result as { presentation?: unknown }).presentation);
         const localAnswer = answerFinancialQuery({
@@ -1637,6 +1636,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
           category: state.categories.includes(ai.category || "") ? ai.category || null : null,
           searchTerm: ai.searchTerm || null, transactionType: ai.transactionType || null, percentage: ai.percentage,
         }, state, wallet, today(), presentation.success ? presentation.data : undefined);
+        if (workspacePersistence() !== "browser" && typeof ai.financialAnswer !== "string") throw new Error(serviceCopy.unavailable);
         const answer = typeof ai.financialAnswer === "string" ? ai.financialAnswer : localAnswer;
         setClarifyingDraftId(activeDraftId);
         const serverEntities = planningReferencesSchema.safeParse((result as { financialEntities?: unknown }).financialEntities);
@@ -2175,6 +2175,13 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
             onConfirm={() => void confirmWorkspaceProposal(parsed.data.id)} onCancel={() => cancelWorkspaceProposal(parsed.data.id)}
             onAnswer={(choice, label) => void requestWorkspaceCreation(label, choice)}
             onCreateCategory={handleCreateWorkspaceCategory} /> : null;
+        })()}
+        {message.categoryDialogue && message.categoryDialogue.status !== "cancelled" && !messages.slice(index+1).some(item=>item.role==="assistant") && (()=>{
+          const parsed=categoryDialogueSchema.safeParse(message.categoryDialogue);
+          return parsed.success ? <div className="r-ai-category-options" role="group" aria-label={parsed.data.question} aria-busy={busy}>
+            {parsed.data.choices.map(choice=><button key={choice.value} type="button" className="r-secondary" disabled={busy || committing || categoryBusy} onClick={()=>void send(choice.label,undefined,{field:parsed.data.field,value:choice.value})}>{choice.label}</button>)}
+            <button type="button" className="r-secondary" disabled={busy || committing || categoryBusy} onClick={()=>setMessages(previous=>[...previous,{role:"assistant",text:categoryCommandCopy.cancelled,localOnly:true,categoryDialogue:{...parsed.data,status:"cancelled"}}])}>{categoryCommandCopy.cancel}</button>
+          </div> : null;
         })()}
         {message.categoryList && <div className="r-ai-category-options" role="group" aria-label={categoryFlowCopy.choose}>
           {message.categoryList.filter(name => state.categories.includes(name) && !state.categoryMeta[name]?.archived).map(name => <button type="button" key={name} aria-pressed={referencedCategories.includes(name)} className={referencedCategories.includes(name) ? "selected" : ""} disabled={busy} onClick={() => setReferencedCategories(previous => previous.includes(name) ? previous.filter(n => n !== name) : [...previous, name].slice(-20))}>{state.categoryMeta[name]?.icon || "❓"} {name}</button>)}

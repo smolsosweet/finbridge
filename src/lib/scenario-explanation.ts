@@ -1,5 +1,6 @@
 import type { FinancialScenario, ScenarioResult } from "./scenario-planner";
 import { formatScenarioDate, formatScenarioMoney } from "./scenario-format";
+import { scenarioMissingCopy, scenarioWalletMissing } from "./scenario-availability";
 
 export function asksForCalculationExplanation(message: string): boolean {
   const text = message.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/đ/g, "d").trim();
@@ -38,5 +39,5 @@ export function scenarioCalculationExplanation(result: ScenarioResult, scenario:
       `${labels.end}${scenario.horizonEnd ? ` (${formatScenarioDate(scenario.horizonEnd, lang)})` : ""}:\n${money(wallet.balanceNow, wallet.currency)}${terms.map(item => ` ${item.sign === 1 ? "+" : "−"} ${money(item.amount, wallet.currency)}`).join("")} = **${money(wallet.projectedBalance, wallet.currency)}**`,
       ...(wallet.protectedReserve != null && wallet.availableAfterReserve != null ? [({ vi: `Tiền dự phòng ${money(wallet.protectedReserve, wallet.currency)} vẫn nằm trong số dư; phần còn có thể dùng: ${money(wallet.projectedBalance, wallet.currency)} − ${money(wallet.protectedReserve, wallet.currency)} = **${money(wallet.availableAfterReserve, wallet.currency)}**. Không trừ như một khoản thanh toán.`, en: `The ${money(wallet.protectedReserve, wallet.currency)} reserve remains in the balance. Spendable cash: ${money(wallet.projectedBalance, wallet.currency)} − ${money(wallet.protectedReserve, wallet.currency)} = **${money(wallet.availableAfterReserve, wallet.currency)}**. It is not a payment.`, zh: `${money(wallet.protectedReserve, wallet.currency)} 备用金仍在余额中。可用资金：${money(wallet.projectedBalance, wallet.currency)} − ${money(wallet.protectedReserve, wallet.currency)} = **${money(wallet.availableAfterReserve, wallet.currency)}**，不计为付款。` }[lang])] : []),
     ].join("\n");
-  }), result.unavailableEstimates.length ? labels.missing : result.estimatedSpending.length ? labels.note : ""].filter(Boolean).join("\n\n");
+  }), ...result.wallets.flatMap(wallet => scenarioMissingCopy(scenarioWalletMissing(result, scenario, asOf, wallet.walletId), lang)), result.estimatedSpending.length ? labels.note : ""].filter(Boolean).join("\n\n");
 }

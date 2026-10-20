@@ -4,11 +4,13 @@ import { z } from "zod";
 import { getSession } from "@/lib/auth-session";
 import { database } from "@/lib/database";
 import { getGeminiModelCandidates, getGeminiTimeoutMs } from "@/lib/gemini-config";
+import { resolveScenarioLanguage } from "@/lib/scenario-format";
 import { answerFinancialQuery, asksForAllWalletBalances, resolveFinancialFollowup, type FinancialAction } from "@/lib/financial-chat";
 import { resolveExplicitWallet, resolveUniqueCurrencyWallet } from "@/lib/transaction-currency";
 import { createTimeoutTransactionDraft, editDraftById, normalizeVietnameseMessage, parseTransactionAmounts, reconcileTransactionDraftAmounts, resolveDraftCategory, type TransactionDraft } from "@/lib/transaction-drafts";
-import { conversationIntents, draftPatchSchema, isCategoryManagementMessage, isClearlyNewTransaction, resolvePendingDraft } from "@/lib/conversation-intent";
+import { conversationIntents, draftPatchSchema, isCategoryManagementMessage, isClearlyNewTransaction, localCategoryCommand, resolvePendingDraft } from "@/lib/conversation-intent";
 import { categoryCommandSchema, prepareCategoryOperation } from "@/lib/category-operations";
+import { categoryChoiceSchema, categoryDialogueResult, inspectCategoryDialogue, resolveCategoryChoice } from "@/lib/category-dialogue";
 import { categoryOperationError } from "@/lib/category-operation-copy";
 import type { AppState } from "@/components/sites/rolly/replica/store";
 import { workspaceRepository } from "@/lib/workspace-repository";
@@ -23,7 +25,7 @@ import { assistantSmallTalk, recoverTransactionDraft } from "@/lib/assistant-res
 import { resolveTransferRead } from "@/lib/transfer-chat-read";
 import { transferChatRequestSchema, transferOperations } from "@/lib/transfer-chat-model";
 import { isSettingsThemeMessage, isSettingsLanguageMessage, isSettingsWalletArchiveMessage, prepareWalletArchive, settingsActionCopy } from "@/lib/settings-actions";
-import { detectRelativeOrder } from "@/lib/transaction-deletion";
+import { detectRelativeOrder, explicitlyRequestsDeleteAll, transactionDeletionSelection, type TransactionDeletionCriteria } from "@/lib/transaction-deletion";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +52,8 @@ const requestSchema = z.object({
   spendingPlan: spendingPlanOptionsSchema.optional(),
   transferContext: transferChatRequestSchema.optional(),
   pendingScenario: assistantScenarioSchema.optional(),
+  pendingCategory: categoryCommandSchema.optional(),
+  categoryChoice: categoryChoiceSchema.optional(),
   language: z.enum(["en", "vi", "zh"]).optional(),
   planningContext: z.object({ goals: workspaceSchema.shape.goals, fixedExpenses: workspaceSchema.shape.fixedExpenses }).strict().optional(),
 }).strict().superRefine((value, context) => {
@@ -57,7 +61,7 @@ const requestSchema = z.object({
   if (new Set(value.wallets.map((wallet) => wallet.id)).size !== value.wallets.length) context.addIssue({ code: "custom", path: ["wallets"], message: "Wallet IDs must be unique." });
 });
 
-const actions = ["none", "balance", "balance_after_obligation", "spending_summary", "category_breakdown", "top_category", "category_savings", "transactions", "budget_status", "safe_daily_allowance", "upcoming_obligations", "goals", "spending_trend", "anomalies", "explain", "unknown"] as const;
+const actions = ["none", "balance", "balance_after_obligation", "spending_summary", "category_breakdown", "top_category", "category_savings", "transactions", "largest_transaction", "budget_status", "safe_daily_allowance", "upcoming_obligations", "goals", "spending_trend", "anomalies", "explain", "unknown"] as const;
 const intents = conversationIntents;
 const fields = ["amount", "type", "category", "date", "wallet"] as const;
 const deleteScopes = ["none", "matching", "all"] as const;
@@ -220,6 +224,23 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
     } catch { return Response.json({ error: "FINANCIAL_DATA_UNAVAILABLE", message: "Chưa đọc được dữ liệu tài khoản. Hãy tải lại trang rồi thử lại." }, { status: 503 }); }
   }
   const allowedWallets = new Set(input.wallets.map((wallet) => wallet.id));
+  const categoryState = authorizedWorkspace || (localDemo ? { wallets:[], transactions:[], goals:[], fixedExpenses:[], recurring:[], rules:[], settings:{}, categories:input.categories.map(c=>c.name), categoryMeta:Object.fromEntries(input.categories.map(c=>[c.name,{type:c.type,archived:c.archived,icon:"",children:[]}])) } as unknown as AppState : null);
+  if (input.categoryChoice) {
+    const choiceLanguage=resolveScenarioLanguage(input.message,input.language || "en");
+    const choiceError={vi:"Lựa chọn không còn hợp lệ. Hãy mở lại yêu cầu danh mục để chọn từ dữ liệu hiện tại.",en:"This choice is no longer available. Reopen the category request to choose from current data.",zh:"此选项已不可用，请重新打开类别请求，按当前数据选择。"}[choiceLanguage];
+    if (!categoryState || !input.pendingCategory) return Response.json({error:"INVALID_CATEGORY_CHOICE",message:choiceError},{status:400});
+    try {
+      const language=resolveScenarioLanguage(input.message,input.language || "en");
+      const command=resolveCategoryChoice(input.pendingCategory,input.categoryChoice,categoryState,language,input.batchId);
+      return Response.json({intent:"general",operationIntent:command.operation,drafts:[],...categoryDialogueResult(command,categoryState,language,input.batchId)});
+    } catch { return Response.json({error:"INVALID_CATEGORY_CHOICE",message:choiceError},{status:400}); }
+  }
+  // Retain existing exact-name shortcuts, but validate/read on the server for signed-in accounts.
+  const directCategory = categoryState && !input.pendingCategory && !/\b(?:khong|dung|not|never|don't)\b|不要|别/.test(normalizeVietnameseMessage(input.message)) ? localCategoryCommand(input.message,categoryState.categories.filter(name=>!categoryState.categoryMeta[name]?.archived)) : null;
+  if (directCategory && categoryState) {
+    if (directCategory === "list_categories") return Response.json({intent:"general",operationIntent:"list_categories",drafts:[],reply:"",categoryList:categoryState.categories.filter(name=>!categoryState.categoryMeta[name]?.archived)});
+    return Response.json({intent:"general",operationIntent:directCategory.operation,drafts:[],...categoryDialogueResult(directCategory,categoryState,resolveScenarioLanguage(input.message,input.language || "en"),input.batchId)});
+  }
   const deletionState = authorizedWorkspace || (localDemo && input.planningContext ? { ...input.planningContext, wallets: input.wallets, transactions: [], categories: input.categories.map(c => c.name), categoryMeta: {}, settings: {}, recurring: [], rules: [] } as unknown as AppState : null);
   const allowedCategories = new Set(input.categories.filter(c => !c.archived).map((category) => `${category.type}:${category.name}`));
 
@@ -278,15 +299,16 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
   if (isGenericDeletionQuestion) {
     const language = /zh|中文/.test(String(authorizedWorkspace?.settings.language)) ? "zh" : /en|English/.test(String(authorizedWorkspace?.settings.language)) ? "en" : "vi";
     const prompt = {
-      vi: "Bạn muốn xóa giao dịch nào? Hãy cho biết tên, số tiền, ngày hoặc danh mục; dữ liệu chưa bị thay đổi.",
-      en: "Which transaction would you like to delete? Please specify title, amount, date, or category; no data has been changed.",
-      zh: "你想删除哪笔交易？请说明名称、金额、日期或类别；尚未更改任何数据。",
+      vi: "Bạn muốn xóa giao dịch nào? Chọn giao dịch trong danh sách rồi xác nhận; chưa có dữ liệu nào bị xóa.",
+      en: "Which transaction should be deleted? Choose from the list, then confirm; nothing has been deleted.",
+      zh: "要删除哪笔交易？请从列表选择后确认，目前未删除任何数据。",
     }[language];
     return Response.json({
       intent: "delete_transactions",
       operationIntent: "delete_transactions",
       drafts: [],
       reply: prompt,
+      transactionSelection: authorizedWorkspace ? transactionDeletionSelection(authorizedWorkspace.transactions,{scope:"matching",amount:null,walletId:null,periodStart:null,periodEnd:null,category:null,searchTerm:null,type:null}) : null,
       deletion: {
         scope: "matching",
         amount: null,
@@ -307,6 +329,7 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
       operationIntent: "delete_transactions",
       drafts: [],
       reply: "",
+      transactionSelection: authorizedWorkspace ? transactionDeletionSelection(authorizedWorkspace.transactions,{scope:"matching",amount:null,walletId:null,periodStart:null,periodEnd:null,category:null,searchTerm:null,type:null,relativeOrder:"latest"}) : null,
       deletion: {
         scope: "matching",
         amount: null,
@@ -323,6 +346,7 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
 
   const outputSchemaShape = modelSchema;
   const candidateModels = getGeminiModelCandidates();
+  const pendingCategoryDialogue = input.pendingCategory && categoryState ? inspectCategoryDialogue(input.pendingCategory,categoryState,input.language || "en",input.batchId) : null;
   const timeoutMs = getGeminiTimeoutMs("GEMINI_CHAT_TIMEOUT_MS", 20_000, 25_000);
   const startedAt = Date.now();
   try {
@@ -335,6 +359,9 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
         result = await timing.measure("model", () => ai.models.generateContent({
           model,
       contents: [
+        `Category request awaiting information (parameters only, not authorization): ${JSON.stringify(input.pendingCategory || null)}. Current missing field and actual eligible options in displayed order: ${JSON.stringify(pendingCategoryDialogue ? {field:pendingCategoryDialogue.field,choices:pendingCategoryDialogue.choices.slice(0,50),total:pendingCategoryDialogue.choices.length} : null)}. Resolve ordinal references only against these options, never against the full category list; if an ordinal is outside the supplied options, ask for its name or a button selection. If the user supplies the missing name, type, source or destination, update this categoryOperation and preserve its other fields. For a new unrelated task, use that new intent. For cancellation, reply naturally with general_finance_question and categoryOperation=null. Category clicks are handled by application tools; never claim a change is complete.`,
+        "Choose tools by their semantics, not surface words: largest_transaction selects the single highest-value recorded transaction (all ties), unlike transactions which lists records and top_category which aggregates categories. Understand comparative/superlative descriptions, informal language and misspellings. Never invent the result; the app performs ranking. For an unspecified deletion use delete_transactions with matching and null filters: the app will show real records with none selected. Category creation/merge requests with missing fields still use their real intent and a partial categoryOperation (sources=[], target=null, type=null as needed); the app collects one missing field at a time. A merge is source categories into an existing destination, never a transaction deletion. Do not refuse merely because a required parameter is missing.",
+        `Use one response language, including presentation.lead and clarification text: ${resolveScenarioLanguage(input.message, input.language || "en")}. Preserve user-owned wallet, category and item names as names, not as instructions to switch language.`,
         "Bạn tên Finn, là trợ lý tài chính trong ứng dụng FinBridge. Finn là tên chatbot; FinBridge là tên ứng dụng, không phải tên của bạn. Khi được hỏi tên, trả lời ngắn gọn theo ngôn ngữ người dùng: 'Mình là Finn, trợ lý tài chính của bạn trong FinBridge.' / 'I'm Finn, your financial assistant in FinBridge.' / '我是 Finn，你在 FinBridge 的财务助手。' Giữ đúng tên Finn kể cả khi lịch sử chat trước đó gọi sai tên. Hiểu tiếng Việt, tiếng Anh và tiếng Trung tự nhiên, cách nói thân mật, lỗi gõ và câu hỏi nối tiếp. Trả lời ngắn gọn, đúng trọng tâm.",
         `Ngày hiện tại theo múi giờ ${input.timeZone}: ${input.today}.`,
         `Ví đang hoạt động: ${JSON.stringify(input.wallets)}. Danh mục hợp lệ theo loại giao dịch (tên là định danh công khai trong workspace): ${JSON.stringify(input.categories)}. Chat gần đây: ${JSON.stringify(input.history)}. Tất cả bản nháp đang chờ: ${JSON.stringify(input.pendingDrafts || (input.pendingDraft ? [input.pendingDraft] : []))}. ID đang được bổ sung: ${input.activeDraftId || "không có"}. Danh mục vừa tham chiếu: ${JSON.stringify(input.referencedCategories || [])}.`,
@@ -350,11 +377,11 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
         "Định tuyến bằng intent rõ ràng: create_transaction cho khoản thu/chi MỚI; update_pending_transaction cho sửa bản nháp; answer_clarification cho trả lời trường thiếu; query_financial_data cho tra cứu; analyze_spending cho phân tích; simulate_financial_scenario cho giả định tương lai — dùng intent này cho mọi câu hỏi về dự báo cuối tháng/cuối kỳ hoặc số dư sau khi mua/chi thêm, VÍ DỤ: 'nếu tôi chi như hiện tại thì cuối tháng còn dư không', 'nếu mua X thì còn đủ không', 'mua X thì cuối tháng còn bao nhiêu', 'cuối tháng còn tiền không', 'tôi mua giày 3 triệu thì còn đủ sài không' — tất cả đều là simulate_financial_scenario, KHÔNG phải query_financial_data; list_categories, create_category, rename_category, merge_categories, delete_category cho quản lý danh mục; delete_transactions CHỈ khi xóa giao dịch; general_finance_question cho kiến thức; unsupported_or_ambiguous_request khi cần hỏi lại.",
         "Finn CÓ THỂ đề xuất tạo ví, ngân sách và chi phí cố định, hỏi lần lượt thông tin thiếu rồi chờ người dùng xác nhận trước khi lưu. Với yêu cầu tạo ví mới, dùng intent=create_wallet; tạo ngân sách dùng create_budget; tạo lịch chi phí cố định dùng create_fixed_expense. Nếu người dùng hỏi tạo ngân sách và chi phí cố định cùng lúc, dùng create_budget. Không trả lời rằng không có quyền/không hỗ trợ; không nói đã tạo. Các intent này để drafts rỗng, action=none và reply rỗng; ứng dụng sẽ gọi luồng tạo có kiểm tra và xác nhận. Việc này không kết nối ngân hàng hay thanh toán thật.",
         "Câu hỏi mới quyết định action, KHÔNG lặp action cũ chỉ vì cùng ngữ cảnh. Hỏi tổng đã chi dùng spending_summary. Hỏi chi cho những mục gì, đã chi cho những danh mục nào, where did my money go hoặc spending by category dùng category_breakdown (tất cả danh mục đã chi), không dùng spending_summary hay list_categories. top_category chỉ dành cho xếp hạng/cao nhất. Câu nối tiếp giữ ví và kỳ thời gian trước nếu người dùng không thay đổi; lấy chúng từ Previous financial result context, không dùng lại số liệu. Nếu hỏi chi tiết giao dịch trong một danh mục thì dùng transactions với bộ lọc danh mục đó.",
-        "Quản lý danh mục hoàn toàn khác xóa giao dịch. categoryOperation chỉ chứa tên nguồn/đích tồn tại, ngoại trừ tên mới khi tạo/đổi tên; type phải rõ khi tạo riêng. Nếu gộp thiếu đích, đổi tên thiếu tên mới hoặc nhiều nguồn không rõ, hỏi đúng một thông tin thiếu, để categoryOperation=null. Không nói đã thực hiện; ứng dụng sẽ hiển thị tác động và xin xác nhận. Khi chọn danh mục cho bản nháp dùng answer_clarification và draftPatch.category, không tạo danh mục riêng.",
+        "Quản lý danh mục hoàn toàn khác xóa giao dịch. categoryOperation chỉ chứa tên nguồn/đích tồn tại, ngoại trừ tên mới khi tạo/đổi tên. Giữ intent quản lý khi thiếu thông tin, trả categoryOperation với trường chưa biết là null hoặc sources=[] để ứng dụng hướng dẫn chọn, không đoán tên hoặc loại thu/chi. Không nói đã thực hiện; ứng dụng sẽ hiển thị tác động và xin xác nhận. Khi chọn danh mục cho bản nháp dùng answer_clarification và draftPatch.category, không tạo danh mục riêng.",
         "Danh mục archived=true chỉ dùng để tra cứu lịch sử, không gán cho bản nháp mới hoặc sửa/gộp danh mục.",
         "Sửa bản nháp: targetDraftId phải là ID thực; draftPatch chỉ chứa các trường người dùng thay đổi, không lặp lại trường cũ. Nếu nhiều bản nháp, chỉ dùng ID khi tên/đại từ gắn rõ với ID đang thao tác. Không biết đang nói khoản nào thì hỏi lại, không tự chọn bản nháp cuối. Khoản mua mới, 'thêm một khoản nữa', dù cùng loại, luôn create_transaction, không sửa khoản trước. Nội dung 'học thêm' thường là chi phí giáo dục; mua món ăn/nước không phải mua sắm chung.",
         "When the user explicitly chooses to edit a pending draft, including messages starting 'Sửa bản nháp này:', 'Update this draft:' or '修改这笔草稿：', use update_pending_transaction with its real targetDraftId and draftPatch. Interpret the entire new description, date, amount and currency, including typos; do not keep an old breakfast title when the user changes it to dinner. Shorthand is a multiplier, not a currency override: 10k tệ and 10 nghìn tệ both mean amount=10000,currency=CNY; 10k đô means amount=10000,currency=USD. Do not ignore the currency after k/nghìn. Do not put wallet=null in a patch just because the user didn't mention a wallet; omit wallet so the application resolves the new currency. If a message could mean an edit or another purchase, ask briefly instead of claiming it is already saved.",
-        "Không bịa dữ kiện tài chính. Với câu hỏi tài chính, chỉ trả action và tham số để ứng dụng tính từ dữ liệu đã lưu; để reply rỗng. Các action: balance, spending_summary, category_breakdown, top_category, category_savings, transactions, budget_status, safe_daily_allowance, upcoming_obligations, goals, spending_trend, anomalies, explain, unknown. Dùng actions khi câu hỏi có nhiều yêu cầu độc lập. Với giảm/tăng chi tiêu theo tỷ lệ, dùng category_savings, điền percentage từ 0 đến 100 và danh mục; nếu người dùng nói 'danh mục đó' hoặc 'giảm tiếp còn X%' thì phân giải từ ngữ cảnh chat gần đây. Nếu không có danh mục trong ngữ cảnh thì hỏi lại ngắn gọn. Nếu kỳ thời gian chưa rõ, để ngày null.",
+        "Không bịa dữ kiện tài chính. Với câu hỏi tài chính, chỉ trả action và tham số để ứng dụng tính từ dữ liệu đã lưu; để reply rỗng. Các action: balance, spending_summary, category_breakdown, top_category, category_savings, transactions, largest_transaction, budget_status, safe_daily_allowance, upcoming_obligations, goals, spending_trend, anomalies, explain, unknown. Dùng actions khi câu hỏi có nhiều yêu cầu độc lập. Với giảm/tăng chi tiêu theo tỷ lệ, dùng category_savings, điền percentage từ 0 đến 100 và danh mục; nếu người dùng nói 'danh mục đó' hoặc 'giảm tiếp còn X%' thì phân giải từ ngữ cảnh chat gần đây. Nếu không có danh mục trong ngữ cảnh thì hỏi lại ngắn gọn. Nếu kỳ thời gian chưa rõ, để ngày null.",
         "Nếu intent=delete_transactions, chỉ phân tích yêu cầu thành bộ lọc xóa; tuyệt đối không nói đã xóa và không tạo drafts. deletionScope=all chỉ khi người dùng nói xóa tất cả hoặc tất cả giao dịch thỏa điều kiện; dùng matching khi muốn xóa một/vài giao dịch cụ thể. Trả các tiêu chí rõ ràng nếu được nêu: deletionSearchTerm cho tên/mô tả, deletionAmount cho số tiền, deletionWalletId chỉ nếu gọi rõ một ví có trong danh sách, deletionPeriodStart/End cho ngày/khoảng ngày, deletionCategory chỉ nếu là danh mục có thật, deletionType cho thu/chi/chuyển khoản. Không có tiêu chí đủ cụ thể cho matching thì để chúng null để ứng dụng hỏi lại. Không suy đoán hoặc chọn giao dịch theo nội dung chat lịch sử; chỉ dùng tin nhắn mới.",
         "Với mọi intent khác deletionScope=none và mọi deletion* fields=null.",
         `Mỗi khoản thu/chi rõ ràng tạo một bản nháp riêng. Chỉ điền walletId nếu người dùng nêu đích danh một ví trong danh sách; không tự đoán ví từ tên danh mục. Máy chủ sẽ tự đối chiếu tiền tệ được nói rõ với các ví đang hoạt động và chỉ chọn nếu có đúng một ví khớp. Tôn trọng và giữ nguyên đơn vị tiền tệ được nói rõ (ví dụ tệ, nhân dân tệ, CNY, RMB, USD, EUR, GBP, JPY); tuyệt đối không tự quy đổi sang VND và không gán vào ví có tiền tệ khác. Shorthand (k, triệu, tr) là số nhân, không thay thế tiền tệ đi sau (ví dụ: 10 triệu nhân dân tệ là amount=10000000, title='ăn sáng', không được biến thành VND). Dùng ${input.today} khi không nói ngày; ngày mơ hồ thì để null. Chuẩn hóa 35k thành 35000, 8 triệu thành 8000000. Chỉ dùng danh mục được cung cấp và categoryConfidence=confident nếu chỉ một danh mục phù hợp; ambiguous nếu nhiều danh mục phù hợp, unknown nếu không có. Không dùng Mua sắm như danh mục mặc định. Không lưu giao dịch hoặc nói đã lưu.`,
@@ -523,6 +550,10 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
         drafts = editDraftById([target], target.id, patch, draftState);
       } else drafts = [];
     } else if (value.intent !== "transaction") drafts = [];
+    if (["create_category","rename_category","merge_categories","delete_category"].includes(operationIntent) && categoryState) {
+      const command = value.categoryOperation?.operation === operationIntent ? value.categoryOperation : {operation:operationIntent as "create_category"|"rename_category"|"merge_categories"|"delete_category",sources:[],target:null,type:null};
+      return Response.json({intent:"general",operationIntent,drafts:[],...categoryDialogueResult(command,categoryState,resolveScenarioLanguage(input.message,input.language || "en"),input.batchId)});
+    }
     let categoryOperation = value.categoryOperation?.operation === operationIntent
       && value.categoryOperation.sources.every(name => input.categories.some(c => c.name === name))
       ? value.categoryOperation : null;
@@ -549,7 +580,7 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
       || (!!value.deletionPeriodEnd && !deletionPeriodEnd)
       || (!!deletionPeriodStart && !!deletionPeriodEnd && deletionPeriodStart > deletionPeriodEnd);
     const deletionScope = value.intent === "delete_transactions"
-      ? invalidDeletionTarget ? "matching" : value.deletionScope
+      ? invalidDeletionTarget || value.deletionScope === "all" && !explicitlyRequestsDeleteAll(input.message) ? "matching" : value.deletionScope === "none" ? "matching" : value.deletionScope
       : "none";
     if (value.intent === "financial" && value.action !== "none") {
       let resolved = resolveFinancialFollowup(input.message, {
@@ -566,7 +597,8 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
     const requestsBalance = value.action === "balance" || !!value.actions?.includes("balance") || value.action === "balance_after_obligation";
     const asksAllWallets = requestsBalance && asksForAllWalletBalances(input.message);
     const resolvedWalletId = asksAllWallets ? null : walletId;
-    const scope = requestsBalance && (!resolvedWalletId || asksAllWallets) ? "all" : value.scope;
+    const unscopedRanking = requestedActions.includes("largest_transaction") && !value.walletId && !input.selectedWalletId;
+    const scope = requestsBalance && (!resolvedWalletId || asksAllWallets) || unscopedRanking ? "all" : value.scope;
     let financialAnswer: string | null = null;
     if (value.intent === "financial" && session) {
       try {
@@ -589,7 +621,7 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
         return Response.json({ error: "FINANCIAL_DATA_UNAVAILABLE", message: "Chưa đọc được dữ liệu tài chính đã lưu. Vui lòng tải lại trang rồi thử lại." }, { status: 503 });
       }
     }
-    const plannerInput = { message: input.message, today: input.today, preferredLanguage: /zh|中文/.test(String(authorizedWorkspace?.settings.language)) ? "zh" as const : /en|English/.test(String(authorizedWorkspace?.settings.language)) ? "en" as const : "vi" as const, selectedWalletId: resolvedWalletId || input.selectedWalletId, history: input.history, context: authorizedWorkspace ? scenarioContext(authorizedWorkspace) : { wallets: input.wallets, categories: input.categories.map(c => c.name), budgets: [], fixedExpenses: [], goals: [] } };
+    const plannerInput = { message: input.message, today: input.today, preferredLanguage: resolveScenarioLanguage(input.message, input.language || (/zh|中文/.test(String(authorizedWorkspace?.settings.language)) ? "zh" : /en|English/.test(String(authorizedWorkspace?.settings.language)) ? "en" : "vi")), selectedWalletId: resolvedWalletId || input.selectedWalletId, history: input.history, context: authorizedWorkspace ? scenarioContext(authorizedWorkspace) : { wallets: input.wallets, categories: input.categories.map(c => c.name), budgets: [], fixedExpenses: [], goals: [] } };
     const scenarioPlan = value.scenarioPlan;
     const scenarioResponse = scenarioPlan ? timing.measureSync("calculation", () => resolveAssistantScenario(scenarioPlan, plannerInput)) : null;
     const calculations = scenarioResponse && authorizedWorkspace ? scenarioResponse.scenarios.map(s => timing.measureSync("calculation", () => calculateScenario(authorizedWorkspace!, s, input.today))) : null;
@@ -598,13 +630,12 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
       const budget = authorizedWorkspace!.goals.find(g => g.id === t.id)!;
       return (scope === "all" || budget.wallet === (resolvedWalletId || input.selectedWalletId)) && (!value.searchTerm || budget.title.toLowerCase().includes(value.searchTerm.toLowerCase())) && (!category || (budget.category || budget.title).toLowerCase().includes(category.toLowerCase()));
     }).map(t => ({ kind: "budget", id: t.id, title: t.title })) : [];
-    return Response.json({ intent: value.intent, operationIntent, financialEntities, scenarioResponse, calculations, baselines, presentation: value.presentation || null, planAdjustment: input.spendingPlan ? value.planAdjustment || null : null, targetDraftId: target?.id || null, categoryOperation, action: value.action, actions: requestedActions, walletId: resolvedWalletId, scope, percentage: value.percentage, financialAnswer,
+    const deletion: TransactionDeletionCriteria = {scope:deletionScope,amount:value.deletionAmount,walletId:deletionWalletId,periodStart:deletionPeriodStart,periodEnd:deletionPeriodEnd,category:deletionCategory,searchTerm:value.deletionSearchTerm,type:value.deletionType,relativeOrder:detectRelativeOrder(input.message) || (value.deletionSearchTerm?detectRelativeOrder(value.deletionSearchTerm):null)};
+    const transactionSelection = value.intent === "delete_transactions" && authorizedWorkspace ? invalidDeletionTarget ? {ids:[],matchedIds:[],selectedIds:[],browse:false,total:0} : transactionDeletionSelection(authorizedWorkspace.transactions,deletion) : null;
+    return Response.json({ intent: value.intent, operationIntent, transactionSelection, categoryList: operationIntent === "list_categories" ? input.categories.filter(c=>!c.archived).map(c=>c.name) : undefined, financialEntities, scenarioResponse, calculations, baselines, presentation: value.presentation || null, planAdjustment: input.spendingPlan ? value.planAdjustment || null : null, targetDraftId: target?.id || null, categoryOperation, action: value.action, actions: requestedActions, walletId: resolvedWalletId, scope, percentage: value.percentage, financialAnswer,
       periodStart: validDate(value.periodStart) ? value.periodStart : null, periodEnd: validDate(value.periodEnd) ? value.periodEnd : null,
       category, searchTerm: value.searchTerm, transactionType: value.transactionType, reply: categoryReply, drafts,
-      deletion: { scope: deletionScope, amount: value.deletionAmount,
-        walletId: deletionWalletId, periodStart: deletionPeriodStart, periodEnd: deletionPeriodEnd, category: deletionCategory,
-        searchTerm: value.deletionSearchTerm, type: value.deletionType,
-        relativeOrder: detectRelativeOrder(input.message) || (value.deletionSearchTerm ? detectRelativeOrder(value.deletionSearchTerm) : null) },
+      deletion,
     });
   } catch (error) {
     const status = error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : null;

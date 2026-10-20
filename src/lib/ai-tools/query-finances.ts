@@ -11,6 +11,7 @@ export const queryFinancesInputSchema = z.object({
     "top_category",
     "category_savings",
     "transactions",
+    "largest_transaction",
     "budget_status",
     "safe_daily_allowance",
     "upcoming_obligations",

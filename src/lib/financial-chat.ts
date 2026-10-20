@@ -19,7 +19,7 @@ const copy: Record<Language, { conclusion: string; figures: string; analysis: st
   zh: { conclusion: "结论", figures: "相关数据", analysis: "分析", suggestions: "建议", limits: "假设/限制", noWallet: "没有可用于计算的活跃钱包。", noTransactions: "此时间段没有符合条件的交易。", noBudgets: "所选钱包没有符合条件的预算。", assumptions: "根据 FinBridge 已保存的数据计算；不同币种的钱包分别计算，不进行换算。", balanceConclusion: "余额根据钱包初始余额和已保存交易计算。", income: "收入", expense: "支出", transferOut: "转出", transferIn: "转入", incomplete: "跨币种转账缺少收款金额；此余额不完整", malformed: "已跳过金额无效的交易", period: "期间", wallet: "钱包", summary: (range) => `${range}的已记录收入与支出。`, totalIncome: "收入", totalExpense: "支出", noBudgetSuggestion: "请在计划页面创建预算以跟踪限额和固定支出。", budgetConclusion: "当前周期的预算和固定支出情况。", budgetLimit: "限额", spent: "已支出", fixed: "预计固定支出", afterFixed: "扣除固定支出后剩余", over: "可能超出限额", upcoming: "即将到期", extraFixed: "未来30天内未关联预算的固定支出", budgetAnalysis: "预算限额不等于钱包余额。固定支出与已记录支出分开显示。" },
 };
 export type FinancialState = Pick<AppState, "wallets" | "transactions" | "goals" | "fixedExpenses" | "settings">;
-export type FinancialAction = "balance" | "balance_after_obligation" | "spending_summary" | "category_breakdown" | "top_category" | "category_savings" | "transactions" | "budget_status" | "safe_daily_allowance" | "upcoming_obligations" | "goals" | "spending_trend" | "anomalies" | "explain" | "unknown";
+export type FinancialAction = "balance" | "balance_after_obligation" | "spending_summary" | "category_breakdown" | "top_category" | "category_savings" | "transactions" | "largest_transaction" | "budget_status" | "safe_daily_allowance" | "upcoming_obligations" | "goals" | "spending_trend" | "anomalies" | "explain" | "unknown";
 export interface FinancialQuery {
   action: FinancialAction;
   actions?: FinancialAction[];
@@ -233,7 +233,8 @@ function answerFinancialQuerySection(
   }
 
   const isFutureWindowAction = action === "upcoming_obligations";
-  const rawStart = query.periodStart && /^\d{4}-\d{2}-\d{2}$/.test(query.periodStart) ? query.periodStart : isFutureWindowAction ? today : `${today.slice(0, 7)}-01`;
+  const earliest = action === "largest_transaction" ? state.transactions.filter(t => wallets.some(w => w.id === t.wallet) && t.date.slice(0,10) <= today).map(t => t.date.slice(0,10)).sort()[0] : null;
+  const rawStart = query.periodStart && /^\d{4}-\d{2}-\d{2}$/.test(query.periodStart) ? query.periodStart : isFutureWindowAction ? today : earliest || `${today.slice(0, 7)}-01`;
   const rawEnd = query.periodEnd && /^\d{4}-\d{2}-\d{2}$/.test(query.periodEnd) ? query.periodEnd : isFutureWindowAction ? addDays(rawStart, 30) : today;
 
   const start = rawStart;
@@ -403,6 +404,15 @@ function answerFinancialQuerySection(
         `• ${currency}：${baseline.amount}的${percentage}%（${baseline.count}笔交易）= 节省 ${money(savings, currency)}；支出降至 ${money(reducedSpend, currency)}。`);
     });
     return { conclusion: localized(lang, `Nếu giảm ${query.category} ${percentage}% theo dữ liệu đã ghi nhận trong ${range}:`, `At a ${percentage}% reduction in “${query.category}” based on recorded spending for ${range}:`, `按${range}已记录数据，将“${query.category}”支出减少${percentage}%：`), figures: results.join("\n"), limits: labels.assumptions };
+  }
+
+  if (action === "largest_transaction") {
+    const term = normalizeVietnameseMessage(query.searchTerm || query.category || "");
+    const matches = records.filter(item => item.type === (query.transactionType || "expense") && (!term || normalizeVietnameseMessage(`${item.title} ${item.category} ${item.note || ""}`).includes(term)));
+    if (!matches.length) return { conclusion: labels.noTransactions, analysis: `${labels.period}: ${range}` };
+    const byCurrency = new Map<string, typeof matches>();
+    for (const item of matches) { const currency = wallets.find(w => w.id === item.wallet)!.currency; const current = byCurrency.get(currency); if (!current || item.amount > current[0].amount) byCurrency.set(currency,[item]); else if (item.amount === current[0].amount) current.push(item); }
+    return { conclusion: localized(lang,"Đây là giao dịch có số tiền cao nhất trong phạm vi bạn hỏi:","Here is the largest transaction in the requested scope:","以下是所选范围内金额最高的交易："), figures: [...byCurrency].flatMap(([currency, items]) => items.map(item => `• **${item.title} · ${money(item.amount,currency)}**\n  ${item.date.slice(0,10)} · ${item.category} · ${walletName(wallets.find(w=>w.id===item.wallet)!.name,lang)}`)).join("\n"), analysis: `${labels.period}: ${range}`, limits: byCurrency.size > 1 ? labels.assumptions : undefined };
   }
 
   if (action === "transactions") {

@@ -672,7 +672,7 @@ export function normalizePlannerResponse(
   if (intent === "financial_query") {
     const rawQuery = (raw.query && typeof raw.query === "object" ? raw.query : {}) as Record<string, unknown>;
     const rawActions = Array.isArray(rawQuery.actions) ? (rawQuery.actions as string[]) : [];
-    const validActions = ["balance", "spending_summary", "top_category", "transactions", "budget_status", "safe_daily_allowance", "upcoming_obligations", "goals", "spending_trend", "anomalies", "explain", "unknown"];
+    const validActions = ["balance", "spending_summary", "top_category", "transactions", "largest_transaction", "budget_status", "safe_daily_allowance", "upcoming_obligations", "goals", "spending_trend", "anomalies", "explain", "unknown"];
 
     let actions: FinancialAction[] | undefined = undefined;
     if (rawActions.length > 0) {

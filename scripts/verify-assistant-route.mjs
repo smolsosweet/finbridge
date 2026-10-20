@@ -332,7 +332,8 @@ test("corrections patch only one explicitly grounded draft and retain all unment
 test("category-management boundary blocks a provider misclassification as transaction deletion", async () => {
   fixture.output = response({ intent: "delete_transactions", deletionScope: "all", reply: "" });
   const result = await (await POST(request(body("xóa danh mục Học phí")))).json();
-  assert.notEqual(result.intent, "delete_transactions"); assert.equal(result.deletion.scope, "none"); assert.deepEqual(result.drafts, []);
+  assert.notEqual(result.intent, "delete_transactions"); assert.equal(result.deletion?.scope || "none", "none"); assert.deepEqual(result.drafts, []);
+  assert.equal(result.operationIntent,"delete_category");assert.equal(fixture.calls.length,0);assert.equal(fixture.data.categories.includes("Học phí"),true);
 });
 
 test("category commands return validated previews and cannot access another account's category", async () => {
@@ -529,4 +530,54 @@ test("outage recovery does not swallow scenarios, corrections, auth failures or 
   }
   fixture.error=Object.assign(new Error("Synthetic auth failure"),{status:401});assert.equal((await POST(request(body("ăn sáng 10k")))).status,502);
   fixture.error=Object.assign(new Error("Synthetic quota failure"),{status:429});assert.equal((await POST(request(body("ăn sáng 10k")))).status,429);
+});
+
+test("English scenario clarification follows the question even when the saved UI language is Vietnamese",async()=>{
+  fixture.data.settings.language="Tiếng Việt";
+  fixture.output=response({intent:"simulate_financial_scenario",scenarioPlan:{name:"Laptop",walletId:"vnd",horizonEnd:"2026-10-31",estimateSpending:true,actions:[{kind:"change",title:"Laptop",amount:null,direction:"expense",percent:null,walletId:"vnd",currency:"VND",category:"Mua sắm",date:"2026-10-20",startDate:null,endDate:null}]}});
+  const result=await(await POST(request(body("If I buy a laptop, will I have enough money for rent?",{language:"vi"})))).json();
+  assert.equal(result.scenarioResponse.intent,"clarification");assert.match(result.scenarioResponse.clarification,/What is the amount/);assert.doesNotMatch(result.scenarioResponse.clarification,/bao nhiêu/);assert.equal(fixture.calls.length,1);
+  assert.match(fixture.calls[0].contents,/one response language.*en/);
+});
+
+test("largest-transaction orchestration runs the owned deterministic ranking tool, not a record list",async()=>{
+  fixture.data.transactions=[{id:"cheap",title:"Breakfast",amount:25000,type:"expense",wallet:"vnd",category:"Thức ăn & Đồ uống",date:"2026-10-10",note:""},{id:"max",title:"Laptop",amount:300000,type:"expense",wallet:"vnd",category:"Mua sắm",date:"2026-10-11",note:""}];
+  const before=structuredClone(fixture.data);
+  for(const message of ["Giao dịch mắc tiền nhất","Khoản nào ngốn nhiều tiền nhất vậy Finn?","Which purchase hit my wallet the hardest?","哪笔支出金额最高？"]){
+    fixture.calls=[];fixture.output=response({intent:"query_financial_data",action:"largest_transaction",walletId:"vnd",reply:"Forged total 999999"});
+    const http=await POST(request(body(message))),result=await http.json();assert.equal(http.status,200);assert.equal(result.action,"largest_transaction");assert.match(result.financialAnswer,/Laptop.*300,000 VND/);assert.doesNotMatch(result.financialAnswer,/Breakfast|999999/);assert.equal(fixture.calls.length,1);
+  }
+  assert.deepEqual(fixture.data,before);
+});
+test("generic deletion returns owned choices with none preselected, using zero model calls for the existing shortcut",async()=>{
+  fixture.data.transactions=[{id:"owned",title:"Food",amount:25000,type:"expense",wallet:"vnd",category:"Thức ăn & Đồ uống",date:"2026-10-10",note:""}];const before=structuredClone(fixture.data);
+  const result=await(await POST(request(body("tôi muốn xóa giao dịch")))).json();assert.deepEqual(result.transactionSelection.ids,["owned"]);assert.deepEqual(result.transactionSelection.selectedIds,[]);assert.equal(result.transactionSelection.browse,true);assert.equal(fixture.calls.length,0);assert.deepEqual(fixture.data,before);
+  fixture.output=response({intent:"delete_transactions",deletionScope:"all"});
+  const guarded=await(await POST(request(body("Bỏ giúp mình một khoản đã ghi")))).json();assert.equal(guarded.deletion.scope,"matching");assert.deepEqual(guarded.transactionSelection.selectedIds,[]);
+  fixture.output=response({intent:"delete_transactions",deletionScope:"matching",deletionWalletId:"foreign"});const invalid=await(await POST(request(body("xóa khoản trong ví kia")))).json();assert.deepEqual(invalid.transactionSelection.ids,[]);
+});
+test("category creation asks the name, retains it across natural follow-up, then collects type without another model call",async()=>{
+  const before=structuredClone(fixture.data);fixture.output=response({intent:"create_category",categoryOperation:null});
+  let result=await(await POST(request(body("tôi muốn tạo thêm danh mục",{language:"vi"})))).json();assert.equal(result.categoryDialogue.field,"target");assert.match(result.reply,/tên/);assert.equal(fixture.calls.length,1);
+  const pending=result.categoryDialogue.command;fixture.calls=[];fixture.output=response({intent:"create_category",categoryOperation:{...pending,target:"Đồ cắm trại"}});
+  result=await(await POST(request(body("gọi nó là Đồ cắm trại nhé",{pendingCategory:pending,language:"vi"})))).json();assert.equal(result.categoryDialogue.field,"type");assert.equal(result.categoryDialogue.command.target,"Đồ cắm trại");assert.match(fixture.calls[0].contents,/Category request awaiting information/);
+  fixture.calls=[];result=await(await POST(request(body("Chi tiêu",{pendingCategory:result.categoryDialogue.command,categoryChoice:{field:"type",value:"expense"},language:"vi"})))).json();assert.equal(result.categoryOperation.target,"Đồ cắm trại");assert.equal(result.categoryOperation.type,"expense");assert.equal(result.categoryDialogue,null);assert.equal(fixture.calls.length,0);assert.deepEqual(fixture.data,before);
+});
+test("merge guides owned source and destination choices, excludes forged/archived targets and stays read-only",async()=>{
+  const before=structuredClone(fixture.data);fixture.output=response({intent:"merge_categories",categoryOperation:{operation:"merge_categories",sources:[],target:null,type:"expense"}});
+  let result=await(await POST(request(body("tôi muốn gộp danh mục chi tiêu",{categories:[{name:"foreign",type:"expense"}]})))).json();assert.equal(result.categoryDialogue.field,"sources");assert.ok(result.categoryDialogue.choices.every(c=>fixture.data.categories.includes(c.value)));assert.ok(!result.categoryDialogue.choices.some(c=>c.value==="foreign"));
+  const source=result.categoryDialogue.command;fixture.calls=[];result=await(await POST(request(body("Mua sắm",{pendingCategory:source,categoryChoice:{field:"sources",value:"Mua sắm"}})))).json();assert.equal(result.categoryDialogue.field,"target");assert.ok(!result.categoryDialogue.choices.some(c=>c.value==="Mua sắm"));
+  assert.equal((await POST(request(body("foreign",{pendingCategory:result.categoryDialogue.command,categoryChoice:{field:"target",value:"foreign"}})))).status,400);
+  result=await(await POST(request(body("Học phí",{pendingCategory:result.categoryDialogue.command,categoryChoice:{field:"target",value:"Học phí"}})))).json();assert.deepEqual(result.categoryOperation.sources,["Mua sắm"]);assert.equal(result.categoryOperation.target,"Học phí");assert.equal(fixture.calls.length,0);assert.deepEqual(fixture.data,before);
+});
+test("a pending category request does not force an unrelated financial question into category management",async()=>{
+  const before=structuredClone(fixture.data);fixture.output=response({intent:"query_financial_data",action:"balance",walletId:"vnd"});
+  const result=await(await POST(request(body("Actually, how much money do I have?",{pendingCategory:{operation:"merge_categories",sources:["Mua sắm"],target:null,type:"expense"}})))).json();assert.equal(result.intent,"financial");assert.equal(result.categoryDialogue,undefined);assert.equal(fixture.calls.length,1);assert.deepEqual(fixture.data,before);
+});
+
+test("ordinal category follow-ups receive the owned eligible options in actual displayed order",async()=>{
+  fixture.output=response({intent:"merge_categories",categoryOperation:{operation:"merge_categories",sources:["Mua sắm"],target:"Thức ăn & Đồ uống",type:"expense"}});
+  const result=await(await POST(request(body("mục thứ hai nhé",{pendingCategory:{operation:"merge_categories",sources:["Mua sắm"],target:null,type:"expense"},language:"vi"})))).json();
+  const options=JSON.parse(fixture.calls[0].contents.match(/Current missing field and actual eligible options in displayed order: (.*?)\. Resolve ordinal/)[1]);
+  assert.equal(options.field,"target");assert.deepEqual(options.choices.map(c=>c.value),["Học phí","Thức ăn & Đồ uống"]);assert.equal(result.categoryOperation.target,options.choices[1].value);assert.equal(fixture.calls.length,1);assert.equal(fixture.reads.length,1);
 });

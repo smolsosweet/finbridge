@@ -1,6 +1,7 @@
 import type { FinancialScenario, ScenarioResult } from "./scenario-planner";
 import { conversationalLead, type AnswerPresentation } from "./assistant-response";
-import { formatScenarioDate, formatScenarioMoney } from "./scenario-format";
+import { detectScenarioLanguage, formatScenarioDate, formatScenarioMoney } from "./scenario-format";
+import { scenarioMissingCopy, scenarioWalletMissing } from "./scenario-availability";
 
 /** Conversational wording surrounds verified clauses; the model supplies no totals. */
 export function scenarioAnswer(result: ScenarioResult, scenario: FinancialScenario, wallets: Array<{ id: string; name: string }>, asOf: string, language: "vi" | "en" | "zh", baseline?: ScenarioResult, presentation?: AnswerPresentation) {
@@ -14,11 +15,11 @@ export function scenarioAnswer(result: ScenarioResult, scenario: FinancialScenar
     en: { reserve: "Protected reserve", available: "Available after reserve", unknownReserve: "No reserve is set; the projected balance does not earmark one.", unknownBalance: "Finn cannot verify this wallet balance. Check its opening balance and recorded transactions before forecasting.", comparison: "Compare options", original: "Unchanged", changed: "With your assumptions", impact: "Difference", action: "To avoid a shortfall, reduce spending or add actual funds by at least", reserveRisk: "The projected balance is positive, but it does not preserve the full reserve; the gap is", method: "What is included" },
     zh: { reserve: "预留备用金", available: "扣除备用金后可用", unknownReserve: "尚未设置备用金，以上预计余额未专门预留此款项。", unknownBalance: "Finn 无法核实此钱包余额，请先检查初始余额及已记录交易。", comparison: "方案比较", original: "保持原计划", changed: "按你的假设", impact: "差额", action: "为避免资金不足，需要减少支出或补充实际资金至少", reserveRisk: "预计余额为正，但无法完整保留备用金，仍差", method: "计算包含的项目" },
   }[language];
-  const complete = !result.unavailableEstimates.length && result.wallets.length > 0 && result.wallets.every(w => w.balanceComplete !== false);
   const end = formatScenarioDate(scenario.horizonEnd || asOf, language);
   const blocks: string[] = [];
-  if (!complete) blocks.push(t.missing);
   for (const wallet of result.wallets) {
+    const missing = scenarioWalletMissing(result, scenario, asOf, wallet.walletId);
+    const complete = missing.length === 0;
     const money = (n: number) => formatScenarioMoney(n, wallet.currency, language);
     const name = wallets.find(w => w.id === wallet.walletId)?.name || wallet.walletId;
     if (wallet.balanceComplete === false) { blocks.push(`**${name} · ${wallet.currency}**\n${extra.unknownBalance}`); continue; }
@@ -33,7 +34,14 @@ export function scenarioAnswer(result: ScenarioResult, scenario: FinancialScenar
       : language === "en"
         ? !complete ? `After calculable items, **${name}** has **${money(wallet.projectedBalance)}** left; this is not a complete forecast.` : wallet.projectedBalance < 0 ? `By **${end}**, **${name}** could be short by about **${closing}**.` : wallet.projectedBalance === 0 ? `By **${end}**, **${name}** is projected to run out, without a buffer for unexpected costs.` : `By **${end}**, you are projected to have about **${closing}** left in **${name}**.`
         : !complete ? `扣除可计算项目后，**${name}** 剩余 **${money(wallet.projectedBalance)}**，这还不是完整预测。` : wallet.projectedBalance < 0 ? `到 **${end}**，**${name}** 可能短缺约 **${closing}**。` : wallet.projectedBalance === 0 ? `到 **${end}**，**${name}** 预计刚好用完，没有应对额外开销的缓冲。` : `到 **${end}**，你在 **${name}** 中预计还剩约 **${closing}**。`;
-    blocks.push(complete && result.wallets.length === 1 ? conversationalLead(presentation?.lead, conclusion) : conclusion);
+    const leadLanguage = detectScenarioLanguage(presentation?.lead?.replace("{{answer}}", "") || "");
+    const includesPurchase = scenario.changes.some(change => change.walletId === wallet.walletId && change.direction === "expense" && change.amount !== null);
+    const directContext = complete && includesPurchase && bills.length ? {
+      vi: "Sau khoản mua dự kiến và các hóa đơn chưa trả đã ghi nhận: ",
+      en: "After your proposed purchase and recorded unpaid bills: ",
+      zh: "计入计划购买和已记录的未付账单后：",
+    }[language] : "";
+    blocks.push(complete && result.wallets.length === 1 && leadLanguage === language ? conversationalLead(presentation?.lead, directContext + conclusion) : directContext + conclusion);
     const details = [`• ${t.current}: **${money(wallet.balanceNow)}**.`, ...(billTotal ? [`• ${t.bills}: **${money(billTotal)}**${bills.length ? ` (${bills.length} ${t.count})` : ""}.`] : []), ...(pace ? [`• ${t.flexible}: **${money(pace.amount)}** (${pace.days} ${t.day}).`] : [])];
     if (presentation?.detail === "detailed") for (const bill of bills) details.push(`  ${bill.title} (${formatScenarioDate(bill.date, language)}): ${money(bill.amount)}.`);
     for (const change of scenario.changes.filter(c => c.walletId === wallet.walletId && c.amount !== null)) details.push(`• ${change.direction === "expense" ? t.purchase : t.income} · ${change.title}: **${money(change.amount!)}**.`);
@@ -42,14 +50,26 @@ export function scenarioAnswer(result: ScenarioResult, scenario: FinancialScenar
     if (wallet.protectedReserve != null && wallet.availableAfterReserve != null) details.push(`• ${extra.reserve}: **${money(wallet.protectedReserve)}**.`, `• ${extra.available}: **${money(wallet.availableAfterReserve)}**.`);
     // Even a brief affordability answer must identify the purchase separately.
     blocks.push(`${presentation?.detail === "detailed" ? `**${extra.method}**\n` : ""}${details.join("\n")}`);
-    if (base && base.balanceComplete !== false && !baseline!.unavailableEstimates.length && base.projectedBalance !== wallet.projectedBalance) blocks.push(presentation?.layout === "comparison"
+    if (includesPurchase && !bills.length) blocks.push({
+      vi: "Không có hóa đơn chưa trả được ghi nhận trong kỳ. Nếu còn tiền nhà hoặc khoản phải trả chưa nhập, kết quả chưa bao gồm khoản đó; hãy bổ sung số tiền và ngày đến hạn.",
+      en: "No unpaid bills are recorded in this period. Any rent or other bill not yet recorded is not included; add its amount and due date.",
+      zh: "本期没有已记录的未付账单。尚未录入的房租或其他应付款未计入结果，请补充金额和到期日。",
+    }[language]);
+    if (missing.length) blocks.push(...scenarioMissingCopy(missing, language));
+    if (base && !scenarioWalletMissing(baseline!, { ...scenario, changes: [], spendingReductions: [], dailySpendingLimits: [] }, asOf, wallet.walletId).length && base.projectedBalance !== wallet.projectedBalance) blocks.push(presentation?.layout === "comparison"
       ? `**${extra.comparison}**\n\n| ${extra.original} | ${extra.changed} | ${extra.impact} |\n| ---: | ---: | ---: |\n| ${money(base.projectedBalance)} | ${money(wallet.projectedBalance)} | ${money(Math.round((wallet.projectedBalance - base.projectedBalance) * scale) / scale)} |`
       : `${t.baseline}: **${money(base.projectedBalance)}**.`);
     if (complete && wallet.projectedBalance > 0 && wallet.availableAfterReserve != null && wallet.availableAfterReserve < 0) blocks.push(`${extra.reserveRisk} **${money(-wallet.availableAfterReserve)}**.`);
     if (complete && wallet.projectedBalance < 0) blocks.push(`${extra.action} **${money(-wallet.projectedBalance)}**.`);
     if (wallet.protectedReserve == null && scenario.estimateSpending) blocks.push(extra.unknownReserve);
   }
-  for (const budget of result.budgets.filter(b => b.projectedRemaining < 0)) blocks.push(`${t.budget} **${budget.title || t.unnamedBudget}** ${t.over} **${formatScenarioMoney(-budget.projectedRemaining, budget.currency, language)}**. ${t.limitNote}`);
-  blocks.push(`${t.period} **${formatScenarioDate(asOf, language)}** → **${end}**.`, !complete ? result.wallets.some(w => w.balanceComplete === false) ? "" : t.help : result.includesPaceForecast ? t.note : t.exact);
+  for (const budget of result.budgets.filter(b => b.projectedRemaining < 0 && b.forecastAvailable)) blocks.push(`${t.budget} **${budget.title || t.unnamedBudget}** ${t.over} **${formatScenarioMoney(-budget.projectedRemaining, budget.currency, language)}**. ${t.limitNote}`);
+  for (const budget of result.budgets.filter(b => !b.forecastAvailable)) blocks.push({
+    vi: `Ngân sách **${budget.title || t.unnamedBudget}** chưa có đủ lịch sử chi linh hoạt để dự báo riêng. Điều này không làm mất ước tính chi tiêu của ví; chưa thể kết luận ngân sách này có vượt hạn mức hay không.`,
+    en: `Budget **${budget.title || t.unnamedBudget}** has no usable flexible-spending history for its own forecast. This does not invalidate the wallet estimate; whether this budget will exceed its limit is still unknown.`,
+    zh: `预算 **${budget.title || t.unnamedBudget}** 缺少独立预测所需的灵活支出记录。这不影响钱包估算，但尚无法判断该预算是否会超支。`,
+  }[language]);
+  blocks.push(`${t.period} **${formatScenarioDate(asOf, language)}** → **${end}**.`);
+  if (result.wallets.some(w => w.balanceComplete !== false)) blocks.push(result.estimatedSpending.length ? t.note : t.exact);
   return blocks.filter(Boolean).join("\n\n");
 }

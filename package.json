@@ -63,6 +63,8 @@
     "test:conversation:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-conversation-postgres.mjs",
     "test:ai-tools": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-ai-tools.mjs",
     "test:scenario-planner": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-scenario-planner.mjs",
+    "test:scenario-answers": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-scenario-answer-clarity.mjs scripts/verify-assistant-responses.mjs scripts/verify-finn-planning-actions.mjs",
+    "test:finn-intent-workflows": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-finn-intent-workflows.mjs scripts/verify-assistant-route.mjs scripts/verify-conversation.mjs scripts/verify-settings-and-natural-language.mjs scripts/verify-ai-tools.mjs",
     "test:proactive-alerts": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-proactive-alerts.mjs",
     "test:notification-center": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-notification-center.mjs",
     "test:notification-center:ui": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs scripts/verify-planning-notifications-ui.mjs",

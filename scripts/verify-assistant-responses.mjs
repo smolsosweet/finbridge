@@ -61,7 +61,7 @@ test("missing history never produces a positive affordability claim and unrelate
   const i=input(s), sc=resolveAssistantScenario({...spec(),walletId:"cny"},i).scenarios[0], result=calculateScenario(s,sc,i.today);
   assert.equal(result.wallets.length,1); assert.equal(result.wallets[0].currency,"CNY");assert.equal(result.plannedBills.length,0);
   const answer=scenarioAnswer(result,sc,s.wallets,i.today,"vi");
-  assert.match(answer,/chưa đủ dữ liệu/i);assert.doesNotMatch(answer,/dự kiến vẫn còn tiền|VND/);
+  assert.match(answer,/Chưa ước tính được chi sinh hoạt tiếp theo/i);assert.doesNotMatch(answer,/dự kiến vẫn còn tiền|VND/);
 });
 
 test("scenario interpretation validates missing wallets, precision, currency, dates and percentages", () => {
@@ -77,7 +77,7 @@ test("inconsistent ledger, future income and early-month sparse history cannot j
   assert.equal(calculateScenario(s,sc,i.today).wallets[0].balanceNow,9104378);
   s.transactions.push({...s.transactions[0]});
   const result=calculateScenario(s,sc,i.today);
-  assert.match(scenarioAnswer(result,sc,s.wallets,i.today,"en"),/needs more data/);
+  assert.match(scenarioAnswer(result,sc,s.wallets,i.today,"en"),/cannot verify this wallet balance/);
   const sparse=state();sparse.transactions[0].date="2026-10-01";
   assert.ok(calculateScenario(sparse,sc,"2026-10-01").unavailableEstimates.length);
 });

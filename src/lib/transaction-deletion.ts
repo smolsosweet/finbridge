@@ -59,6 +59,20 @@ export function hasTransactionDeletionFilter(criteria: TransactionDeletionCriter
   );
 }
 
+/** Read-only candidates. An unspecified deletion never preselects a record. */
+export function transactionDeletionSelection<T extends DeletableTransaction>(transactions: T[], criteria: TransactionDeletionCriteria) {
+  const browse = criteria.scope !== "all" && !hasTransactionDeletionFilter(criteria);
+  const matches = browse ? [] : findTransactionsForDeletion(transactions, criteria);
+  const candidates = browse ? [...transactions].sort((a,b)=>(b.occurredAt || b.date).localeCompare(a.occurredAt || a.date)).slice(0,50)
+    : matches.length ? matches : findTransactionsForDeletion(transactions,{...criteria,scope:"matching",searchTerm:null});
+  return { ids:candidates.map(t=>t.id), matchedIds:matches.map(t=>t.id), selectedIds:!browse && (criteria.scope==="all" || matches.length===1)?matches.map(t=>t.id):[], browse, total:browse?transactions.length:candidates.length };
+}
+
+/** Extra authorization guard: a model classification alone cannot select delete-all. */
+export function explicitlyRequestsDeleteAll(message: string) {
+  return /\b(?:tat ca|toan bo|het|every|everything|all|entire)\b|全部|所有|清空/.test(normalizeVietnameseMessage(message));
+}
+
 function normalizedDeletionTokens(value: string) {
   const ignored = new Set(["xoa", "bo", "hay", "giao", "dich", "khoan", "an", "uong", "giup", "toi", "cho", "ngay", "hom", "qua", "yesterday", "today", "transaction", "transactions", "please", "delete", "remove", "the", "on", "from"]);
   return normalizeVietnameseMessage(value).split(/[^\p{L}\p{N}]+/u).filter((word) => word.length > 1 && !ignored.has(word));
