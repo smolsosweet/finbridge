@@ -5,7 +5,7 @@ export const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash-lite";
 export function getGeminiModelCandidates(overrideEnv?: string): string[] {
   const configured = (overrideEnv ? process.env[overrideEnv]?.trim() : undefined) || process.env.GEMINI_TRANSACTION_MODEL?.trim();
   const primary = configured || DEFAULT_GEMINI_MODEL;
-  const fallbacks = [primary, "gemini-3.5-flash-lite", "gemini-3.5-flash"];
+  const fallbacks = [primary, "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.6-flash"];
   return fallbacks.filter((m, i, arr) => arr.indexOf(m) === i);
 }
 

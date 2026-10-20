@@ -27,7 +27,7 @@ function LocalDemoWorkspace({ user, children }: { user: AuthenticatedUser; child
     return () => clearUserWorkspace(user.id);
   }, [user.id, user.name]);
   if (!ready) return <div role="status" className="min-h-screen grid place-items-center bg-[#f3f6f6] text-[#147d78]">FinBridge…</div>;
-  return <AuthenticatedUserContext.Provider value={user}><SafetyProvider><div role="status" className="fb-database-status">{notice}</div>{children}</SafetyProvider></AuthenticatedUserContext.Provider>;
+  return <AuthenticatedUserContext.Provider value={user}><SafetyProvider><div className="fb-local-demo-shell"><div role="status" className="fb-database-status">{notice}</div>{children}</div></SafetyProvider></AuthenticatedUserContext.Provider>;
 }
 
 function SessionWorkspace({ user, children }: { user: AuthenticatedUser; children: ReactNode }) {
