@@ -1,7 +1,9 @@
 # Deploying generic reminder email
 
 The application already has an authenticated POST worker at /api/internal/safety.
-The added Safety email scheduler GitHub Actions workflow invokes it every five minutes
+The added Safety email scheduler GitHub Actions workflow invokes it every five minutes,
+offset from the beginning of the hour (at minute 03, 08, ... 58) to reduce shared
+GitHub Actions scheduler contention.
 on main, or manually through workflow_dispatch. GitHub schedules are best effort and
 may be delayed or disabled for inactive repositories; this is not an exact delivery SLA.
 

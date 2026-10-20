@@ -1,7 +1,9 @@
 name: Safety email scheduler
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    # Avoid minute zero, when GitHub's shared scheduler is most likely to delay
+    # or drop queued runs. This retains a five-minute cadence at :03, :08, ... :58.
+    - cron: "3-58/5 * * * *"
   workflow_dispatch:
 permissions:
   contents: read
