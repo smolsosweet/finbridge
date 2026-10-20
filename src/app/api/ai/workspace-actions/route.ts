@@ -1,8 +1,9 @@
+import { FINN_VOICE_POLICY } from "@/lib/finn-voice";
 import { traceAiRequest, type AiRequestTiming } from "@/lib/ai-request-timing";
 import { readAiJson } from "@/lib/ai-request";
 import { AI_JSON_BYTES } from "@/lib/ai-limits";
-import { createHash } from "node:crypto";
 import { ThinkingLevel } from "@google/genai";
+import { stableWorkspaceActionId as stableActionId } from "@/lib/workspace-action-id";
 import { z } from "zod";
 import { requireAiSession } from "@/lib/ai-access";
 import { createQuotaGemini } from "@/lib/ai-quota-gemini";
@@ -29,10 +30,6 @@ const inputSchema = z.object({
   context: z.object({ wallets: workspaceSchema.shape.wallets, goals: workspaceSchema.shape.goals, fixedExpenses: workspaceSchema.shape.fixedExpenses, categories: workspaceSchema.shape.categories, categoryMeta: workspaceSchema.shape.categoryMeta, walletCategories: workspaceSchema.shape.walletCategories }).strict().optional(),
 }).strict();
 
-function stableActionId(batch: string, index: number) {
-  const hash = createHash("sha256").update(`${batch}:create:${index}`).digest("hex");
-  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
-}
 export async function POST(request: Request) {
   return traceAiRequest("workspace-actions", timing => handleRequest(request, timing));
 }
@@ -49,7 +46,7 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
   if (!parsed.success) return respond({ error: "INVALID_REQUEST" }, 400);
   const input = parsed.data, t = workspaceActionCopy[input.language];
   try {
-    const state = session ? (await timing.measure("workspace", () => workspaceRepository(database(), timing).read(session.user.id))).data
+    const state = session ? (await timing.measure("workspace", () => { const repository = workspaceRepository(database(), timing); return repository.readForAnalysis ? repository.readForAnalysis(session.user.id) : repository.read(session.user.id); })).data
       : input.context ? { ...input.context, transactions: [], recurring: [], rules: [], settings: { language: input.language } } as AppState : null;
     if (!state) return respond({ error: "WORKSPACE_UNAVAILABLE", message: t.unavailable }, 503);
     const pending = input.pending && ["collecting", "review", "failed"].includes(input.pending.status) && !input.pending.applied ? input.pending : null;
@@ -90,6 +87,7 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
       const ai = createQuotaGemini(key, session.user.id, "workspace-actions");
       const result = await timing.measure("model", () => ai.models.generateContent({ model,
         contents: [
+          FINN_VOICE_POLICY,
           "You are Finn's financial workspace creation planner. You ONLY propose new manually tracked wallets, budgets and fixed expense schedules. You NEVER save, transfer/pay money, delete data or claim an operation succeeded. Output JSON matching the schema.",
           "Use mode=manage for creation or answering/editing a pending creation. Use mode=unrelated for Q&A, recorded transactions, category commands, or hypothetical simulations. Use mode=cancel only when the user explicitly cancels the pending creation. Multiple requested objects may be proposed (max six).",
           "For each action use kind=wallet|budget|fixed_expense. Reuse the exact pending id when supplying updates; use id=null for a new object. Return only fields explicitly supplied in the newest message. Do not invent or zero-fill missing facts, names, amounts, categories, currencies or dates. Ask via null/omitted fields. Keep previously known values unless the user explicitly changes them. Interpret informal Vietnamese, English and Chinese, typos, relative dates and follow-ups using the current question.",

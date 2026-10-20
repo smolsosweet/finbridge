@@ -399,11 +399,16 @@ function answerFinancialQuerySection(
       const savings = Math.round(baseline.amount * percentage / 100 * scale) / scale;
       const reducedSpend = Math.round((baseline.amount - savings) * scale) / scale;
       return localized(lang,
-        `• ${currency}: ${percentage}% của ${money(baseline.amount, currency)} (${baseline.count} giao dịch) = tiết kiệm ${money(savings, currency)}; chi còn ${money(reducedSpend, currency)}.`,
-        `• ${currency}: ${percentage}% of ${money(baseline.amount, currency)} (${baseline.count} transactions) = ${money(savings, currency)} saved; spending becomes ${money(reducedSpend, currency)}.`,
-        `• ${currency}：${baseline.amount}的${percentage}%（${baseline.count}笔交易）= 节省 ${money(savings, currency)}；支出降至 ${money(reducedSpend, currency)}。`);
+        `• Bạn đã chi **${money(baseline.amount, currency)}** qua ${baseline.count} giao dịch. Giảm ${percentage}% tương đương **${money(savings, currency)}**, mức chi sau giảm là **${money(reducedSpend, currency)}** cho cùng kỳ.`,
+        `• You've spent **${money(baseline.amount, currency)}** across ${baseline.count} transactions. A ${percentage}% reduction would save **${money(savings, currency)}**, bringing spending to **${money(reducedSpend, currency)}** for the same period.`,
+        `• 你已支出 **${money(baseline.amount, currency)}**，共${baseline.count}笔交易。减少${percentage}%可节省 **${money(savings, currency)}**，同一期间的支出将降至 **${money(reducedSpend, currency)}**。`);
     });
-    return { conclusion: localized(lang, `Nếu giảm ${query.category} ${percentage}% theo dữ liệu đã ghi nhận trong ${range}:`, `At a ${percentage}% reduction in “${query.category}” based on recorded spending for ${range}:`, `按${range}已记录数据，将“${query.category}”支出减少${percentage}%：`), figures: results.join("\n"), limits: labels.assumptions };
+    return {
+      conclusion: localized(lang, `Được chứ, Finn cùng bạn xem cách giảm chi cho “${query.category}” nhé.`, `Let's look at reducing your spending on “${query.category}”.`, `Finn 和你一起看看如何减少“${query.category}”的支出。`),
+      figures: results.join("\n"),
+      analysis: localized(lang, `Tính theo khoản đã ghi nhận trong ${range}; đây là mức giảm giả định, chưa thay đổi ngân sách hay tạo kế hoạch.`, `Based on recorded spending for ${range}; this is a hypothetical reduction, not a budget change or a saved plan.`, `根据${range}的已记录支出计算；这是假设调整，尚未修改预算或创建计划。`),
+      suggestions: localized(lang, "Bạn muốn thử mức giảm khác hay xem khoản nào trong danh mục này chi nhiều nhất?", "Would you like to try another percentage or see the largest expenses in this category?", "你想试试其他比例，还是看看这个类别中金额最大的支出？"),
+    };
   }
 
   if (action === "largest_transaction") {

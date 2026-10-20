@@ -15,6 +15,12 @@ test("real PostgreSQL: batched hydration equals the original reader and isolates
     owners.push(await syntheticUser(pool), await syntheticUser(pool));
     const state = workspaceFixture(), repo = workspaceRepository(pool);
     await repo.save(owners[0], { revision: 0, mutationId: randomUUID(), data: state });
+    const fullRecord=await repo.read(owners[0]),analysisRecord=await repo.readForAnalysis(owners[0]);
+    const financial=value=>{const copy=structuredClone(value);for(const key of ["transactionChat","planningChat","receiptDraft","onboardingDraft"])delete copy[key];return copy;};
+    assert.equal(analysisRecord.revision,fullRecord.revision);
+    assert.deepEqual(financial(analysisRecord.data),financial(fullRecord.data));
+    assert.equal(analysisRecord.data.transactionChat,undefined);
+    assert.equal((await repo.readForAnalysis(owners[1])).data,null);
     const client = await pool.connect();
     try {
       await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ");

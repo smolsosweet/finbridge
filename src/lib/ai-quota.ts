@@ -1,7 +1,7 @@
 export const AI_QUOTA_TIME_ZONE = "America/Los_Angeles";
 export const AI_ROUTE_COST = {
   assistant: 1, "transaction-drafts": 1, "scenario-planner": 1,
-  "proactive-feed": 1, "workspace-actions": 1, "speech-transcription": 2, "receipt-drafts": 3,
+  "proactive-feed": 1, "workspace-actions": 1, "translate-conversation": 1, "speech-transcription": 2, "receipt-drafts": 3,
 } as const;
 export type AiRoute = keyof typeof AI_ROUTE_COST;
 export type AiQuotaConfig = {

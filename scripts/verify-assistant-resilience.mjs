@@ -1,6 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { assistantSmallTalk, recoverTransactionDraft } from "../src/lib/assistant-resilience.ts";
+import { FINN_VOICE_POLICY, finnChatCopy } from "../src/lib/finn-voice.ts";
+
+test("Finn's shared voice keeps draft, error and completion claims separate in every language", () => {
+  for (const language of ["vi", "en", "zh"]) {
+    const copy = finnChatCopy[language];
+    for (const value of Object.values(copy)) {
+      assert.ok(value.length > 0);
+      assert.doesNotMatch(value, /Gemini|AI Studio|API key|localStorage/i);
+    }
+    assert.match(copy.draftReady, /chưa lưu|not saved|尚未保存/);
+    assert.match(copy.greeting, /Finn/);
+    assert.match(copy.timeout, /thử lại|retry|重试/);
+    assert.notEqual(copy.timeout, copy.rateLimit);
+    assert.notEqual(copy.rateLimit, copy.configuration);
+  }
+  assert.match(FINN_VOICE_POLICY, /Only claim saved, created, changed or deleted after the application confirms success/);
+  assert.match(FINN_VOICE_POLICY, /Do not promise background monitoring/);
+  assert.match(FINN_VOICE_POLICY, /never override validation, authorization, confirmations/);
+});
 
 const state=()=>({wallets:[{id:"vnd",name:"Vietinbank",currency:"VND"},{id:"cny",name:"Alipay",currency:"CNY"},{id:"usd",name:"AmericaBank",currency:"USD"}],categories:["Thức ăn & Đồ uống"],categoryMeta:{"Thức ăn & Đồ uống":{type:"expense",icon:"🍔",children:[]}},goals:[],fixedExpenses:[]});
 const input=message=>({message,batchId:"stable-batch",today:"2026-10-19",selectedWalletId:null,language:"vi"});

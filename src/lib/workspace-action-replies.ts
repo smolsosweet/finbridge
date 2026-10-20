@@ -1,5 +1,5 @@
 import type { ActionQuestion, WorkspaceAction } from "./workspace-actions";
-import { parseTransactionAmounts } from "./transaction-drafts";
+import { parseSpokenTransactionAmounts, parseTransactionAmounts } from "./transaction-drafts";
 
 const normalize = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase().replace(/\s+/g, " ").trim();
 type FieldReply = { patch: Partial<WorkspaceAction> } | { error: "INVALID_NUMBER" | "CURRENCY_MISMATCH"; currency?: string; expectedCurrency?: string };
@@ -29,7 +29,16 @@ export function resolveWorkspaceFieldReply(message: string, question: ActionQues
     .replace(/^(?:(?:so tien|ngan sach|han muc|so du(?: ban dau)?|amount|budget|opening balance|credit limit|金额|预算|初始余额)\s*(?:la|is|:|：|是)?\s*)/u, "")
     .replace(/\s+(?:nhe|nha|a|please)$/u, "");
   const match = numericText.match(/^(\$|€|£|¥|[a-z]{3}|人民币|元|美元)?\s*([+-]?\d[\d.,]*)(?:\s*(k|nghin|ngan|trieu|tr|m|million|thousand|ty|billion|百万|万|千))?(?:\s*(nhan\s+dan\s+te|renminbi|bang\s+anh|my\s+kim|do\s+la|dollars?|dong|euro?|pound|pounds|bang|yuan|rmb|vnd|cny|usd|eur|gbp|jpy|yen|te|do|d|₫|\$|€|£|¥|[a-z]{3}|元|美元|人民币))?$/u);
-  if (!match) return null;
+  if (!match) {
+    const spoken = parseSpokenTransactionAmounts(numericText);
+    if (spoken.length !== 1) return null;
+    const item = spoken[0];
+    const residue = (numericText.slice(0, item.start) + " " + numericText.slice(item.end)).replace(/\b(?:toi|minh|khoang|tam|la|so tien|han muc|ngan sach|amount|budget|opening balance|credit limit|please|about|around|roughly|approximately|a|the|is|bang)\b/g, " ").replace(/[\s,.:;!?]+/g, "").trim();
+    if (residue) return null;
+    if (!Number.isFinite(item.amount) || item.amount > 1e12 || (question.field !== "initialBalance" && item.amount <= 0)) return { error: "INVALID_NUMBER" };
+    if (item.currency && action.currency && item.currency !== action.currency) return { error: "CURRENCY_MISMATCH", currency: item.currency, expectedCurrency: action.currency };
+    return { patch: { [question.field]: item.amount, ...(item.currency ? { currency: item.currency } : {}) } };
+  }
   const [, prefix, raw, unit, suffix] = match;
   const code = (value: string | undefined) => {
     if (!value) return null;

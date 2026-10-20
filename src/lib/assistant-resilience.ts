@@ -11,12 +11,12 @@ type RecoveryState = Pick<AppState, "categories" | "categoryMeta" | "goals" | "f
 export function assistantSmallTalk(message: string, language: Language): string | null {
   const text = normalizeVietnameseMessage(message).replace(/[!.,?？。！👋]/gu, " ").replace(/\s+/g, " ").trim();
   if (/^(?:(?:xin )?chao|hello|hi|hey|你好|您好)(?:\s*(?:finn|ban|bạn))?$|^finn\s+oi$/i.test(text)) return {
-    vi: "Chào bạn! Mình là Finn. Bạn muốn ghi thu chi, xem kế hoạch hay quản lý ví và ngân sách?",
+    vi: "Chào bạn! Finn đây. Bạn muốn ghi thu chi, xem kế hoạch hay quản lý ví và ngân sách?",
     en: "Hi! I'm Finn. Would you like to record spending, review a plan, or manage wallets and budgets?",
     zh: "你好！我是 Finn。你想记录收支、查看计划，还是管理钱包和预算？",
   }[language];
   if (/^(?:ban ten (?:la )?gi|ban la ai|finn la ai|what(?:'s| is) your name|who are you|你叫什么名字|你是谁)$/i.test(text)) return {
-    vi: "Mình là Finn, trợ lý tài chính của bạn trong FinBridge.",
+    vi: "Finn là bạn đồng hành tài chính của bạn trong FinBridge.",
     en: "I'm Finn, your financial assistant in FinBridge.",
     zh: "我是 Finn，你在 FinBridge 的财务助手。",
   }[language];

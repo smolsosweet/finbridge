@@ -1,6 +1,9 @@
 "use client";
 
+import { useAppUiText } from "./useAppUiText";
+
 import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 import { Dashboard } from "./Dashboard";
 import { TransactionHistory } from "./TransactionHistory";
 import { Planning } from "./Planning";
@@ -20,6 +23,7 @@ import { FinBridgeMascot } from "@/components/FinBridgeMascot";
 import "./workspace.css";
 
 export function FinBridgeApp({ screen = "" }: { screen?: string }) {
+  const uiText = useAppUiText();
   const router = useRouter();
   const params = useSearchParams();
   const state = useAppState();
@@ -38,6 +42,7 @@ export function FinBridgeApp({ screen = "" }: { screen?: string }) {
     : /en|english|anh/.test(String(state.settings.language || "").toLowerCase())
     ? "en"
     : "vi";
+  useEffect(() => { document.documentElement.lang = lang === "zh" ? "zh-CN" : lang; }, [lang]);
 
   const navLabels = {
     vi: [["home", "Trang chủ", "f015"], ["transactions", "Giao dịch", "f555"], ["tools", "Kế hoạch", "f51e"], ["settings", "Cài đặt", "f013"]],
@@ -70,7 +75,7 @@ export function FinBridgeApp({ screen = "" }: { screen?: string }) {
   else if (screen === "paywall7dTrial") content = <PremiumPage navigate={navigate} />;
   else if (screen === "budgetAI" || screen === "budgetwithAIEntry") content = <BudgetAI navigate={navigate} />;
   else if (screen === "welcome") content = <WelcomeScreen onGetStarted={() => router.push("/onboarding")} onLogIn={() => router.push("/login")} />;
-  else content = <div><PageHeader title="FinBridge" onBack={() => navigate("")} /><p>Không tìm thấy màn hình này.</p></div>;
+  else content = <div><PageHeader title="FinBridge" onBack={() => navigate("")} /><p>{uiText("Không tìm thấy màn hình này.")}</p></div>;
 
   const isWelcome = screen === "welcome";
   const isAppShell = !isWelcome;
@@ -79,7 +84,7 @@ export function FinBridgeApp({ screen = "" }: { screen?: string }) {
   return (
     <div className={"r-app " + theme + (isAppShell ? " fb-home-shell has-sidebar" : "")}>
       {!isWelcome && (
-        <aside className="fb-desktop-sidebar" aria-label="Điều hướng máy tính">
+        <aside className="fb-desktop-sidebar" aria-label={uiText("Điều hướng máy tính")}>
           <div>
             <div className="fb-sidebar-brand" onClick={() => navigate("")} role="button" tabIndex={0}>
               <span className="fb-brand-mark" aria-hidden="true">
@@ -178,7 +183,7 @@ export function FinBridgeApp({ screen = "" }: { screen?: string }) {
       )}
 
       {!screen && (
-        <nav className="r-bottom-nav" aria-label="Điều hướng chính">
+        <nav className="r-bottom-nav" aria-label={uiText("Điều hướng chính")}>
           {mobileNavLabels.map(([id, name, code]) => (
             <button
               key={id}

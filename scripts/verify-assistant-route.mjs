@@ -66,6 +66,35 @@ test("a short budget amount answer advances the active question even when the pr
   assert.deepEqual(fixture.data, before);
 });
 
+test("reuse a creation extraction with one model call/read instead of classifying then extracting again",async()=>{
+  const input=body("Dành cho mình hai triệu để sinh hoạt tháng này, bắt đầu hôm nay ở Test wallet",{today:"2026-10-20"});
+  const extracted={kind:"budget",name:"Living",amount:2000000,currency:"VND",walletId:"vnd",date:"2026-10-20",cycle:"monthly",category:""};
+  const before=structuredClone(fixture.data);
+  fixture.output=response({intent:"create_budget"});
+  await POST(request(input));
+  fixture.output={mode:"manage",actions:[extracted]};
+  const legacy=await(await workspaceActionsPOST(request({batchId:input.batchId,message:input.message,today:input.today,language:"vi",history:[],pending:null}))).json();
+  assert.equal(fixture.calls.length,2);assert.equal(fixture.reads.length,2);
+  fixture.calls=[];fixture.reads=[];
+  fixture.output=response({intent:"create_budget",workspaceActions:[extracted]});
+  const http=await POST(request(input)),result=await http.json();
+  assert.equal(http.status,200);assert.equal(fixture.calls.length,1);assert.equal(fixture.reads.length,1);
+  assert.deepEqual(result.workspaceProposal,legacy.proposal);assert.equal(result.workspaceProposal.status,"review");
+  assert.deepEqual(fixture.data,before);assert.equal(result.drafts.length,0);
+  fixture.output.workspaceActions[0].walletId="foreign-wallet";
+  const invalid=await(await POST(request(input))).json();
+  assert.equal(invalid.workspaceProposal.status,"collecting");assert.equal(invalid.workspaceProposal.actions[0].amount,2000000);
+  assert.deepEqual(fixture.data,before);
+});
+
+test("a structured category clarification stays with its pending task instead of becoming a transaction edit",async()=>{
+  const pendingCategory={operation:"create_category",sources:[],target:null,type:"expense"};
+  fixture.output=response({intent:"answer_clarification",categoryOperation:{...pendingCategory,target:"Outdoors"}});
+  const result=await(await POST(request(body("Outdoors",{pendingCategory})))).json();
+  assert.equal(result.operationIntent,"create_category");assert.equal(result.categoryOperation.target,"Outdoors");
+  assert.deepEqual(result.drafts,[]);assert.equal(fixture.calls.length,1);assert.equal(fixture.data.categories.includes("Outdoors"),false);
+});
+
 test("wallet choice then shorthand amount then date advance one budget without losing prior fields", async () => {
   let pending = { id: randomUUID(), actions: [creation("budget", { name: "Tiền sinh hoạt tháng 10" })], status: "collecting" };
   for (const [message, field] of [["Test wallet · VND", "amount"], ["số tiền là 10 triệu nhé", "date"], ["ngày mai", "cycle"], ["Hàng tháng", "category"], ["Tất cả danh mục chi", null]]) {
@@ -106,6 +135,20 @@ test("short numeric replies work for wallet opening balance, credit limit and fi
   assert.equal(fixture.calls.length, 0);
   assert.equal(fixture.data.wallets.length, 1);
   assert.equal(fixture.data.fixedExpenses.length, 0);
+});
+
+test("spoken amounts and natural amount framing complete the current field without losing earlier details", async () => {
+  for (const [message, amount, currency] of [["khoảng mười triệu đồng", 10_000_000, "VND"], ["about ten million", 10_000_000, null], ["ten thousand yuan", 10_000, "CNY"]]) {
+    const pending = { id: randomUUID(), actions: [creation("budget", { name: "Living costs", walletId: currency === "CNY" ? "cny" : "vnd", currency: currency || "VND" })], status: "collecting" };
+    if (currency === "CNY") fixture.data.wallets.push({ id: "cny", name: "Alipay", currency: "CNY", initial: 10_000, type: "cash" });
+    fixture.calls = [];
+    const result = await (await workspaceActionsPOST(request(creationRequest(pending, message)))).json();
+    assert.equal(result.proposal.actions[0].amount, amount, message);
+    assert.equal(result.proposal.actions[0].name, "Living costs");
+    assert.equal(result.proposal.actions[0].walletId, pending.actions[0].walletId);
+    assert.equal(fixture.calls.length, 0, "unambiguous short amount replies are deterministic");
+    if (currency === "CNY") fixture.data.wallets.pop();
+  }
 });
 
 test("invalid amounts and mismatched currencies preserve the pending action with actionable errors", async () => {
@@ -442,7 +485,7 @@ test("foreign target IDs return a safe account-owned selection rather than a for
 test("provider API failures are actionable, disclose no provider name, and never produce mutations", async () => {
   for (const [status, name, expected, code] of [[429, "Error", 429, "AI_QUOTA_OR_RATE_LIMIT"], [503, "Error", 503, "AI_BUSY"], [401, "Error", 502, "AI_CONFIGURATION_ERROR"], [undefined, "TimeoutError", 504, "AI_TIMEOUT"]]) {
     fixture.error = Object.assign(new Error("Synthetic failure"), { status, name });
-    const http = await POST(request(body("Explain compound interest"))), result = await http.json();
+    const http = await POST(request(body("Explain compound interest", {language:"en"}))), result = await http.json();
     assert.equal(http.status, expected); assert.equal(result.error, code); assert.doesNotMatch(result.message, /gemini|api key|AI Studio/i);
     assert.equal(fixture.data.transactions.length, 0);
   }
@@ -532,12 +575,12 @@ test("outage recovery does not swallow scenarios, corrections, auth failures or 
   fixture.error=Object.assign(new Error("Synthetic quota failure"),{status:429});assert.equal((await POST(request(body("ăn sáng 10k")))).status,429);
 });
 
-test("English scenario clarification follows the question even when the saved UI language is Vietnamese",async()=>{
+test("Scenario clarification follows the explicitly selected language even for a differently worded question",async()=>{
   fixture.data.settings.language="Tiếng Việt";
   fixture.output=response({intent:"simulate_financial_scenario",scenarioPlan:{name:"Laptop",walletId:"vnd",horizonEnd:"2026-10-31",estimateSpending:true,actions:[{kind:"change",title:"Laptop",amount:null,direction:"expense",percent:null,walletId:"vnd",currency:"VND",category:"Mua sắm",date:"2026-10-20",startDate:null,endDate:null}]}});
   const result=await(await POST(request(body("If I buy a laptop, will I have enough money for rent?",{language:"vi"})))).json();
-  assert.equal(result.scenarioResponse.intent,"clarification");assert.match(result.scenarioResponse.clarification,/What is the amount/);assert.doesNotMatch(result.scenarioResponse.clarification,/bao nhiêu/);assert.equal(fixture.calls.length,1);
-  assert.match(fixture.calls[0].contents,/one response language.*en/);
+  assert.equal(result.scenarioResponse.intent,"clarification");assert.match(result.scenarioResponse.clarification,/bao nhiêu/);assert.doesNotMatch(result.scenarioResponse.clarification,/What is the amount/);assert.equal(fixture.calls.length,1);
+  assert.match(fixture.calls[0].contents,/one response language.*vi/);
 });
 
 test("largest-transaction orchestration runs the owned deterministic ranking tool, not a record list",async()=>{

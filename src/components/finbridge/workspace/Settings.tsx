@@ -1,5 +1,7 @@
 "use client";
 
+import { useAppUiText } from "./useAppUiText";
+
 import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { signOutGoogle } from "@/lib/sign-out";
@@ -161,6 +163,7 @@ export function AccountSettings({
   navigate: (screen: string) => void;
   initialOption?: string;
 }) {
+  const uiText = useAppUiText();
   const state = useAppState();
   const authenticatedUser = useAuthenticatedUser();
   const lang = settingsLanguage(state.settings.language);
@@ -339,7 +342,7 @@ export function AccountSettings({
                 aria-label={t.nameLabel}
                 value={nameInput}
                 onChange={(e) => setNameInput(e.target.value)}
-                placeholder="Nhập tên hiển thị..."
+                placeholder={uiText("Nhập tên hiển thị...")}
                 required
                 autoFocus
               />
@@ -423,14 +426,13 @@ export function AccountSettings({
                   </div>
                 ))}
               </div>
-              <p>Xem trước hiển thị số tiền:</p>
+              <p>{uiText("Xem trước hiển thị số tiền:")}</p>
               <h2 className="r-center" style={{ color: "var(--r-teal)", margin: "14px 0" }}>
                 {money(1234567.89)}
               </h2>
               <div className="fb-modal-actions">
                 <button type="button" className="r-primary" onClick={close}>
-                  Hoàn tất
-                </button>
+                  {uiText("Hoàn tất")}</button>
               </div>
             </>
           )}
@@ -438,20 +440,18 @@ export function AccountSettings({
           {option === "notification" && (
             <div className="r-form">
               <p className="fb-modal-subheading">
-                Cài đặt giờ nhận thông báo để FinBridge nhắc nhở bạn ghi chép các khoản chi tiêu phát sinh trong ngày.
-              </p>
+                {uiText("Cài đặt giờ nhận thông báo để FinBridge nhắc nhở bạn ghi chép các khoản chi tiêu phát sinh trong ngày.")}</p>
               <div className="r-toggle-row" style={{ marginBottom: 14 }}>
-                <p>Bật thông báo nhắc nhở hàng ngày</p>
+                <p>{uiText("Bật thông báo nhắc nhở hàng ngày")}</p>
                 <Toggle
-                  label="Nhắc nhở thông báo"
+                  label={uiText("Nhắc nhở thông báo")}
                   checked={Boolean(state.settings.notification ?? true)}
                   onChange={(v) => setSetting("notification", v)}
                 />
               </div>
               <label>
-                Thời gian nhắc nhở trong ngày
-                <input
-                  aria-label="Thời gian nhắc nhở"
+                {uiText("Thời gian nhắc nhở trong ngày")}<input
+                  aria-label={uiText("Thời gian nhắc nhở")}
                   type="time"
                   defaultValue={String(state.settings.reminderTime || "20:00")}
                   onChange={(e) => setSetting("reminderTime", e.target.value)}
@@ -459,8 +459,7 @@ export function AccountSettings({
               </label>
               <div className="fb-modal-actions">
                 <button type="button" className="r-primary" onClick={close}>
-                  Lưu cài đặt
-                </button>
+                  {uiText("Lưu cài đặt")}</button>
               </div>
             </div>
           )}
@@ -518,6 +517,7 @@ export function AccountSettings({
 }
 
 export function HomepageConfiguration({ navigate }: { navigate: (screen: string) => void }) {
+  const uiText = useAppUiText();
   const state = useAppState();
   const lang = settingsLanguage(state.settings.language);
 
@@ -528,7 +528,7 @@ export function HomepageConfiguration({ navigate }: { navigate: (screen: string)
         <div className="fb-settings-back-row">
           <button type="button" className="fb-settings-back" onClick={() => navigate("accountSettings")}>
             <ChevronLeft size={18} />
-            <span>Quay lại</span>
+            <span>{uiText("Quay lại")}</span>
           </button>
         </div>
         <div className="r-config-list">

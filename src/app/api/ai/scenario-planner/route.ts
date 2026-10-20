@@ -1,3 +1,4 @@
+import { FINN_VOICE_POLICY, finnChatCopy } from "@/lib/finn-voice";
 import { traceAiRequest, type AiRequestTiming } from "@/lib/ai-request-timing";
 import { readAiJson } from "@/lib/ai-request";
 import { AI_JSON_BYTES } from "@/lib/ai-limits";
@@ -59,7 +60,7 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
     const ownerHeader = request.headers.get("x-finbridge-workspace-owner");
     if (ownerHeader && ownerHeader !== session.user.id) return Response.json({ error: "ACCOUNT_CHANGED", message: "Please reload the page after changing accounts." }, { status: 409 });
     try {
-      workspace = (await timing.measure("workspace", () => workspaceRepository(database(), timing).read(session.user.id))).data;
+      workspace = (await timing.measure("workspace", () => { const repository = workspaceRepository(database(), timing); return repository.readForAnalysis ? repository.readForAnalysis(session.user.id) : repository.read(session.user.id); })).data;
       if (!workspace) throw new Error("WORKSPACE_UNAVAILABLE");
       input.context = scenarioContext(workspace);
     } catch { return Response.json({ error: "FINANCIAL_DATA_UNAVAILABLE", message: "Chưa đọc được dữ liệu tài chính. Hãy tải lại trang rồi thử lại." }, { status: 503 }); }
@@ -82,7 +83,7 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
     if (fallback.scenarios.length || fallback.query || fallback.intent === "clarification") {
       return respondPlan(fallback);
     }
-    return Response.json({ error: "AI_NOT_CONFIGURED", message: "The assistant is not available yet. Please try again later." }, { status: 503 });
+    return Response.json({ error: "AI_NOT_CONFIGURED", message: finnChatCopy[input.preferredLanguage].configuration }, { status: 503 });
   }
 
   const model = process.env.GEMINI_TRANSACTION_MODEL?.trim() || "gemini-3.5-flash-lite";
@@ -100,6 +101,7 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
     };
 
     const promptInstructions = [
+          FINN_VOICE_POLICY,
       `You are FinBridge Financial Assistant, an intelligent personal finance planner.`,
       `Interpret questions in natural Vietnamese, English, or Chinese, including informal expressions, typos, and follow-ups.`,
       `Respond in the user's language (fallback: ${input.preferredLanguage}).`,
@@ -181,44 +183,35 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
       return respondPlan(fallback);
     }
 
+    const errorCopy = finnChatCopy[input.preferredLanguage];
     if (status === 429) {
       return Response.json({
         error: "AI_RATE_LIMIT",
-        message: input.preferredLanguage === "vi"
-          ? "Hiện có quá nhiều yêu cầu. Vui lòng thử lại sau giây lát."
-          : "There are too many requests right now. Please try again shortly.",
+        message: errorCopy.rateLimit,
       }, { status: 429 });
     }
     if (status === 401 || status === 403) {
       return Response.json({
         error: "AI_AUTHENTICATION_ERROR",
-        message: input.preferredLanguage === "vi"
-          ? "Phân tích tạm thời không khả dụng. Vui lòng thử lại sau hoặc liên hệ hỗ trợ."
-          : "Analysis is temporarily unavailable. Please try again later or contact support.",
+        message: errorCopy.configuration,
       }, { status: 502 });
     }
     if (timeout) {
       return Response.json({
         error: "AI_TIMEOUT",
-        message: input.preferredLanguage === "vi"
-          ? "Phân tích kịch bản quá thời gian chờ. Tin nhắn của bạn vẫn được giữ; vui lòng thử lại."
-          : "Scenario analysis timed out. Your message is still here; try again.",
+        message: errorCopy.timeout,
       }, { status: 504 });
     }
     if (isNetworkError(error)) {
       return Response.json({
         error: "AI_NETWORK_ERROR",
-        message: input.preferredLanguage === "vi"
-          ? "Không thể kết nối dịch vụ phân tích. Vui lòng thử lại sau giây lát."
-          : "FinBridge could not connect to the analysis service. Please try again shortly.",
+        message: errorCopy.unavailable,
       }, { status: 502 });
     }
 
     return Response.json({
       error: "AI_REQUEST_FAILED",
-      message: input.preferredLanguage === "vi"
-        ? "FinBridge AI tạm thời chưa hoàn thành được phân tích này. Vui lòng thử lại."
-        : "FinBridge could not complete this analysis. Your message is still here; retry shortly.",
+      message: errorCopy.unavailable,
     }, { status: 502 });
   }
 }

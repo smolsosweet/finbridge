@@ -1,5 +1,7 @@
 "use client";
 
+import { useAppUiText } from "./useAppUiText";
+
 import Image from "next/image";
 import { useState } from "react";
 import { useFeedbackSubmission } from "@/components/auth/useFeedbackSubmission";
@@ -10,6 +12,7 @@ import { setSetting, useAppState } from "./store";
 import { settingsLanguage } from "./SettingsOverview";
 
 export function CalendarPage({ navigate, milestones = false }: { navigate: (screen: string) => void; milestones?: boolean }) {
+  const uiText = useAppUiText();
   const state = useAppState();
   const [month, setMonth] = useState(9);
   const [year, setYear] = useState(2026);
@@ -23,9 +26,9 @@ export function CalendarPage({ navigate, milestones = false }: { navigate: (scre
     {milestones ? <><div className="r-streak-summary"><div><b>{streak}</b><span>{lang === "vi" ? "ngày chuỗi" : lang === "zh" ? "天连击" : "day streak"}</span></div><Flame size={100} fill="#817d70" color="#817d70" /></div><div className="r-setting-row"><Icon code="f0eb" /><span>{lang === "vi" ? "Nhập giao dịch hôm nay để bắt đầu chuỗi!" : lang === "zh" ? "今日记账以开始连击！" : "Log a transaction today to start your streak!"}</span></div></> : <button className="r-calendar-premium" onClick={() => navigate("paywall7dTrial")}><Icon code="f521" className="r-gold" />{lang === "vi" ? "Nâng Cấp Lên FinBridge Premium Để Mở Khóa Tất Cả Ngày!" : lang === "zh" ? "升级至 FinBridge Premium 解锁所有日期！" : "Upgrade to FinBridge Premium to Unlock All Days!"}</button>}
     <div className="r-calendar-title"><button aria-label={lang === "vi" ? "Tháng trước" : lang === "zh" ? "上个月" : "Previous month"} onClick={() => change(-1)}><ChevronLeft size={20} /></button><b>{calMonthTitle}</b><button aria-label={lang === "vi" ? "Tháng sau" : lang === "zh" ? "下个月" : "Next month"} onClick={() => change(1)}><ChevronRight size={20} /></button><button aria-label={lang === "vi" ? "Tháng hiện tại" : lang === "zh" ? "当前月" : "Current month"} onClick={() => { setMonth(9); setYear(2026); }}><RotateCcw size={18} /></button></div>
     <MonthCalendar month={month} year={year} transactions={state.transactions} onPick={(value) => setDay(value)} />
-    {day && <div className="r-calendar-day"><h3>{day}</h3>{state.transactions.filter((t) => t.date === day).length ? state.transactions.filter((t) => t.date === day).map((t) => <p key={t.id}>{t.title} · {t.amount}</p>) : <p>Chưa có giao dịch trong ngày này.</p>}</div>}
-    {milestones && <section className="r-achievements"><h2>Thành tựu</h2><div>{[["Chuỗi Dài Nhất", "highest-streak-cropped.png"], ["Tuần Hoàn Hảo", "highest-streak-cropped.png"], ["Tháng Hoàn Hảo", "monthly-streak.png"], ["Người Bảo Vệ Ngân Sách", "budget-badge.png"], ["Người Giữ Kho Báu", "savings-badge-cropped.png"], ["Kẻ Nghiền Nát Nợ", "debt-badge-right-cropped.png"]].map(([title, image]) => <button key={title} onClick={() => setAward(title)}><Image src={"/finbridge/images/" + image} width={130} height={130} alt={title} className={streak ? "" : "r-locked-badge"} /><span>{title}</span></button>)}</div></section>}
-    {award && <Modal title={award} onClose={() => setAward("")}><p>Nhập giao dịch và hoàn thành mục tiêu của bạn để đạt thành tựu này.</p><button className="r-primary" onClick={() => setAward("")}>Đóng</button></Modal>}
+    {day && <div className="r-calendar-day"><h3>{day}</h3>{state.transactions.filter((t) => t.date === day).length ? state.transactions.filter((t) => t.date === day).map((t) => <p key={t.id}>{t.title} · {t.amount}</p>) : <p>{uiText("Chưa có giao dịch trong ngày này.")}</p>}</div>}
+    {milestones && <section className="r-achievements"><h2>{uiText("Thành tựu")}</h2><div>{[["Chuỗi Dài Nhất", "highest-streak-cropped.png"], ["Tuần Hoàn Hảo", "highest-streak-cropped.png"], ["Tháng Hoàn Hảo", "monthly-streak.png"], ["Người Bảo Vệ Ngân Sách", "budget-badge.png"], ["Người Giữ Kho Báu", "savings-badge-cropped.png"], ["Kẻ Nghiền Nát Nợ", "debt-badge-right-cropped.png"]].map(([title, image]) => <button key={title} onClick={() => setAward(title)}><Image src={"/finbridge/images/" + image} width={130} height={130} alt={title} className={streak ? "" : "r-locked-badge"} /><span>{title}</span></button>)}</div></section>}
+    {award && <Modal title={award} onClose={() => setAward("")}><p>{uiText("Nhập giao dịch và hoàn thành mục tiêu của bạn để đạt thành tựu này.")}</p><button className="r-primary" onClick={() => setAward("")}>{uiText("Đóng")}</button></Modal>}
   </div>;
 }
 const REQUESTS_I18N: Record<"vi" | "en" | "zh", [string, string][]> = {
@@ -279,6 +282,7 @@ export function FeatureRequests({ navigate }: { navigate: (screen: string) => vo
   );
 }
 export function FeatureRequestsModal({ onClose }: { onClose: () => void }) {
+  const uiText = useAppUiText();
   const state = useAppState();
   const lang = settingsLanguage(state.settings.language);
   const t = UI_TEXT[lang] || UI_TEXT.vi;
@@ -367,7 +371,7 @@ export function FeatureRequestsModal({ onClose }: { onClose: () => void }) {
                     </label>
                     <div className="fb-modal-actions">
                       <button type="button" className="r-button" onClick={() => setOther(false)}>
-                        {lang === "vi" ? "Hủy" : lang === "zh" ? "取消" : "Cancel"}
+                        {lang === "vi" ? uiText("Hủy") : lang === "zh" ? "取消" : "Cancel"}
                       </button>
                       {feedback.error && <p role="alert">{feedback.error}</p>}
                       <button type="submit" className="r-primary fb-contact-submit-btn" disabled={feedback.busy}>
@@ -381,7 +385,7 @@ export function FeatureRequestsModal({ onClose }: { onClose: () => void }) {
             ) : (
               <div className="fb-modal-actions">
                 <button type="button" className="r-button" onClick={onClose}>
-                  {lang === "vi" ? "Đóng" : lang === "zh" ? "关闭" : "Close"}
+                  {lang === "vi" ? uiText("Đóng") : lang === "zh" ? "关闭" : "Close"}
                 </button>
                 <button type="button" className="r-primary" onClick={() => { feedback.reset(); setOther(true); }}>
                   <Plus size={16} />
@@ -404,7 +408,7 @@ export function FeatureRequestsModal({ onClose }: { onClose: () => void }) {
             </div>
             <div className="fb-modal-actions">
               <button type="button" className="r-primary" onClick={onClose}>
-                {lang === "vi" ? "Đóng" : lang === "zh" ? "关闭" : "Close"}
+                {lang === "vi" ? uiText("Đóng") : lang === "zh" ? "关闭" : "Close"}
               </button>
             </div>
           </>
@@ -414,6 +418,7 @@ export function FeatureRequestsModal({ onClose }: { onClose: () => void }) {
   );
 }
 export function PremiumPage({ navigate }: { navigate: (screen: string) => void }) {
+  const uiText = useAppUiText();
   const [trial, setTrial] = useState(false);
   const [plans, setPlans] = useState(false);
   const [selected, setSelected] = useState("Hàng năm");
@@ -421,8 +426,8 @@ export function PremiumPage({ navigate }: { navigate: (screen: string) => void }
   return (
     <div className="r-premium-page">
       <PageHeader close onBack={() => navigate("?tab=settings")} />
-      <h1>Dùng thử FinBridge Premium miễn phí</h1>
-      <h2>Xây dựng thói quen quản lý tiền bạc tốt hơn bằng các công cụ AI mạnh mẽ.</h2>
+      <h1>{uiText("Dùng thử FinBridge Premium miễn phí")}</h1>
+      <h2>{uiText("Xây dựng thói quen quản lý tiền bạc tốt hơn bằng các công cụ AI mạnh mẽ.")}</h2>
       <ul>
         {[
           "Mở khóa tiềm năng đầy đủ - truy cập mọi tính năng",
@@ -440,24 +445,21 @@ export function PremiumPage({ navigate }: { navigate: (screen: string) => void }
           </li>
         ))}
       </ul>
-      <p>VÀ NHIỀU HƠN NỮA...</p>
+      <p>{uiText("VÀ NHIỀU HƠN NỮA...")}</p>
       <button className="r-text-link" onClick={() => setPayment(true)}>
-        Đổi mã khuyến mãi
-      </button>
+        {uiText("Đổi mã khuyến mãi")}</button>
       <div className="r-premium-bottom">
         <div className="r-toggle-row">
-          <span>Kích hoạt bản dùng thử miễn phí</span>
-          <Toggle checked={trial} label="Kích hoạt bản dùng thử miễn phí" onChange={setTrial} />
+          <span>{uiText("Kích hoạt bản dùng thử miễn phí")}</span>
+          <Toggle checked={trial} label={uiText("Kích hoạt bản dùng thử miễn phí")} onChange={setTrial} />
         </div>
         <b>
-          ₫249,000 mỗi năm <small>(20,750/tháng)</small>
+          {uiText("₫249,000 mỗi năm")}<small>{uiText("(20,750/tháng)")}</small>
         </b>
         <button className="r-premium-continue" onClick={() => setPlans(true)}>
-          Tiếp tục
-        </button>
+          {uiText("Tiếp tục")}</button>
         <button className="r-text-link" onClick={() => setPlans(true)}>
-          Xem tất cả các kế hoạch
-        </button>
+          {uiText("Xem tất cả các kế hoạch")}</button>
       </div>
       {plans && (
         <Modal wide onClose={() => setPlans(false)}>
@@ -476,7 +478,7 @@ export function PremiumPage({ navigate }: { navigate: (screen: string) => void }
               </button>
             ))}
           </div>
-          <p className="r-center r-small">Đăng ký sẽ tự động gia hạn, bạn có thể hủy bất cứ lúc nào.</p>
+          <p className="r-center r-small">{uiText("Đăng ký sẽ tự động gia hạn, bạn có thể hủy bất cứ lúc nào.")}</p>
           <button
             className="r-primary"
             onClick={() => {
@@ -484,16 +486,14 @@ export function PremiumPage({ navigate }: { navigate: (screen: string) => void }
               setPayment(true);
             }}
           >
-            Bắt đầu dùng thử miễn phí ›
-          </button>
+            {uiText("Bắt đầu dùng thử miễn phí ›")}</button>
         </Modal>
       )}
       {payment && (
         <Modal title="FinBridge Premium" wide onClose={() => setPayment(false)}>
-          <p>Tính năng thanh toán Premium đang được tích hợp trực tiếp trong các bản cập nhật sắp tới của FinBridge.</p>
+          <p>{uiText("Tính năng thanh toán Premium đang được tích hợp trực tiếp trong các bản cập nhật sắp tới của FinBridge.")}</p>
           <button type="button" className="r-primary" onClick={() => setPayment(false)}>
-            Đã hiểu
-          </button>
+            {uiText("Đã hiểu")}</button>
         </Modal>
       )}
     </div>

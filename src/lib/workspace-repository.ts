@@ -8,7 +8,7 @@ import { validateFixedPaymentChanges } from "./fixed-expense-payments";
 import { validatePlanningChanges } from "./planning-validation";
 import { validateNewExpenseFunding } from "./transaction-funding";
 import { isDeepStrictEqual } from "node:util";
-import type { AiRequestTiming } from "./ai-request-timing";
+import { timeDatabaseClient, type AiRequestTiming } from "./ai-request-timing";
 export const WORKSPACE_SQL = `
 CREATE TABLE IF NOT EXISTS finbridge_workspaces (
  user_id TEXT PRIMARY KEY REFERENCES "user"(id) ON DELETE RESTRICT,
@@ -34,7 +34,7 @@ export class WorkspaceError extends Error {
   status: number;
   constructor(code: string, status = 409) { super(code); this.status = status; }
 }
-export type WorkspaceRepository = { read(userId: string): Promise<WorkspaceRecord>; save(userId: string, input: { revision: number; mutationId: string; data: AppState }): Promise<WorkspaceRecord> };
+export type WorkspaceRepository = { read(userId: string): Promise<WorkspaceRecord>; readForAnalysis?(userId: string): Promise<WorkspaceRecord>; save(userId: string, input: { revision: number; mutationId: string; data: AppState }): Promise<WorkspaceRecord> };
 const record = (row?: { revision: number; data: unknown; updated_at: Date }): WorkspaceRecord => row ? { revision: row.revision, data: row.data ? parseWorkspace(row.data) : null, updatedAt: row.updated_at.toISOString() } : emptyWorkspaceRecord();
 export function workspaceRepository(pool: Pool, timing?: AiRequestTiming): WorkspaceRepository {
   const measure = <T>(stage: "pool" | "hydrate" | "write" | "safety", run: () => Promise<T>) => timing ? timing.measure(stage, run) : run();
@@ -42,20 +42,23 @@ export function workspaceRepository(pool: Pool, timing?: AiRequestTiming): Works
     const user = await client.query('SELECT id FROM "user" WHERE id=$1 FOR SHARE', [owner]);
     if (!user.rowCount || (await client.query("SELECT 1 FROM finbridge_account_lifecycle WHERE user_id=$1", [owner])).rowCount) throw new WorkspaceError("UNAUTHENTICATED", 401);
   }
-  return {
-    async read(owner) {
-      const client = await measure("pool", () => pool.connect());
+  async function read(owner: string, analysis = false) {
+      const client = timeDatabaseClient(await measure("pool", () => pool.connect()), timing);
       try {
         await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ"); await active(client, owner);
-        const rows = await client.query("SELECT * FROM finbridge_workspaces WHERE user_id=$1", [owner]); const result = record(rows.rows[0]);
-        if (result.data) result.data = parseWorkspace(await measure("hydrate", () => readFinanceTables(client, owner, result.data!)));
+        const sql = analysis ? "SELECT revision,updated_at,data - ARRAY['transactionChat','planningChat','receiptDraft','onboardingDraft']::text[] AS data FROM finbridge_workspaces WHERE user_id=$1" : "SELECT * FROM finbridge_workspaces WHERE user_id=$1";
+        const rows = await client.query(sql, [owner]); const result = record(rows.rows[0]);
+        if (result.data) result.data = parseWorkspace(await measure("hydrate", () => readFinanceTables(client, owner, result.data!, analysis ? "analysis" : "full")));
         await client.query("COMMIT"); return result;
       }
       catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
-    },
+  }
+  return {
+    read: owner => read(owner),
+    readForAnalysis: owner => read(owner, true),
     async save(owner, input) {
       const data = parseWorkspace(input.data), encoded = JSON.stringify(data), hash = createHash("sha256").update(encoded).digest("hex");
-      const client = await measure("pool", () => pool.connect());
+      const client = timeDatabaseClient(await measure("pool", () => pool.connect()), timing);
       try {
         await client.query("BEGIN"); await active(client, owner);
         await client.query("INSERT INTO finbridge_workspaces(user_id) VALUES($1) ON CONFLICT(user_id) DO NOTHING", [owner]);
@@ -79,12 +82,12 @@ export function workspaceRepository(pool: Pool, timing?: AiRequestTiming): Works
           WHERE finbridge_workspace_limits.requests < 120 OR finbridge_workspace_limits.window_at < CURRENT_TIMESTAMP - INTERVAL '1 minute' RETURNING user_id`, [owner]);
         if (!allowed.rowCount) throw new WorkspaceError("RATE_LIMITED", 429);
         const revision = previous.revision + 1;
-        const result = await client.query("UPDATE finbridge_workspaces SET revision=$2,data=$3::jsonb,updated_at=CURRENT_TIMESTAMP WHERE user_id=$1 RETURNING *", [owner, revision, encoded]);
+        const result = await client.query("UPDATE finbridge_workspaces SET revision=$2,data=$3::jsonb,updated_at=CURRENT_TIMESTAMP WHERE user_id=$1 RETURNING revision,updated_at", [owner, revision, encoded]);
         await measure("write", () => writeFinanceTables(client, owner, data, previousData));
         await client.query("INSERT INTO finbridge_workspace_revisions(user_id,revision,mutation_id,content_hash,data) VALUES($1,$2,$3,$4,$5)", [owner, revision, input.mutationId, hash, encoded]);
         const safetyInputs = (s: AppState) => JSON.parse(JSON.stringify([s.wallets, s.transactions, s.goals, s.fixedExpenses, s.settings])) as unknown;
         if (!previousData || !isDeepStrictEqual(safetyInputs(previousData), safetyInputs(data))) await measure("safety", () => refreshSafetyFromWorkspace(client, owner, data, result.rows[0].updated_at));
-        await client.query("COMMIT"); return record(result.rows[0]);
+        await client.query("COMMIT"); return { revision: result.rows[0].revision, data, updatedAt: result.rows[0].updated_at.toISOString() };
       } catch (e) { await client.query("ROLLBACK"); throw e; } finally { client.release(); }
     },
   };

@@ -1,5 +1,7 @@
 "use client";
 
+import { useAppUiText } from "./useAppUiText";
+
 import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Ban, CalendarDays, Check, ChevronDown, FolderTree, Info, Lock, Pencil, Plus, ReceiptText, RotateCcw, Search, Settings, SlidersHorizontal, Trash2, Wallet, X } from "lucide-react";
@@ -1103,6 +1105,7 @@ export function MonthCalendar({ month, year, transactions = [], onPick }: { mont
 }
 
 export function Dashboard({ transactionsTab = false, walletSettingsMode = false, navigate }: { transactionsTab?: boolean; walletSettingsMode?: boolean; navigate: (screen: string) => void }) {
+  const uiText = useAppUiText();
   const state = useAppState();
   const searchParams = useSearchParams();
   const lang = getLanguage(state.settings.language);
@@ -1868,7 +1871,7 @@ export function Dashboard({ transactionsTab = false, walletSettingsMode = false,
           </button>
         </div>
       </section>
-      <section className="fb-finance-dashboard" aria-label="Dashboard dòng tiền">
+      <section className="fb-finance-dashboard" aria-label={uiText("Dashboard dòng tiền")}>
         <section ref={overviewCardRef} className="fb-overview fb-finance-overview"><div className="fb-section-heading"><div><h2>{t.flowThisPeriod}</h2><p className="fb-section-note">{t.flowSub}</p></div>{periodControls}</div>
           <div className="r-summary fb-flow-summary-container">
             <div className="fb-flow-vertical-stack">

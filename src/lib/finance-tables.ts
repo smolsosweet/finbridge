@@ -112,7 +112,7 @@ export async function readSafetyFinanceTables(client: PoolClient, owner: string,
   `, [owner]);
   return { ...fallback, ...result.rows[0] };
 }
-export async function readFinanceTables(client: PoolClient, owner: string, fallback: AppState): Promise<AppState> {
+export async function readFinanceTables(client: PoolClient, owner: string, fallback: AppState, mode: "full" | "analysis" = "full"): Promise<AppState> {
   // Static queries retain the same authoritative columns, owner filters and ordering.
   // Batch on the existing transaction/client: Promise.all on one pg client would
   // still serialize network round trips. No data is shared or cached across users.
@@ -133,13 +133,17 @@ export async function readFinanceTables(client: PoolClient, owner: string, fallb
     ["recurring", `SELECT data || jsonb_build_object('wallet',wallet_id,'amount',amount,'type',direction) AS data FROM finbridge_recurring_transactions WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position`],
     ["rules", `SELECT to_jsonb(rule_text) AS data FROM finbridge_categorization_rules WHERE user_id=$1 AND deleted_at IS NULL ORDER BY position`],
   ] as const;
+  const conversationSections = new Set(["messages", "conversations", "drafts", "onboarding"]);
+  const selected = mode === "analysis" ? queries.filter(([name]) => !conversationSections.has(name)) : queries;
   const result = await client.query<{ sections: Record<string, import("pg").QueryResultRow[]> }>(
-    `SELECT jsonb_build_object(${queries.map(([name, sql]) =>
+    `SELECT jsonb_build_object(${selected.map(([name, sql]) =>
       `'${name}', COALESCE((SELECT jsonb_agg(to_jsonb(finance_rows)) FROM (${sql}) finance_rows), '[]'::jsonb)`
     ).join(",")}) AS sections`, [owner],
   );
   if (!result.rows[0]?.sections) throw new Error("FINANCE_READ_UNAVAILABLE");
-  const sections = result.rows[0].sections;
+  const sections = { messages: [], conversations: [], drafts: [], onboarding: [], ...result.rows[0].sections } as Record<string, import("pg").QueryResultRow[]>;
+  const seed = { ...fallback };
+  if (mode === "analysis") { delete seed.transactionChat; delete seed.planningChat; delete seed.receiptDraft; delete seed.onboardingDraft; }
   const wallets = sections.wallets.map(r => r.data);
   const cats = sections.categories;
   const links = sections.links;
@@ -153,5 +157,5 @@ export async function readFinanceTables(client: PoolClient, owner: string, fallb
   const messages = sections.messages;
   const drafts = sections.drafts.map(r => r.data);
   const conversations = sections.conversations;
-  return { ...fallback, onboardingDraft: (sections.onboarding.map(r => r.data))[0], wallets, transactions, goals, fixedExpenses, recurring: sections.recurring.map(r => r.data), categories: cats.filter(c => c.listed).map(c => c.name), categoryMeta: Object.fromEntries(cats.map(c => [c.name, { ...c.data, type: c.category_type, icon: c.icon, archived: c.archived, children: children.filter(row => row.category_id === c.id).map(row => row.name) }])), walletCategories: Object.fromEntries(wallets.map(w => [w.id, links.filter(l => l.wallet_id === w.id).map(l => l.name)])), settings: Object.fromEntries(preferences.map(p => [p.preference_key, p.value])), rules: (sections.rules.map(r => r.data)).map(String), ...(fallback.transactionChat || messages.some(m => m.conversation_id === "transactions") ? { transactionChat: { messages: messages.filter(m => m.conversation_id === "transactions").map(m => m.data), drafts, clarifyingDraftId: conversations.find(c => c.id === "transactions")?.data.clarifyingDraftId || null, activeDraftId: conversations.find(c => c.id === "transactions")?.data.activeDraftId || null, referencedCategories: conversations.find(c => c.id === "transactions")?.data.referencedCategories || [] } } : {}), planningChat: messages.filter(m => m.conversation_id === "planning").map(m => m.data) };
+  return { ...seed, onboardingDraft: (sections.onboarding.map(r => r.data))[0], wallets, transactions, goals, fixedExpenses, recurring: sections.recurring.map(r => r.data), categories: cats.filter(c => c.listed).map(c => c.name), categoryMeta: Object.fromEntries(cats.map(c => [c.name, { ...c.data, type: c.category_type, icon: c.icon, archived: c.archived, children: children.filter(row => row.category_id === c.id).map(row => row.name) }])), walletCategories: Object.fromEntries(wallets.map(w => [w.id, links.filter(l => l.wallet_id === w.id).map(l => l.name)])), settings: Object.fromEntries(preferences.map(p => [p.preference_key, p.value])), rules: (sections.rules.map(r => r.data)).map(String), ...(seed.transactionChat || messages.some(m => m.conversation_id === "transactions") ? { transactionChat: { messages: messages.filter(m => m.conversation_id === "transactions").map(m => m.data), drafts, clarifyingDraftId: conversations.find(c => c.id === "transactions")?.data.clarifyingDraftId || null, activeDraftId: conversations.find(c => c.id === "transactions")?.data.activeDraftId || null, referencedCategories: conversations.find(c => c.id === "transactions")?.data.referencedCategories || [] } } : {}), planningChat: messages.filter(m => m.conversation_id === "planning").map(m => m.data) };
 }

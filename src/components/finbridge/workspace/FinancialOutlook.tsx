@@ -1,4 +1,6 @@
 "use client";
+
+import { useAppUiText } from "./useAppUiText";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Bell, Check, ShieldCheck, TrendingUp } from "lucide-react";
 import { reserveAmounts } from "@/lib/financial-outlook";
@@ -25,6 +27,7 @@ const HOME_COPY = {
 type AiNote = { explanation: string; suggestion: string };
 
 export function FinancialOutlook({ editable = false, compact = false, notifications = false, unreadOnly = false, asOfDate, navigate }: { editable?: boolean; compact?: boolean; notifications?: boolean; unreadOnly?: boolean; asOfDate?: string; navigate?: (path: string) => void }) {
+  const uiText = useAppUiText();
   const state = useAppState();
   const lang: Language = /中文|zh/i.test(String(state.settings.language)) ? "zh" : /Tiếng Việt|vi/i.test(String(state.settings.language)) ? "vi" : "en";
   const t = COPY[lang], homeCopy = HOME_COPY[lang];
@@ -175,7 +178,7 @@ export function FinancialOutlook({ editable = false, compact = false, notificati
             className={styles.closeBtn}
             onClick={() => setSelectedAlert(null)}
           >
-            {lang === "vi" ? "Đóng" : lang === "zh" ? "关闭" : "Close"}
+            {lang === "vi" ? uiText("Đóng") : lang === "zh" ? "关闭" : "Close"}
           </button>
         </div>
       </div>

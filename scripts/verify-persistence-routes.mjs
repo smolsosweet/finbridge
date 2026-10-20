@@ -13,6 +13,9 @@ const stubs = {
 };
 const hooks = registerHooks({
   resolve(specifier, context, next) {
+    // transfer-services uses the relative spelling of the same database module.
+    // Keep the test isolated instead of importing production server-only setup.
+    if (specifier === "./database" && context.parentURL?.endsWith("/transfer-services.ts")) return {url:"finbridge-persistence-test:@/lib/database",shortCircuit:true};
     if (stubs[specifier]) return { url: "finbridge-persistence-test:" + specifier, shortCircuit: true };
     if (specifier.startsWith("@/")) return { url: pathToFileURL(path.join(root, specifier.slice(2)) + ".ts").href, shortCircuit: true };
     if (specifier.startsWith(".") && context.parentURL?.startsWith("file:")) {

@@ -233,6 +233,12 @@ test("normalizes explicit shorthand and currency amounts without mixing their IS
   assert.deepEqual(parseTransactionAmounts("ăn tối 10k đô"), [{ amount: 10_000, currency: "USD" }]);
   assert.deepEqual(parseTransactionAmounts("ăn tối 10 đô la"), [{ amount: 10, currency: "USD" }]);
   assert.deepEqual(parseTransactionAmounts("ăn sáng 10000đ"), [{ amount: 10_000, currency: "VND" }]);
+  assert.deepEqual(parseTransactionAmounts("ăn sáng mười nghìn"), [{ amount: 10_000, currency: "VND" }]);
+  assert.deepEqual(parseTransactionAmounts("mua laptop một triệu rưỡi"), [{ amount: 1_500_000, currency: "VND" }]);
+  assert.deepEqual(parseTransactionAmounts("买早餐一万人民币"), [{ amount: 10_000, currency: "CNY" }]);
+  assert.deepEqual(parseTransactionAmounts("ăn sáng hai mươi lăm nghìn đồng và ăn trưa ten thousand yuan"), [{ amount: 25_000, currency: "VND" }, { amount: 10_000, currency: "CNY" }]);
+  const spokenDraft = createTimeoutTransactionDraft("ăn sáng mười nghìn", "spoken", "2026-10-20", state());
+  assert.equal(spokenDraft?.title, "ăn sáng"); assert.equal(spokenDraft?.amount, 10_000); assert.equal(spokenDraft?.currency, "VND");
   assert.equal(formatTransactionMoney(350_000, "VND"), "350,000 VND");
   assert.equal(formatTransactionMoney(20, "USD"), "20.00 USD");
   assert.equal(formatTransactionMoney(5, "CNY"), "5.00 CNY");
@@ -335,6 +341,24 @@ test("ranks this-month categories and calculates a contextual 20% reduction from
   const savings10 = answerFinancialQuery({ action: "category_savings", walletId: "vnd", scope: "selected", periodStart: "2026-10-01", periodEnd: "2026-10-18", category: "Thức ăn & Đồ uống", searchTerm: null, transactionType: "expense", percentage: 10 }, app, "vnd", "2026-10-18");
   assert.match(savings10, /62,700/);
   assert.match(savings10, /564,300/);
+});
+
+test("savings conversations stay grounded, localized and hypothetical without creating a plan", () => {
+  for (const [language, hypothetical, expected, next] of [
+    ["Tiếng Việt", /giả định.*chưa thay đổi ngân sách hay tạo kế hoạch/, /Finn cùng bạn/, /thử mức giảm khác/],
+    ["English", /hypothetical.*not a budget change or a saved plan/, /Let's look/, /try another percentage/],
+    ["中文", /假设调整.*尚未修改预算或创建计划/, /Finn 和你/, /其他比例/],
+  ]) {
+    const app = financialFixture();
+    app.settings.language = language;
+    const before = structuredClone(app);
+    const answer = answerFinancialQuery({ action: "category_savings", walletId: "vnd", scope: "selected", periodStart: "2026-10-01", periodEnd: "2026-10-18", category: "Thức ăn & Đồ uống", searchTerm: null, transactionType: "expense", percentage: 10 }, app, "vnd", "2026-10-18");
+    assert.match(answer, expected); assert.match(answer, hypothetical); assert.match(answer, next);
+    assert.match(answer, /VND/); assert.match(answer, /2026-10-01/); assert.match(answer, /2026-10-18/);
+    assert.doesNotMatch(answer, /USD|553[.,]000|55[.,]300|theo dõi tự động|automatically monitor/);
+    if (language === "English") assert.doesNotMatch(answer, /Được chứ|Tính theo|Bạn muốn/);
+    assert.deepEqual(app, before);
+  }
 });
 
 test("enumerates balances by wallet and keeps different currencies separate", () => {

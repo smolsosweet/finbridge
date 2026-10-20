@@ -7,7 +7,7 @@ import { AiRequestTiming, traceAiRequest } from "../src/lib/ai-request-timing.ts
 
 const normalize = sql => sql.replace(/\s+/g, " ").trim();
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-function fakeDatabase(state, delay = 0) {
+function fakeDatabase(state, delay = 0, mode = "full", messageBytes = 0) {
   const queries = [], sections = {
     finbridge_wallets: state.wallets.map(data => ({ data })),
     finbridge_categories: state.categories.map(name => ({ id: name, name, listed: true, data: state.categoryMeta[name], category_type: state.categoryMeta[name]?.type || "expense", icon: "", archived: false })),
@@ -18,7 +18,7 @@ function fakeDatabase(state, delay = 0) {
     finbridge_fixed_expenses: (state.fixedExpenses || []).map(data => ({ data })),
     finbridge_preferences: Object.entries(state.settings).map(([preference_key, value]) => ({ preference_key, value })),
     finbridge_fixed_expense_recipients: [{ expense_id: state.fixedExpenses?.[0]?.id, data: { bankBin: "970415", accountNumber: "synthetic", accountName: "Synthetic", reference: "Test" } }],
-    finbridge_chat_messages: [{ conversation_id: "transactions", data: { role: "user", text: "Synthetic user message" } }, { conversation_id: "planning", data: { role: "assistant", text: "Synthetic context" } }],
+    finbridge_chat_messages: [{ conversation_id: "transactions", data: { role: "user", text: messageBytes ? "X".repeat(messageBytes) : "Synthetic user message" } }, { conversation_id: "planning", data: { role: "assistant", text: "Synthetic context" } }],
     finbridge_transaction_drafts: [{ data: { id: "draft", amount: 25_000 } }],
     finbridge_conversations: [{ id: "transactions", data: { clarifyingDraftId: "draft", activeDraftId: "draft", referencedCategories: [state.categories[0]] } }],
     finbridge_onboarding_drafts: [{ data: { step: 1 } }],
@@ -35,7 +35,7 @@ function fakeDatabase(state, delay = 0) {
     queries.push(normalize(sql)); if (delay) await sleep(delay);
     if (!sql.startsWith("SELECT jsonb_build_object(")) return { rows: lookup(sql) };
     const batch = {}, parts = [...sql.matchAll(/'([a-zA-Z]+)', COALESCE\(\(SELECT jsonb_agg\(to_jsonb\(finance_rows\)\) FROM \((.*?)\) finance_rows\), '\[\]'::jsonb\)/gs)];
-    assert.equal(parts.length, 15);
+    assert.equal(parts.length, mode === "analysis" ? 11 : 15);
     for (const [, name, query] of parts) batch[name] = lookup(query);
     return { rows: [{ sections: batch }] };
   } };
@@ -101,4 +101,17 @@ test("timing logs expose durations/counts only, with correlation headers on succ
 test("deterministic-only requests record zero model calls", async () => {
   const timing = new AiRequestTiming(); await timing.measure("workspace", async () => null);
   assert.equal(timing.snapshot().modelCalls, 0);
+});
+
+
+test("analysis hydration omits duplicate conversation rows but preserves every financial fact", async () => {
+  const state=workspaceFixture(), before=structuredClone(state);
+  const fullDb=fakeDatabase(state,0,"full",32000), analysisDb=fakeDatabase(state,0,"analysis",32000);
+  const full=await readFinanceTables(fullDb,"synthetic-owner",state), analysis=await readFinanceTables(analysisDb,"synthetic-owner",state,"analysis");
+  const financial=value=>{const copy=structuredClone(value);for(const key of ["transactionChat","planningChat","onboardingDraft","receiptDraft"])delete copy[key];return copy;};
+  assert.deepEqual(financial(analysis),financial(full));assert.deepEqual(state,before);
+  assert.equal(analysis.transactionChat,undefined);assert.deepEqual(analysis.planningChat,[]);
+  for(const table of ["finbridge_chat_messages","finbridge_conversations","finbridge_transaction_drafts","finbridge_onboarding_drafts"])assert.ok(!analysisDb.queries[0].includes(table));
+  assert.equal(analysisDb.queries.length,1);
+  console.info("Synthetic analysis hydration bytes (not production latency):",{before:Buffer.byteLength(JSON.stringify(full)),after:Buffer.byteLength(JSON.stringify(analysis))});
 });

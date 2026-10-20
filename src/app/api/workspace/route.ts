@@ -15,9 +15,9 @@ async function handle(request: Request) {
     const response = await handleWorkspace(request, session.user.id, new URL(process.env.BETTER_AUTH_URL!).origin, workspaceRepository(database(), timing));
     const totalMs = Math.round(performance.now() - started);
     response.headers.append("Server-Timing", `auth;dur=${authMs}, total;dur=${totalMs}`);
-    const { stagesMs } = timing.snapshot();
+    const { stagesMs, databaseCalls } = timing.snapshot();
     for (const [stage, duration] of Object.entries(stagesMs)) response.headers.append("Server-Timing", `${stage};dur=${duration}`);
-    console.info("[FinBridge workspace] total", { requestId: response.headers.get("x-finbridge-request-id"), status: response.status, authMs, totalMs, stagesMs });
+    console.info("[FinBridge workspace] total", { requestId: response.headers.get("x-finbridge-request-id"), status: response.status, authMs, totalMs, databaseCalls, stagesMs });
     return response;
   } catch (error) {
     console.error("[FinBridge workspace] initialization failed", { name: error instanceof Error ? error.name : "UnknownError", durationMs: Math.round(performance.now() - started) });

@@ -1,5 +1,7 @@
 "use client";
 
+import { useAppUiText } from "./useAppUiText";
+
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, Check, ChevronDown, X } from "lucide-react";
@@ -34,7 +36,8 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
   return <button type="button" className={"r-switch " + (checked ? "is-on" : "")} role="switch" aria-checked={checked} aria-label={label} onClick={() => onChange(!checked)}><span /></button>;
 }
 export function PageHeader({ title, subtitle, onBack, close = false, children }: { title?: string; subtitle?: string; onBack: () => void; close?: boolean; children?: ReactNode }) {
-  return <header className={"r-header " + (close ? "r-header-close" : "")}><button type="button" className="r-icon-button" onClick={onBack} aria-label={close ? "Đóng" : "Quay lại"}>{close ? <X size={20} /> : <ArrowLeft size={20} />}</button>{title && <div><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div>}{children}</header>;
+  const uiText = useAppUiText();
+  return <header className={"r-header " + (close ? "r-header-close" : "")}><button type="button" className="r-icon-button" onClick={onBack} aria-label={close ? uiText("Đóng") : uiText("Quay lại")}>{close ? <X size={20} /> : <ArrowLeft size={20} />}</button>{title && <div><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}</div>}{children}</header>;
 }
 export function Modal({ title, children, onClose, sheet = false, wide = false, closeLabel = "Đóng hộp thoại" }: { title?: string; children: ReactNode; onClose: () => void; sheet?: boolean; wide?: boolean; closeLabel?: string }) {
   const mounted = useSyncExternalStore(subscribeHydration, clientSnapshot, serverSnapshot);

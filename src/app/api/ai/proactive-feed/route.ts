@@ -1,6 +1,7 @@
 import { readAiJson } from "@/lib/ai-request";
 import { AI_JSON_BYTES } from "@/lib/ai-limits";
 import { ThinkingLevel, Type } from "@google/genai";
+import { FINN_VOICE_POLICY } from "@/lib/finn-voice";
 import { z } from "zod";
 import { requireAiSession } from "@/lib/ai-access";
 import { createQuotaGemini } from "@/lib/ai-quota-gemini";
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
     const result = await ai.models.generateContent({
       model,
       contents: [
+          FINN_VOICE_POLICY,
         `Write in ${language === "vi" ? "Vietnamese" : language === "zh" ? "Chinese" : "English"}. For each deterministic financial alert, write one concise explanation and one practical suggestion. Use only the supplied cause, figures and assumptions. Do not change the facts or priority, add amounts/dates/numbers, claim payment happened, or imply certainty for forecasts. Return every alert exactly once using its id.`,
         JSON.stringify(alerts),
       ].join("\n"),

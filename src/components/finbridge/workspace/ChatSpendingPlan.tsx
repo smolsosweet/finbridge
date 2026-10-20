@@ -3,7 +3,7 @@
 import { calculateSpendingPlan, spendingPlanOptionsSchema, type SpendingPlanOptions } from "@/lib/financial-outlook";
 import type { AppState } from "./store";
 import { formatTransactionMoney } from "@/lib/transaction-drafts";
-import { resolveCategoryDisplayName, resolveLanguage } from "@/lib/i18n";
+import { resolveCategoryDisplayName, resolveWalletDisplayName, resolveLanguage } from "@/lib/i18n";
 import styles from "./ChatSpendingPlan.module.css";
 import { occurrenceStatusCopy } from "@/lib/fixed-expense-payments";
 import { useFinancialDate } from "./useFinancialDate";
@@ -43,7 +43,7 @@ export function ChatSpendingPlan({ state, asOf, options, onScope }: { state: App
       const overdueCount = w.pending.filter(bill => bill.overdue).length;
       const forecastHelp = !w.complete ? t.fix : w.issues.includes("missing-category-history") ? v.categoryHelp : v.historyHelp;
       return <article key={w.walletId}>
-        <header><strong>{w.name} · {w.currency}</strong>{onScope && plan.wallets.length > 1 && <button type="button" onClick={() => onScope({ ...options, walletIds: [w.walletId] })}>{t.scope}</button>}</header>
+        <header><strong>{resolveWalletDisplayName(w.name, language)} · {w.currency}</strong>{onScope && plan.wallets.length > 1 && <button type="button" onClick={() => onScope({ ...options, walletIds: [w.walletId] })}>{t.scope}</button>}</header>
         <section aria-label={t.now}><header><h3>{t.now}</h3><span className={styles.badge}>{v.recorded} · {date(plan.asOf)}</span></header>
           <dl className={styles.metrics}>{metric(t.now, w.balance, true)}{metric(t.actual, w.actualSpent)}</dl>
           {!w.complete && <p className={styles.warning} role="status">{t.fix}</p>}

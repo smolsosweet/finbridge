@@ -26,6 +26,95 @@ export interface TransactionDraft {
 
 export interface ParsedTransactionAmount { amount: number; currency: string | null; }
 
+type SpokenAmount = ParsedTransactionAmount & { start: number; end: number };
+const viSmall: Record<string, number> = { khong: 0, mot: 1, hai: 2, ba: 3, bon: 4, tu: 4, nam: 5, lam: 5, sau: 6, bay: 7, tam: 8, chin: 9, muoi: 10 };
+const enSmall: Record<string, number> = { zero: 0, one: 1, a: 1, an: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const spokenCurrency = /^(?:nhân\s+dân\s+tệ|nhan\s+dan\s+te|renminbi|bảng\s+anh|bang\s+anh|mỹ\s+kim|my\s+kim|đô\s+la|do\s+la|đô\s+mỹ|do\s+my|tiền\s+việt|tien\s+viet|dollars?|dollar|đồng|dong|yuan|rmb|vnd|cny|usd|eur|euro|gbp|pounds?|pound|yen|jpy|tệ|te|đô|do|元|人民币|美元|₫|đ|\$|€|£|¥)(?=\s|$|[.,!?])/iu;
+function parseChineseNumber(value: string): number | null {
+  const digits: Record<string, number> = { 零: 0, 〇: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  const small: Record<string, number> = { 十: 10, 百: 100, 千: 1_000 };
+  const large: Record<string, number> = { 万: 10_000, 亿: 100_000_000 };
+  let total = 0, section = 0, current = 0, seen = false;
+  for (const char of value) {
+    if (char in digits) { current = digits[char]; seen = true; continue; }
+    if (char in small) { section += (current || (char === "十" ? 1 : 0)) * small[char]; current = 0; seen = true; continue; }
+    if (char in large) { section += current; total += (section || 1) * large[char]; section = 0; current = 0; seen = true; continue; }
+    return null;
+  }
+  const result = total + section + current;
+  return seen && result > 0 && result <= 1_000_000_000_000 ? result : null;
+}
+function parseSpokenGroup(words: string[], language: "vi" | "en"): { value: number; scaled: boolean } | null {
+  let total = 0, group = 0, current = 0, scaled = false, used = false, lastScale = 0;
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    if (language === "vi" && word === "ruoi") { if (!lastScale) return null; total += lastScale / 2; lastScale = 0; used = true; continue; }
+    if (lastScale) lastScale = 0;
+    if (language === "vi" && word === "muoi") { current = (current || 1) * 10; used = true; continue; }
+    if (language === "vi" && word === "tram") { current = (current || 1) * 100; used = true; continue; }
+    const scale = language === "vi" ? ({ nghin: 1_000, ngan: 1_000, trieu: 1_000_000, ty: 1_000_000_000 } as Record<string, number>)[word]
+      : ({ hundred: 100, thousand: 1_000, million: 1_000_000, billion: 1_000_000_000 } as Record<string, number>)[word];
+    if (scale) {
+      if (language === "en" && scale === 100) current = (current || 1) * scale;
+      else {
+        if (!(group + current)) return null;
+        total += (group + current) * scale; group = 0; current = 0; lastScale = scale;
+      }
+      scaled = true; used = true; continue;
+    }
+    const n = (language === "vi" ? viSmall : enSmall)[word];
+    if (n === undefined || (n === 0 && !used)) return null;
+    if (language === "en" && n >= 20 && n % 10 === 0) current += n;
+    else if (language === "en" && n < 10 && current >= 20 && current % 10 === 0) current += n;
+    else if (language === "en" && n < 20 && current === 0) current = n;
+    else current += n;
+    used = true;
+  }
+  if (!used) return null;
+  return { value: total + group + current, scaled };
+}
+
+/** Parse spoken cardinal amounts in a phrase, requiring a scale or currency so
+ * ordinary numbers in descriptions are not mistaken for transaction amounts. */
+export function parseSpokenTransactionAmounts(message: string): SpokenAmount[] {
+  const matches: SpokenAmount[] = [];
+  const chinesePattern = /([零〇一二两三四五六七八九十百千万亿]+)\s*(人民币|元|美元|美金|块钱|块|日元)?/gu;
+  for (const match of message.matchAll(chinesePattern)) {
+    const raw = match[1], currencyWord = match[2] || null;
+    const hasScale = /[十百千万亿]/u.test(raw);
+    if (!hasScale && !currencyWord) continue;
+    const amount = parseChineseNumber(raw);
+    if (amount === null) continue;
+    const currency = currencyWord ? normalizeCurrency(currencyWord) || (/^块(?:钱)?$/u.test(currencyWord) ? "CNY" : null) : null;
+    matches.push({ start: match.index!, end: match.index! + match[0].length, amount, currency });
+  }
+  const tokenPattern = /[\p{L}]+/gu;
+  const normalizeWord = (word: string) => word.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLocaleLowerCase("vi");
+  const tokens = [...message.matchAll(tokenPattern)].map(match => ({ word: normalizeWord(match[0]), start: match.index!, end: match.index! + match[0].length }));
+  const allowedVi = new Set([...Object.keys(viSmall), "muoi", "tram", "nghin", "ngan", "trieu", "ty", "ruoi"]);
+  const allowedEn = new Set([...Object.keys(enSmall), "hundred", "thousand", "million", "billion", "and"]);
+  for (let start = 0; start < tokens.length; start++) {
+    for (const language of ["vi", "en"] as const) {
+      const allowed = language === "vi" ? allowedVi : allowedEn;
+      const words: string[] = [];
+      for (let end = start; end < Math.min(tokens.length, start + 15); end++) {
+        if (!allowed.has(tokens[end].word)) break;
+        if (tokens[end].word !== "and") words.push(tokens[end].word);
+        const parsed = parseSpokenGroup(words, language);
+        if (!parsed || parsed.value <= 0 || parsed.value > 1_000_000_000_000) continue;
+        const currencySuffix = message.slice(tokens[end].end);
+        const trimmedSuffix = currencySuffix.trimStart();
+        const currencyMatch = trimmedSuffix.match(spokenCurrency);
+        const currency = currencyMatch?.[0] || null;
+        if (!parsed.scaled && !currency) continue;
+        const phraseEnd = currency ? tokens[end].end + currencySuffix.length - trimmedSuffix.length + currency.length : tokens[end].end;
+        matches.push({ start: tokens[start].start, end: phraseEnd, amount: parsed.value, currency: currency ? normalizeCurrency(currency) : language === "vi" ? "VND" : null });
+      }
+    }
+  }
+  return matches.sort((a, b) => a.start - b.start || b.end - a.end).filter((item, index, list) => !list.slice(0, index).some(previous => item.start < previous.end));
+}
+
 /** A wallet choice is actionable only if an active compatible wallet exists. */
 export function hasCompatibleDraftWallet(draft: Pick<TransactionDraft, "currency">, wallets: DraftWallet[]): boolean {
   return wallets.some(wallet => !wallet.archived && (!draft.currency || wallet.currency.toUpperCase() === draft.currency.toUpperCase()));
@@ -55,7 +144,7 @@ export function normalizeCurrency(unit: string | null | undefined): string | nul
 /** Parse only amounts with an explicit shorthand or currency marker. */
 export function parseTransactionAmounts(message: string): ParsedTransactionAmount[] {
   const pattern = /(?:\$\s*(\d[\d.,]*)|\b(\d[\d.,]*)\s*(k|nghìn|ngàn|nghin|ngan|triệu|trieu|tr|million|m|nhân\s+dân\s+tệ|nhan\s+dan\s+te|renminbi|bảng\s+anh|bang\s+anh|đô\s*la|do\s*la|đô\s*mỹ|do\s*my|mỹ\s*kim|my\s*kim|tiền\s*việt|tien\s*viet|usd|dollars?|dollar|đô|do|cny|rmb|yuan|tệ|te|eur|euro|gbp|pound|pounds|bảng|bang|jpy|yen|yên|vnd|đồng|dong|₫|đ|\$|€|£|¥|元|人民币|美元))/giu;
-  const amounts: ParsedTransactionAmount[] = [];
+  const amounts: Array<{ start: number; end: number; value: ParsedTransactionAmount }> = [];
   for (const match of message.matchAll(pattern)) {
     const raw = match[1] || match[2];
     const unit = (match[3] || (match[1] ? "usd" : "")).toLocaleLowerCase("vi").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
@@ -66,13 +155,16 @@ export function parseTransactionAmounts(message: string): ParsedTransactionAmoun
       : /^[\d]{1,3}(?:[.,]\d{3})+$/.test(raw) ? raw.replace(/[.,]/g, "") : raw.replace(",", ".");
     const numeric = Number(normalized);
     const multiplier = /^(k|nghin|ngan)$/.test(unit) ? 1_000 : /^(trieu|tr|million|m)$/.test(unit) ? 1_000_000 : 1;
-    const amount = Math.round(numeric * multiplier * 100) / 100;
+    const half = /^\s*(?:rưỡi|ruoi)\b/iu.test(message.slice((match.index || 0) + match[0].length)) ? multiplier / 2 : 0;
+    const amount = Math.round((numeric * multiplier + half) * 100) / 100;
     if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000_000) continue;
     const currency = normalizeCurrency(currencyUnit)
       || (/^(k|nghin|ngan|trieu|tr|million|m)$/.test(unit) ? "VND" : null);
-    amounts.push({ amount, currency });
+    amounts.push({ start: match.index || 0, end: (match.index || 0) + match[0].length, value: { amount, currency } });
   }
-  return amounts;
+  const spoken = parseSpokenTransactionAmounts(message).filter(item => !amounts.some(amount => item.start < amount.end && item.end > amount.start));
+  return [...amounts.map(item => ({ start: item.start, value: item.value })), ...spoken.map(item => ({ start: item.start, value: { amount: item.amount, currency: item.currency } }))]
+    .sort((a, b) => a.start - b.start).map(item => item.value);
 }
 
 export function reconcileTransactionDraftAmounts<T extends { amount: number | null; needsReview: string[] }>(message: string, drafts: T[]) {
@@ -139,7 +231,9 @@ export function createTimeoutTransactionDraft(message: string, batchId: string, 
     date = validDate(candidate) ? candidate : null;
   }
   const category = inferDraftCategory(message, type, state);
-  const title = message.trim()
+  const spokenRanges = parseSpokenTransactionAmounts(message).sort((a, b) => b.start - a.start);
+  const withoutSpokenAmount = spokenRanges.reduce((text, item) => text.slice(0, item.start) + " " + text.slice(item.end), message);
+  const title = withoutSpokenAmount.trim().replace(/\b(?:rưỡi|ruoi)\b/giu, " ")
     .replace(/(?:\$\s*\d[\d.,]*|\b\d[\d.,]*\s*(?:k|nghìn|ngàn|nghin|ngan|triệu|trieu|tr|million|m|nhân\s+dân\s+tệ|nhan\s+dan\s+te|renminbi|bảng\s+anh|bang\s+anh|đô\s*la|do\s*la|đô\s*mỹ|do\s*my|mỹ\s*kim|my\s*kim|usd|dollars?|dollar|đô|do|cny|rmb|yuan|tệ|te|eur|euro|gbp|pound|pounds|bảng|bang|jpy|yen|yên|vnd|đồng|dong|₫|đ|\$|€|£|¥|元|人民币|美元)(?:\s*(?:nhân\s+dân\s+tệ|nhan\s+dan\s+te|renminbi|bảng\s+anh|bang\s+anh|đô\s*la|do\s*la|đô\s*mỹ|do\s*my|mỹ\s*kim|my\s*kim|usd|dollars?|dollar|đô|do|cny|rmb|yuan|tệ|te|eur|euro|gbp|pound|pounds|bảng|bang|jpy|yen|yên|vnd|đồng|dong|₫|đ|\$|€|£|¥|元|人民币|美元))?)/giu, " ")
     .replace(/\b(?:hôm nay|hôm qua|yesterday|today|hết)\b/gi, " ")
     .replace(/\s+/g, " ").trim();

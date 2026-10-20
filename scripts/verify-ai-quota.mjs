@@ -15,11 +15,11 @@ function fixture(overrides = {}) {
   const run = (options = {}) => createQuotaFetch({ owner: "A", route: "assistant", config, repository, transport, ...options })("https://provider.example.invalid", options.init);
   return { events, repository, run, calls: () => calls };
 }
-test("global limits require explicit positive safe integers; all seven routes have weighted costs", () => {
+test("global limits require explicit positive safe integers; all AI routes have weighted costs", () => {
   assert.throws(() => readAiQuotaConfig({}), /AI_QUOTA_NOT_CONFIGURED/);
   for (const value of ["0", "-1", "1.2", "Infinity", "NaN", "10000001"]) assert.throws(() => readAiQuotaConfig({ AI_QUOTA_SERVER_DAILY_POINTS: value }), /AI_QUOTA_NOT_CONFIGURED/);
   assert.deepEqual(readAiQuotaConfig({ AI_QUOTA_SERVER_DAILY_POINTS: "100", AI_QUOTA_SERVER_DAILY_REQUESTS: "80", AI_QUOTA_SERVER_MINUTE_REQUESTS: "10" }), config);
-  assert.equal(Object.keys(AI_ROUTE_COST).length, 7); assert.equal(AI_ROUTE_COST["receipt-drafts"], 3); assert.equal(AI_ROUTE_COST["speech-transcription"], 2);
+  assert.equal(Object.keys(AI_ROUTE_COST).length, 8); assert.equal(AI_ROUTE_COST["receipt-drafts"], 3); assert.equal(AI_ROUTE_COST["speech-transcription"], 2); assert.equal(AI_ROUTE_COST["translate-conversation"], 1);
 });
 test("Pacific day reset follows midnight, including spring and autumn daylight changes", () => {
   for (const [timestamp, day, reset] of [

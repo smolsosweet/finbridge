@@ -21,6 +21,8 @@ try{
  Object.assign(process.env,{NODE_ENV:"production",FINBRIDGE_DEMO_MODE:"false",BETTER_AUTH_URL:"https://finbridge.example.invalid"});
  const {POST}=await import("../src/app/api/ai/assistant/route.ts"),before=JSON.stringify(data);let pending;
  const cases=[
+  {message:"Create a monthly budget called Living, limit 250000 VND, starting today, using Synthetic wallet and all expense categories.",language:"en",check:r=>{assert.equal(r.operationIntent,"create_budget");assert.equal(r.workspaceProposal.status,"review");assert.equal(r.workspaceProposal.actions[0].amount,250000);assert.equal(r.workspaceProposal.actions[0].walletId,"vnd");}},
+  {message:"I want a manually tracked USD cash wallet called Travel with an opening balance of 500 USD.",language:"en",check:r=>{assert.equal(r.operationIntent,"create_wallet");assert.equal(r.workspaceProposal.status,"review");assert.equal(r.workspaceProposal.actions[0].currency,"USD");assert.equal(r.workspaceProposal.actions[0].initialBalance,500);}},
   {message:"Khoản mua nào đứng đầu bảng về số tiền?",check:r=>{assert.equal(r.action,"largest_transaction");assert.match(r.financialAnswer,/Laptop.*3,000,000 VND/);assert.doesNotMatch(r.financialAnswer,/Breakfast/);}},
   {message:"Show me the priciest thing I've paid for, not the whole list.",language:"en",check:r=>assert.equal(r.action,"largest_transaction")},
   {message:"Tui mún bỏ bớt 1 giao dịhc, cho tui coi để chọn.",check:r=>{assert.equal(r.operationIntent,"delete_transactions");assert.ok(r.transactionSelection.ids.length);assert.deepEqual(r.transactionSelection.selectedIds,[]);}},
@@ -30,14 +32,17 @@ try{
   {message:"Có thể hợp nhất mấy nhóm chi giúp mình không?",check:r=>{assert.equal(r.operationIntent,"merge_categories");assert.equal(r.categoryDialogue.field,"sources");pending=r.categoryDialogue.command;}},
   {message:"Thôi, đừng đổi danh mục nữa.",pending:true,check:r=>{assert.equal(r.categoryOperation,null);assert.equal(r.categoryDialogue,undefined);assert.equal(r.drafts.length,0);}},
  ];
- let failures=0;
+ let failures=0,executed=0;
  for(let i=0;i<cases.length;i++){
-  const item=cases[i],start=Date.now();let status,passed=false,error;
+  if(process.env.FINBRIDGE_PROBE_CREATION_ONLY === "true" && i>1)break;
+  if(process.env.FINBRIDGE_PROBE_CASES && !process.env.FINBRIDGE_PROBE_CASES.split(",").map(Number).includes(i+1))continue;
+  executed++;
+  const item=cases[i],start=Date.now();let status,passed=false,error,diagnostic;
   try{
    const http=await POST(new Request(process.env.BETTER_AUTH_URL+"/api/ai/assistant",{method:"POST",headers:{origin:process.env.BETTER_AUTH_URL,"content-type":"application/json","x-finbridge-workspace-owner":"synthetic-owner"},body:JSON.stringify({batchId:randomUUID(),message:item.message,today:"2026-10-20",timeZone:"Asia/Ho_Chi_Minh",language:item.language||"vi",selectedWalletId:"vnd",wallets:data.wallets.map(({id,name,currency})=>({id,name,currency})),categories:data.categories.map(name=>({name,type:"expense"})),history:[],pendingDrafts:[],...(item.pending?{pendingCategory:pending}:{})}),signal:AbortSignal.timeout(35000)}));
-   status=http.status;const result=await http.json();assert.equal(status,200);item.check(result);assert.equal(JSON.stringify(data),before);passed=true;
+   status=http.status;const result=await http.json();diagnostic={intent:result.operationIntent,proposalStatus:result.workspaceProposal?.status,unknownFields:result.workspaceProposal?.actions?.map(action=>Object.entries(action).filter(([key,value])=>value===null).map(([key])=>key))};assert.equal(status,200);item.check(result);assert.equal(JSON.stringify(data),before);passed=true;
   }catch(e){failures++;error=e.name;}
-  console.log(JSON.stringify({case:i+1,status,passed,durationMs:Date.now()-start,error}));
+  console.log(JSON.stringify({case:i+1,status,passed,durationMs:Date.now()-start,error,...(!passed?{diagnostic}:{})}));
  }
- console.log(JSON.stringify({passed:cases.length-failures,total:cases.length,scope:"synthetic workspace, real provider; no production claim"}));if(failures)process.exitCode=1;
+ console.log(JSON.stringify({passed:executed-failures,total:executed,scope:"synthetic workspace, real provider; no production claim"}));if(failures)process.exitCode=1;
 }finally{hooks.deregister();delete globalThis.__finnLanguageProbe;for(const[k,v]of Object.entries(saved))if(v===undefined)delete process.env[k];else process.env[k]=v;}

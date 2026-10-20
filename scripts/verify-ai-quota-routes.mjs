@@ -57,11 +57,12 @@ const inputs = {
   "scenario-planner": { today: common.today, timeZone: common.timeZone, message: "hello", preferredLanguage: "en", history: [], context: { wallets: common.wallets, budgets: [], fixedExpenses: [], goals: [], categories: ["Dining"] } },
   "proactive-feed": { language: "en", alerts: [{ id: "a", kind: "negative-balance", problem: "test", figures: "test", when: "test", cause: "test", priority: "high", suggestedAction: "test", assumptions: "test" }] },
   "workspace-actions": { batchId: "00000000-0000-4000-8000-000000000003", message: "create a wallet", language: "en", today: common.today, history: [], pending: null },
+  "translate-conversation": { language: "en", texts: [{ id: "one", text: "Xin chào" }], names: [] },
 };
 function request(route, { origin = process.env.BETTER_AUTH_URL, owner = "owner", language = "en" } = {}) {
   return new Request(process.env.BETTER_AUTH_URL + "/api/ai/" + route, { method: "POST", headers: { origin, "content-type": "application/json", "x-finbridge-workspace-owner": owner, "x-finbridge-language": language }, body: JSON.stringify(inputs[route]) });
 }
-test("all seven routes reject missing sessions, unverified accounts, wrong origin and stale account headers before Gemini", async () => {
+test("all AI routes reject missing sessions, unverified accounts, wrong origin and stale account headers before Gemini", async () => {
   for (const [route, POST] of Object.entries(routes)) {
     assert.equal((await POST(request(route, { origin: "https://attacker.invalid" }))).status, 403, route);
     assert.equal((await POST(request(route, { origin: "" }))).status, 403, route);
@@ -72,7 +73,7 @@ test("all seven routes reject missing sessions, unverified accounts, wrong origi
   }
   assert.equal(fixture.calls, 0); assert.equal(fixture.reservations.length, 0);
 });
-test("all seven routes fail closed on shared quota denial and DB errors, with EN/VI/ZH and Retry-After", async () => {
+test("all AI routes fail closed on shared quota denial and DB errors, with EN/VI/ZH and Retry-After", async () => {
   for (const [route, POST] of Object.entries(routes)) {
     for (const language of ["en", "vi", "zh"]) {
       for (const [code, status] of [["AI_QUOTA_EXCEEDED", 429], ["AI_QUOTA_UNAVAILABLE", 503]]) {
@@ -99,7 +100,7 @@ test("provider 429 records shared cooldown without retry and returns 429 for eve
     const response = await POST(request(route));
     assert.equal(response.status, 429, route); assert.equal(response.headers.get("retry-after"), "80");
   }
-  assert.equal(fixture.calls, 7); assert.deepEqual(fixture.pauses, Array(7).fill(80));
+  assert.equal(fixture.calls, Object.keys(AI_ROUTE_COST).length); assert.deepEqual(fixture.pauses, Array(Object.keys(AI_ROUTE_COST).length).fill(80));
 });
 test("unconfigured quotas block real SDK network access without a RAM fallback", async () => {
   const previous = process.env.AI_QUOTA_SERVER_DAILY_POINTS;
