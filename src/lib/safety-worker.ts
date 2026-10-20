@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 import { advanceSafety, evaluateSafety, type SafetyDocument, type SafetyEvent } from "./safety-model";
 import { saveSafety, safetyWorkspace, databaseSafety } from "./safety-repository";
-import { sendSafetyEmail } from "./safety-mail";
+import { sendSafetyEmail, type SafetyEmailDetails } from "./safety-mail";
 
 // External schedulers can impose a 30-second request limit. Reserve time for
 // cleanup and respond before that limit instead of leaving claimed mail ambiguous.
@@ -68,8 +68,29 @@ export async function runSafetyWorker(pool: Pool, send = sendSafetyEmail, now = 
         const evaluation = fresh && rule ? evaluateSafety(rule, doc!.snapshot!, now) : null;
         const valid = !inactive.rowCount && user.rows[0]?.emailVerified && evaluation?.state === "alarm" && evaluation.limit === event.evaluation.limit && evaluation.start === event.evaluation.start && evaluation.end === event.evaluation.end;
         let status: SafetyEvent["emailStatus"] = "cancelled";
-        if (valid) {
-          const sent = await send(user.rows[0].email, doc!.snapshot!.language);
+        if (valid && rule && evaluation) {
+          const targetObj = rule.kind === "budget"
+            ? doc?.snapshot?.budgets.find(b => b.id === rule.targetId)
+            : doc?.snapshot?.wallets.find(w => w.id === rule.targetId);
+
+          const details: SafetyEmailDetails = {
+            ruleName: rule.name,
+            kind: rule.kind,
+            basis: rule.basis,
+            unit: rule.unit,
+            threshold: rule.threshold,
+            actualAmount: evaluation.actual ?? undefined,
+            currentValue: evaluation.value ?? undefined,
+            limitAmount: evaluation.limit,
+            currency: evaluation.currency,
+            targetName: targetObj && "title" in targetObj ? targetObj.title : (targetObj && "name" in targetObj ? targetObj.name : undefined),
+            category: targetObj && "category" in targetObj ? targetObj.category : undefined,
+            periodStart: evaluation.start,
+            periodEnd: evaluation.end,
+            timeZone: doc?.snapshot?.timeZone,
+          };
+
+          const sent = await send(user.rows[0].email, doc!.snapshot!.language, details);
           if (sent === "retry") {
             const attempts = await lock.query<{ attempts: number }>("SELECT attempts FROM finbridge_safety_events WHERE id=$1", [item.id]);
             status = attempts.rows[0].attempts < 3 ? "pending" : "failed"; count.retried++;
