@@ -5,7 +5,7 @@
 .card header p,.note{color:var(--r-muted)}
 .card button{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--r-line);border-radius:9px;padding:10px 12px;font-size:12px;color:var(--r-teal);background:var(--r-surface);min-height:40px}
 .card button:disabled{opacity:.5;cursor:not-allowed}
-.formGrid{display:grid;grid-template-columns:minmax(140px,1.2fr) auto minmax(110px,1fr) minmax(200px,2fr) auto;align-items:start;gap:12px;margin:18px 0}
+.formGrid{display:grid;grid-template-columns:minmax(130px,1.2fr) auto minmax(130px,1.2fr) minmax(200px,2fr) auto;align-items:start;gap:12px;margin:18px 0}
 .field{display:flex;flex-direction:column;gap:7px;min-width:0}
 .field span,.labelPlaceholder{font-size:12px;font-weight:500;color:var(--r-text);min-height:18px;line-height:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .labelPlaceholder{visibility:hidden;user-select:none}

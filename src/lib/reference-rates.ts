@@ -2,6 +2,8 @@ import { z } from "zod";
 
 export const REFERENCE_CURRENCIES = ["CNY", "USD", "AUD"] as const;
 export type ReferenceCurrency = typeof REFERENCE_CURRENCIES[number];
+export const ALL_REFERENCE_CURRENCIES = ["VND", "CNY", "USD", "AUD"] as const;
+export type SupportedReferenceCurrency = typeof ALL_REFERENCE_CURRENCIES[number];
 export const REFERENCE_CACHE_MS = 6 * 60 * 60_000;
 const DAY = 24 * 60 * 60_000;
 export type ReferenceRate = {
