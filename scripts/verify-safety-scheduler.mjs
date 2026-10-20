@@ -33,9 +33,9 @@ test("scheduler surfaces HTTP, malformed and ambiguous delivery failures without
   await assert.rejects(invokeSafetyScheduler(env, async () => Response.json({ evaluated: 0, accepted: 0, cancelled: 0, failed: 0, unknown: 1, retried: 0 })), /SCHEDULER_DELIVERY_REQUIRES_REVIEW/);
 });
 
-test("busy worker is retryable and cannot be mistaken for a completed evaluation", async () => {
+test("busy worker is accepted without making an external scheduler disable the job", async () => {
   const response = await handleSafetyCron(new Request(url, { method: "POST", headers: { authorization: "Bearer " + secret } }), () => ({}), async () => ({ evaluated: 0, accepted: 0, cancelled: 0, failed: 0, unknown: 0, retried: 0, busy: true }), { SAFETY_CRON_SECRET: secret });
-  assert.equal(response.status, 503);
+  assert.equal(response.status, 202);
   assert.equal(response.headers.get("retry-after"), "60");
   assert.equal((await response.json()).error, "WORKER_BUSY");
 });

@@ -11,7 +11,10 @@ export async function handleSafetyCron(request: Request, pool: () => Pool, worke
   try {
     const result = await worker(pool());
     if ("busy" in result && result.busy) {
-      const busy = response({ ...result, error: "WORKER_BUSY" }, 503);
+      // A second scheduler invocation is expected while an earlier bounded run
+      // is finishing. It did no work, but it is not an infrastructure failure:
+      // external schedulers such as cron-job.org disable jobs after repeated 5xx.
+      const busy = response({ ...result, error: "WORKER_BUSY" }, 202);
       busy.headers.set("Retry-After", "60");
       return busy;
     }

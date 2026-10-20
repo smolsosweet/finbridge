@@ -25,7 +25,9 @@ does not follow HTTP redirects and never prints the bearer secret or response te
 Its concurrency group prevents overlapping workflow runs. A transaction advisory
 lock, held on a separate connection until the worker finishes, serializes calls
 from any source and works with Neon transaction pooling. A busy worker returns
-HTTP 503 with `Retry-After: 60`; HTTP 200 alone does not confirm mail delivery.
+HTTP 202 with `Retry-After: 60`; it did no work because another invocation is
+already active, so an external scheduler must not count it as a failure. HTTP
+200 alone does not confirm mail delivery.
 The lock uses the two-integer key `(17961015, 1)` so leaked legacy session locks
 cannot block the new worker. No GET endpoint is introduced.
 
