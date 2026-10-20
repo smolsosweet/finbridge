@@ -1,25 +1,24 @@
 # Deploying generic reminder email
 
-The application already has an authenticated POST worker at /api/internal/safety.
-The added Safety email scheduler GitHub Actions workflow invokes it every five minutes,
-offset from the beginning of the hour (at minute 03, 08, ... 58) to reduce shared
-GitHub Actions scheduler contention.
-on main, or manually through workflow_dispatch. GitHub schedules are best effort and
-may be delayed or disabled for inactive repositories; this is not an exact delivery SLA.
+The application has an authenticated POST worker at `/api/internal/safety`.
+Production uses an external HTTPS scheduler, configured to call that endpoint every
+15 minutes. The GitHub Actions workflow is retained for manual diagnostics only;
+it has no automatic schedule.
 
 Configure BEFORE enabling email:
 1. On Vercel Production set a random server-only SAFETY_CRON_SECRET of at least 32
    characters, the existing Brevo sender/key, and canonical BETTER_AUTH_URL.
-2. In GitHub Actions secrets set the identical SAFETY_CRON_SECRET. Set repository
-   variable FINBRIDGE_BASE_URL to the canonical HTTPS origin with no path/query.
-   Set FINBRIDGE_SAFETY_SCHEDULER_ENABLED=true only when these settings are ready.
-   The workflow skips its job by default, including manual dispatch, until enabled.
-3. Deploy the worker code, manually run the workflow, confirm its aggregate counts.
+2. Configure an external scheduler with the canonical HTTPS POST URL, this header:
+   `Authorization: Bearer <SAFETY_CRON_SECRET>`, a 30-second timeout, and failure
+   notifications. It must have no database credentials. Confirm its first scheduled
+   invocation returns HTTP 200.
+3. The optional GitHub Actions workflow is only for manual diagnosis. If used, set
+   the identical secret and base URL in its repository settings, then run it manually.
 4. Opt a synthetic test account into a rule. After validating the sender/scheduler,
    set SAFETY_EMAIL_ENABLED=true on Vercel and redeploy. Trigger a known synthetic
    breach and confirm accepted status AND Brevo delivery separately.
-5. Keep workflow failure notifications enabled. HTTP failures, malformed responses,
-   failed or unknown sends fail the job. Ambiguous sends are not automatically retried.
+5. Keep external-scheduler failure notifications enabled. HTTP failures, malformed
+   responses, failed or unknown sends need review. Ambiguous sends are not retried.
 
 The job needs no checkout credential write permissions, does not install packages,
 does not follow HTTP redirects and never prints the bearer secret or response text.
@@ -32,5 +31,4 @@ It evaluates at most 25 accounts and sends at most one queued message per call.
 For larger traffic use a dedicated queue that can acknowledge work before delivery.
 
 Until the scheduler and delivery are actually tested, keep SAFETY_EMAIL_ENABLED=false
-and describe only in-app alerts. Adding this workflow locally does not activate it;
-it must reach main and have its repository settings configured.
+and describe only in-app alerts. Adding workflow files locally never activates email.
