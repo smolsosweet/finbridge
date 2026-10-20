@@ -16,6 +16,7 @@ function OwnedSafetyProvider({ children, owner }: { children: ReactNode; owner: 
   const [doc, setDoc] = useState<SafetyPublic>(emptySafetyPublic), [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const current = useRef(doc), active = useRef(true), locked = useRef(false);
   const refreshing = useRef<Promise<void> | null>(null), refreshAgain = useRef(false);
+  const lastRefresh = useRef(0);
   const adopt = useCallback((value: SafetyPublic) => { if (active.current && workspaceOwner() === owner && value.revision >= current.current.revision) { current.current = value; setDoc(value); } }, [owner]);
   const refresh = useCallback((): Promise<void> => {
     if (refreshing.current) return refreshing.current;
@@ -24,6 +25,7 @@ function OwnedSafetyProvider({ children, owner }: { children: ReactNode; owner: 
         refreshAgain.current = false;
         const response = await fetch("/api/safety", { cache: "no-store", headers: { "x-finbridge-workspace-owner": owner }, signal: AbortSignal.timeout(15000) });
         if (!response.ok) throw new Error("UNAVAILABLE"); adopt(await response.json());
+        lastRefresh.current = Date.now();
         if (active.current) setError("");
       } while (refreshAgain.current && active.current && !locked.current);
     };
@@ -38,8 +40,15 @@ function OwnedSafetyProvider({ children, owner }: { children: ReactNode; owner: 
       if (refreshing.current) refreshAgain.current = true;
       void refresh().catch(() => { if (active.current) setError("UNAVAILABLE"); });
     };
-    const timer = setInterval(update, 60000); window.addEventListener("finbridge:financial-workspace-saved", update);
-    return () => { active.current = false; clearInterval(timer); window.removeEventListener("finbridge:financial-workspace-saved", update); };
+    // Local financial edits still refresh immediately. Idle tabs only poll
+    // while visible; returning to a stale tab catches up without a focus storm.
+    const visibleUpdate = () => {
+      if (document.visibilityState === "visible" && Date.now() - lastRefresh.current >= 60000) update();
+    };
+    const timer = setInterval(visibleUpdate, 5 * 60000);
+    window.addEventListener("finbridge:financial-workspace-saved", update);
+    document.addEventListener("visibilitychange", visibleUpdate);
+    return () => { active.current = false; clearInterval(timer); window.removeEventListener("finbridge:financial-workspace-saved", update); document.removeEventListener("visibilitychange", visibleUpdate); };
   }, [refresh]);
   const mutate = useCallback(async (command: Command) => {
     if (locked.current) throw new Error("BUSY");

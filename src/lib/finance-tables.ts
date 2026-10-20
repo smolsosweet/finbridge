@@ -99,16 +99,16 @@ export async function writeAlertRules(client: PoolClient, owner: string, rules: 
 export async function readSafetyFinanceTables(client: PoolClient, owner: string, fallback: AppState): Promise<AppState> {
   const result = await client.query<Pick<AppState, "wallets" | "transactions" | "goals" | "settings">>(`
     SELECT
-      COALESCE((SELECT jsonb_agg(data || jsonb_build_object('id',id,'name',name,'currency',trim(currency),'initial',opening_balance,'archived',archived) ORDER BY position)
+      COALESCE((SELECT jsonb_agg(jsonb_build_object('id',id,'name',name,'currency',trim(currency),'initial',opening_balance,'archived',archived) ORDER BY position)
         FROM finbridge_wallets WHERE user_id=$1 AND deleted_at IS NULL), '[]'::jsonb) AS wallets,
-      COALESCE((SELECT jsonb_agg((t.data - 'targetWallet') || jsonb_build_object('id',t.id,'amount',t.amount,'type',t.direction,'wallet',t.wallet_id,'category',COALESCE(c.name,''),'date',t.occurred_on::text)
+      COALESCE((SELECT jsonb_agg(jsonb_build_object('id',t.id,'amount',t.amount,'type',t.direction,'wallet',t.wallet_id,'category',COALESCE(c.name,''),'date',t.occurred_on::text)
         || CASE WHEN t.target_wallet_id IS NULL THEN '{}'::jsonb ELSE jsonb_build_object('targetWallet',t.target_wallet_id) END ORDER BY t.position)
         FROM finbridge_transactions t LEFT JOIN finbridge_categories c ON c.user_id=t.user_id AND c.id=t.category_id
         WHERE t.user_id=$1 AND t.deleted_at IS NULL), '[]'::jsonb) AS transactions,
-      COALESCE((SELECT jsonb_agg(b.data || jsonb_build_object('id',b.id,'kind','budget','title',b.title,'amount',b.amount,'currency',trim(b.currency),'wallet',b.wallet_id,'category',COALESCE(c.name,''),'date',b.starts_on::text,'cycle',b.cycle) ORDER BY b.position)
+      COALESCE((SELECT jsonb_agg(jsonb_build_object('id',b.id,'kind','budget','title',b.title,'amount',b.amount,'currency',trim(b.currency),'wallet',b.wallet_id,'category',COALESCE(c.name,''),'date',b.starts_on::text,'cycle',b.cycle) ORDER BY b.position)
         FROM finbridge_budgets b LEFT JOIN finbridge_categories c ON c.user_id=b.user_id AND c.id=b.category_id
         WHERE b.user_id=$1 AND b.deleted_at IS NULL), '[]'::jsonb) AS goals,
-      COALESCE((SELECT jsonb_object_agg(preference_key,value) FROM finbridge_preferences WHERE user_id=$1 AND deleted_at IS NULL), '{}'::jsonb) AS settings
+      COALESCE((SELECT jsonb_object_agg(preference_key,value) FROM finbridge_preferences WHERE user_id=$1 AND deleted_at IS NULL AND preference_key IN ('language','timeZone')), '{}'::jsonb) AS settings
   `, [owner]);
   return { ...fallback, ...result.rows[0] };
 }

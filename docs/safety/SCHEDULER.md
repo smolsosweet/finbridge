@@ -36,6 +36,8 @@ which keeps it compatible with external schedulers that allow a 30-second reques
 It sends already queued mail before scanning more accounts. When no mail is queued,
 it evaluates at most 25 accounts and sends at most one queued message per call.
 For larger traffic use a dedicated queue that can acknowledge work before delivery.
+See [Neon transfer savings](../NEON_DATA_SAVINGS.md) before changing the frequency:
+every twelve hours allows at most two queued attempts/day for the entire app.
 
 Until the scheduler and delivery are actually tested, keep SAFETY_EMAIL_ENABLED=false
 and describe only in-app alerts. Adding workflow files locally never activates email.

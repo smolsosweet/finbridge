@@ -49,7 +49,7 @@
     "test:bill-payments": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-bill-payments.mjs scripts/verify-fixed-expense-lifecycle.mjs",
     "test:bill-payments:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-bill-payments-postgres.mjs",
     "test:workspace:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-workspace-postgres.mjs",
-    "test:safety": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-safety.mjs",
+    "test:safety": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-safety.mjs scripts/verify-safety-refresh.cjs",
     "test:safety:postgres": "node --no-warnings --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-safety-postgres.mjs",
     "test:onboarding": "node --test scripts/verify-onboarding.cjs scripts/verify-onboarding-form.cjs",
     "test:auth:postgres": "node --experimental-strip-types --experimental-loader ./scripts/ts-extension-loader.mjs --test scripts/verify-auth-postgres.mjs",

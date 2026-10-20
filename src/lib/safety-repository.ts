@@ -5,9 +5,12 @@ import { readSafetyFinanceTables, writeAlertRules } from "./finance-tables";
 import type { AppState } from "../components/finbridge/workspace/store";
 
 export async function safetyWorkspace(client: PoolClient, userId: string) {
-  const rows = await client.query("SELECT data,updated_at FROM finbridge_workspaces WHERE user_id=$1 FOR SHARE", [userId]);
-  if (!rows.rows[0]?.data) return null;
-  const data = await readSafetyFinanceTables(client, userId, rows.rows[0].data);
+  // The relational projection below owns every safety input. Reading the full
+  // workspace first adds chat histories, drafts and receipt data to every read.
+  const rows = await client.query("SELECT updated_at FROM finbridge_workspaces WHERE user_id=$1 AND data IS NOT NULL FOR SHARE", [userId]);
+  if (!rows.rows[0]) return null;
+  const fallback: AppState = { wallets: [], transactions: [], goals: [], categories: [], categoryMeta: {}, recurring: [], rules: [], settings: {} };
+  const data = await readSafetyFinanceTables(client, userId, fallback);
   return { data, updatedAt: rows.rows[0].updated_at };
 }
 export function databaseSafety(doc: SafetyDocument, state: AppState, updatedAt: Date) {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test, after } from "node:test";
 import { randomUUID } from "node:crypto";
 import { ruleFixture } from "./safety-fixtures.mjs";
-import { safetyRepository, SAFETY_SQL } from "../src/lib/safety-repository.ts";
+import { safetyRepository, safetyWorkspace, SAFETY_SQL } from "../src/lib/safety-repository.ts";
 import { workspaceRepository } from "../src/lib/workspace-repository.ts";
 import { readFinanceTables, readSafetyFinanceTables } from "../src/lib/finance-tables.ts";
 import { safetySnapshot } from "../src/lib/safety-model.ts";
@@ -32,6 +32,28 @@ test("safety projection matches the full relational reader in one query without 
   assert.deepEqual(foreign.wallets, []); assert.deepEqual(foreign.transactions, []); assert.deepEqual(foreign.goals, []);
  } finally { client.release(); }
 });
+test("safety reads exclude bulky chat, receipts and transaction notes without changing financial results", async () => {
+ const client = await pool.connect();
+ try {
+  await client.query("BEGIN");
+  const expected = safetySnapshot(await readFinanceTables(client, owner, workspaceFixture()), "UTC");
+  await client.query("UPDATE finbridge_workspaces SET data=data || jsonb_build_object('receiptDraft',repeat('r',250000),'planningChat',jsonb_build_array(jsonb_build_object('role','user','text',repeat('c',250000)))) WHERE user_id=$1", [owner]);
+  await client.query("UPDATE finbridge_transactions SET data=data || jsonb_build_object('note',repeat('n',250000)) WHERE user_id=$1", [owner]);
+  const oldRows = await client.query("SELECT data,updated_at FROM finbridge_workspaces WHERE user_id=$1", [owner]);
+  const oldBytes = Buffer.byteLength(JSON.stringify(oldRows.rows));
+  let bytes = 0;
+  const measured = { async query(...args) { const result = await client.query(...args); bytes += Buffer.byteLength(JSON.stringify(result.rows)); return result; } };
+  const workspace = await safetyWorkspace(measured, owner);
+  assert.deepEqual(safetySnapshot(workspace.data, "UTC"), expected);
+  assert.equal(workspace.data.planningChat, undefined);
+  assert.equal(workspace.data.receiptDraft, undefined);
+  assert.equal(workspace.data.transactions[0].note, undefined);
+  assert.ok(bytes < oldBytes / 10, `safety query result bytes ${bytes} must be less than a tenth of ${oldBytes}`);
+  console.log(`Synthetic safety payload: full workspace ${oldBytes} bytes; projected reads ${bytes} bytes`);
+  assert.equal(await safetyWorkspace(measured, other), null);
+ } finally { await client.query("ROLLBACK"); client.release(); }
+});
+
 test("foreign origins, missing sessions and client-supplied financial snapshots are rejected",async()=>{
  assert.equal((await request({action:"read"},{trusted:false})).status,403);
  assert.equal((await handleSafety(new Request(origin+"/api/safety"),null,origin,repo,true)).status,401);
