@@ -19,7 +19,7 @@ export async function runSafetyWorker(pool: Pool, send = sendSafetyEmail, now = 
     const acquired = await lock.query("SELECT pg_try_advisory_lock(17961015) AS locked");
     if (!acquired.rows[0].locked) return { ...count, busy: true };
     await lock.query("UPDATE finbridge_safety_events SET event=jsonb_set(event,'{emailStatus}','\"unknown\"') WHERE event->>'emailStatus'='sending' AND next_attempt_at < $1", [new Date(now.getTime() - 10 * 60000)]);
-    const docs = await lock.query<{ user_id: string }>("SELECT user_id FROM finbridge_safety WHERE updated_at < $1 ORDER BY updated_at LIMIT 25", [new Date(now.getTime() - 60000)]);
+    const docs = await lock.query<{ user_id: string }>("SELECT user_id FROM finbridge_safety WHERE updated_at < $1 ORDER BY updated_at LIMIT $2", [new Date(now.getTime() - 60000), MAX_EVALUATIONS_PER_RUN]);
     for (const { user_id: userId } of docs.rows) {
       if (!hasTime()) break;
       await lock.query("BEGIN");
@@ -36,7 +36,7 @@ export async function runSafetyWorker(pool: Pool, send = sendSafetyEmail, now = 
         await lock.query("COMMIT");
       } catch (e) { await lock.query("ROLLBACK"); throw e; }
     }
-    const pending = await lock.query<{ id: string; user_id: string }>("SELECT id,user_id FROM finbridge_safety_events WHERE event->>'emailStatus'='pending' AND next_attempt_at <= $1 ORDER BY next_attempt_at LIMIT 1", [now]);
+    const pending = await lock.query<{ id: string; user_id: string }>("SELECT id,user_id FROM finbridge_safety_events WHERE event->>'emailStatus'='pending' AND next_attempt_at <= $1 ORDER BY next_attempt_at LIMIT $2", [now, MAX_EMAILS_PER_RUN]);
     for (const item of pending.rows) {
       if (!hasTime(MINIMUM_MAIL_WINDOW_MS)) break;
       // A durable claim precedes I/O. Crash/timeout becomes unknown, never blind retry.

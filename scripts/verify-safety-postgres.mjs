@@ -67,10 +67,12 @@ test("selected read touches only the requested event belonging to this account",
  assert.equal(JSON.stringify((await saved()).rules),rules);
 });
 test("GET has no writes and marking read retains financial data",async()=>{const before=await saved();assert.equal((await handleSafety(new Request(origin+"/api/safety",{headers:{"x-finbridge-workspace-owner":owner}}),owner,origin,repo,true)).status,200);assert.equal((await saved()).revision,before.revision);assert.equal((await request({action:"read"})).status,200);assert.ok((await saved()).events.every(e=>e.read));});
-test("worker sends each generic reminder once and accepts database data even after 24 hours",async()=>{
+test("worker sends a bounded batch and never resends accepted reminders",async()=>{
  await pool.query("UPDATE finbridge_safety SET document=jsonb_set(document,'{syncedAt}',to_jsonb($2::text)) WHERE user_id=$1",[owner,new Date(Date.now()-26*3600000).toISOString()]);
- let calls=0;await runSafetyWorker(pool,async(to,language)=>{calls++;assert.equal(to,owner+"@example.invalid");assert.equal(language,"en");return "accepted";});assert.ok(calls>=1);const accepted=calls;
- await runSafetyWorker(pool,async()=>{calls++;return "accepted";});assert.equal(calls,accepted);assert.equal((await saved()).events.find(e=>e.ruleId==="actual-80").emailStatus,"accepted");
+ let calls=0;await runSafetyWorker(pool,async(to,language)=>{calls++;assert.equal(to,owner+"@example.invalid");assert.equal(language,"en");return "accepted";});assert.equal(calls,1);
+ const acceptedBefore=(await pool.query("SELECT id FROM finbridge_safety_events WHERE user_id=$1 AND event->>'emailStatus'='accepted'",[owner])).rows.map(row=>row.id);assert.equal(acceptedBefore.length,1);
+ await runSafetyWorker(pool,async()=>{calls++;return "accepted";});assert.equal(calls,2);
+ const acceptedAfter=(await pool.query("SELECT id,attempts FROM finbridge_safety_events WHERE user_id=$1 AND event->>'emailStatus'='accepted'",[owner])).rows;assert.ok(acceptedBefore.every(id=>acceptedAfter.some(row=>row.id===id&&row.attempts===1)));
 });
 test("removed group conditions are archived; invalid grouped edit cannot save partially",async()=>{const old=await saved();const rules=old.rules.filter(r=>r.id!=="forecast-100");assert.equal((await request({action:"saveGroup",groupId,rules})).status,200);assert.equal((await saved()).rules.find(r=>r.id==="forecast-100").archived,true);assert.equal((await pool.query("SELECT archived FROM finbridge_alert_rules WHERE user_id=$1 AND id='forecast-100'",[owner])).rows[0].archived,true);});
 test("ambiguous email result is not blindly resent; pause cancels queued mail",async()=>{
