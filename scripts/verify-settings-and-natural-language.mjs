@@ -47,7 +47,7 @@ const transpile = (filePath) => {
   return m.exports;
 };
 
-const { SettingsActionCard } = transpile("src/components/sites/rolly/replica/SettingsActionCard.tsx");
+const { SettingsActionCard } = transpile("src/components/finbridge/workspace/SettingsActionCard.tsx");
 
 const mockWorkspace = () => ({
   wallets: [

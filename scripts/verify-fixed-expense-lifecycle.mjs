@@ -3,7 +3,7 @@ import test from "node:test";
 import { fixedExpenseOccurrence, nextExpenseDue, nextScheduledExpenseDue, recordFixedExpensePayment } from "../src/lib/fixed-expense-payments.ts";
 import { calculateSpendingPlan } from "../src/lib/financial-outlook.ts";
 import { financialCalendarDate } from "../src/lib/financial-calendar.ts";
-import { subscribeFinancialDate } from "../src/components/sites/rolly/replica/useFinancialDate.ts";
+import { subscribeFinancialDate } from "../src/components/finbridge/workspace/useFinancialDate.ts";
 import { detectProactiveAlerts } from "../src/lib/proactive-alerts.ts";
 
 const expense = (extra = {}) => ({ id: "internet", title: "Internet", amount: 239000, budgetId: "", walletId: "vnd", category: "Utilities", active: true, dueDate: "2026-10-20", recurrence: "monthly", reminderDays: 2, ...extra });

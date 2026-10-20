@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AppState, Wallet } from "../components/sites/rolly/replica/store";
+import type { AppState, Wallet } from "../components/finbridge/workspace/store";
 
 export const settingsActionProposalSchema = z.object({
   id: z.string().uuid(),

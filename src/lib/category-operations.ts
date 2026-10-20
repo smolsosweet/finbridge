@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AppState, ChatMessage } from "../components/sites/rolly/replica/store";
+import type { AppState, ChatMessage } from "../components/finbridge/workspace/store";
 import { isValidDraftCategoryName, normalizeVietnameseMessage } from "./transaction-drafts";
 
 export const categoryCommandSchema = z.object({

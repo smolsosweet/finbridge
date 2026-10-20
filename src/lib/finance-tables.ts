@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
-import type { AppState } from "../components/sites/rolly/replica/store";
+import type { AppState } from "../components/finbridge/workspace/store";
 import type { SafetyRule } from "./safety-model";
 const base = `user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE RESTRICT, id TEXT NOT NULL, data JSONB NOT NULL, position INTEGER NOT NULL DEFAULT 0, deleted_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(user_id,id)`;
 const walletFK = `FOREIGN KEY(user_id,wallet_id) REFERENCES finbridge_wallets(user_id,id) ON DELETE RESTRICT`;

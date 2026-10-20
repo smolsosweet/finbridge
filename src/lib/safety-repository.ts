@@ -2,7 +2,7 @@ import type { Pool, PoolClient } from "pg";
 import { advanceSafety, emptySafetyDocument, type SafetyDocument, type SafetyEvent, type SafetyRule } from "./safety-model";
 import { evaluateSafety, safetySnapshot } from "./safety-model";
 import { readSafetyFinanceTables, writeAlertRules } from "./finance-tables";
-import type { AppState } from "../components/sites/rolly/replica/store";
+import type { AppState } from "../components/finbridge/workspace/store";
 
 export async function safetyWorkspace(client: PoolClient, userId: string) {
   const rows = await client.query("SELECT data,updated_at FROM finbridge_workspaces WHERE user_id=$1 FOR SHARE", [userId]);

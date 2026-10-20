@@ -46,7 +46,7 @@ test("unavailable and wrong-type categories are never accepted from remembered o
 });
 
 // Execute the actual JSX choices and handlers; no copied component or static mock list.
-const source=ts.createSourceFile("Transactions.tsx",readFileSync("src/components/sites/rolly/replica/Transactions.tsx","utf8"),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);let expression;
+const source=ts.createSourceFile("Transactions.tsx",readFileSync("src/components/finbridge/workspace/Transactions.tsx","utf8"),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);let expression;
 function visit(node){if(ts.isJsxExpression(node)&&node.expression?.getText(source).startsWith("message.categoryDialogue &&"))expression=node.expression.getText(source);ts.forEachChild(node,visit);}visit(source);assert.ok(expression);
 const code=ts.transpileModule(`exports.render=(message,messages,index,busy,committing,categoryBusy,send,setMessages,categoryDialogueSchema,categoryCommandCopy)=>(${expression});`,{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 const module={exports:{}};new Function("require","exports",code)(createRequire(import.meta.url),module.exports);

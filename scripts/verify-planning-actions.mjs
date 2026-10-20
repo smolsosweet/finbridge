@@ -303,9 +303,9 @@ test("real UI cards render preview details, confirm/cancel buttons, and localize
     return m.exports;
   };
 
-  const { FixedExpensePaymentCard } = transpile("src/components/sites/rolly/replica/FixedExpensePaymentCard.tsx");
-  const { FixedExpenseStatusCard } = transpile("src/components/sites/rolly/replica/FixedExpenseStatusCard.tsx");
-  const { PlanningEditCard } = transpile("src/components/sites/rolly/replica/PlanningEditCard.tsx");
+  const { FixedExpensePaymentCard } = transpile("src/components/finbridge/workspace/FixedExpensePaymentCard.tsx");
+  const { FixedExpenseStatusCard } = transpile("src/components/finbridge/workspace/FixedExpenseStatusCard.tsx");
+  const { PlanningEditCard } = transpile("src/components/finbridge/workspace/PlanningEditCard.tsx");
 
   for (const language of ["vi", "en", "zh"]) {
     // 1. Payment Card

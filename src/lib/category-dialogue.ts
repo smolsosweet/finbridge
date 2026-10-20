@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { AppState } from "../components/sites/rolly/replica/store";
+import type { AppState } from "../components/finbridge/workspace/store";
 import { categoryCommandSchema, prepareCategoryOperation, type CategoryCommand } from "./category-operations";
 import { categoryOperationError } from "./category-operation-copy";
 

@@ -13,7 +13,7 @@ import * as payments from "../src/lib/fixed-expense-payments.ts";
 // Render the real component/calculations, pin the live clock to asOf and replace
 // CSS names. This does not emulate browser layout or live Gemini.
 const require = createRequire(import.meta.url), module = { exports: {} };
-const code = ts.transpileModule(readFileSync("src/components/sites/rolly/replica/ChatSpendingPlan.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
+const code = ts.transpileModule(readFileSync("src/components/finbridge/workspace/ChatSpendingPlan.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
 new Function("require", "module", "exports", code)(name => {
   if (name === "@/lib/financial-outlook") return outlook;
   if (name === "@/lib/transaction-drafts") return drafts;

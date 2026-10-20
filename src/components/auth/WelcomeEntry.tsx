@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { WelcomeScreen } from "@/components/sites/rolly/WelcomeScreen";
+import { WelcomeScreen } from "@/components/finbridge/WelcomeScreen";
 
 export function WelcomeEntry({ lang = "en", preferStoredLanguage = true }: { lang?: string; preferStoredLanguage?: boolean }) {
   const router = useRouter();

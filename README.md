@@ -23,6 +23,10 @@ Existing account-owned browser records are offered for a one-time explicit impor
 
 Email needs a configured Brevo HTTPS or SMTP sender. Local outbox mode is development-only. Secrets belong in ignored environment files or hosting settings.
 
+All Gemini calls use [shared PostgreSQL AI quotas](docs/AI_QUOTAS.md). Set the required global budgets from the actual AI Studio project limits and migrate the quota schema before deploying. Unconfigured quotas block AI calls; manual entry remains available.
+
+See [AI upload/browser security](docs/AI_INPUT_SECURITY.md), [judge account provisioning](docs/DEMO_ACCOUNTS.md), [email scheduler setup](docs/safety/SCHEDULER.md) and the [release checklist (Vietnamese)](docs/RELEASE_CHECKLIST_VI.md). The demo uses Gemini Free; only synthetic data should be submitted to AI. Account closure disables access and retains financial history; there is no automatic financial purge schedule.
+
 Forwarded-IP trust in auth rate limiting remains open before public deployment. See [auth acceptance](docs/auth/AUTH_FLOW_ACCEPTANCE_2026-10-14.md). Local tests do not establish production security or provider availability.
 
 ## Local setup
@@ -69,6 +73,6 @@ Database tests require `AUTH_TEST_DATABASE_URL` targeting local `finbridge_auth_
 - [Data preservation](docs/AUTH_DATA_PRESERVATION.md)
 - [Security](SECURITY.md) and [third-party notices](THIRD_PARTY_NOTICES.md)
 
-Routes are in `src/app`, auth/setup in `src/components/auth`, and services in `src/lib`. Active finance UI retains `src/components/sites/rolly/replica` for import/test/storage compatibility.
+Routes are in `src/app`, auth/setup in `src/components/auth`, and services in `src/lib`. Active finance UI lives in `src/components/finbridge/workspace`; public UI assets live in `public/finbridge`. See [path migration](docs/FINBRIDGE_PATH_MIGRATION.md) for old URL and browser-data compatibility.
 
 The original scaffold used the MIT-licensed AI Website Cloner Template. Its copyright and [LICENSE](LICENSE) remain; UI prototype provenance is recorded in [THIRD_PARTY_NOTICES](THIRD_PARTY_NOTICES.md).

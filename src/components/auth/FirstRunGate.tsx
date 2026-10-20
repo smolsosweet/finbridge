@@ -4,7 +4,7 @@ import { useAuthenticatedUser } from "./AuthenticatedUser";
 import { OnboardingWizard } from "./OnboardingWizard";
 import { applyOnboarding, onboardingSchema, type OnboardingRecord } from "@/lib/onboarding";
 import { SETUP_COPY } from "@/lib/setup-copy";
-import { updateState, useAppState, workspaceOwner } from "@/components/sites/rolly/replica/store";
+import { updateState, useAppState, workspaceOwner } from "@/components/finbridge/workspace/store";
 import { readPreferredLanguage, workspaceLanguage } from "@/lib/language-preference";
 export function FirstRunGate({ children }: { children: ReactNode }) {
   const user = useAuthenticatedUser(), state = useAppState();

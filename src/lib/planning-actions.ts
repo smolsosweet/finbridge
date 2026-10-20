@@ -1,7 +1,7 @@
 import { z } from "zod";
-import type { AppState, FixedExpense, Goal } from "../components/sites/rolly/replica/store";
+import type { AppState, FixedExpense, Goal } from "../components/finbridge/workspace/store";
 import { expenseWallet, fixedExpensePayment, nextExpenseDue, recordFixedExpensePayment, unpaidOccurrences } from "./fixed-expense-payments";
-import { validBudget, validFixedExpense, plannedOccurrences } from "../components/sites/rolly/replica/planningModel";
+import { validBudget, validFixedExpense, plannedOccurrences } from "../components/finbridge/workspace/planningModel";
 import { parseTransactionAmounts } from "./transaction-drafts";
 
 // 1. Bill Payment Proposal Schema & Types

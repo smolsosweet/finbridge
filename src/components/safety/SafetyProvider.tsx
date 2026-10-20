@@ -1,7 +1,7 @@
 "use client";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuthenticatedUser } from "@/components/auth/AuthenticatedUser";
-import { flushWorkspace, workspaceOwner } from "@/components/sites/rolly/replica/store";
+import { flushWorkspace, workspaceOwner } from "@/components/finbridge/workspace/store";
 import type { SafetyCommand } from "@/lib/safety-handler";
 import { emptySafetyPublic, type SafetyPublic } from "@/lib/safety-model";
 type Command = SafetyCommand extends infer T ? T extends SafetyCommand ? Omit<T, "revision"> : never : never;

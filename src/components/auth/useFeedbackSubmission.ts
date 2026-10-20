@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAuthenticatedUser } from "./AuthenticatedUser";
-import { workspaceOwner } from "@/components/sites/rolly/replica/store";
+import { workspaceOwner } from "@/components/finbridge/workspace/store";
 import type { FeedbackReceipt } from "@/lib/feedback";
 
 export const FEEDBACK_COPY = {

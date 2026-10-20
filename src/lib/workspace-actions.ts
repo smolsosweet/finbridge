@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { AppState, FixedExpense, Goal, Wallet } from "../components/sites/rolly/replica/store";
-import { currencyScale, validBudget, validFixedExpense } from "../components/sites/rolly/replica/planningModel";
+import type { AppState, FixedExpense, Goal, Wallet } from "../components/finbridge/workspace/store";
+import { currencyScale, validBudget, validFixedExpense } from "../components/finbridge/workspace/planningModel";
 import { workspaceSchema } from "./workspace-model";
 
 export type ActionLanguage = "en" | "vi" | "zh";

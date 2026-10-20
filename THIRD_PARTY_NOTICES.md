@@ -6,9 +6,11 @@ The initial scaffold was derived from [AI Website Cloner Template](https://githu
 
 ## Initial UI prototype
 
-Initial UI prototyping referenced the Rolly application. Legacy component, asset and browser-storage paths still contain its name. These retained compatibility paths and reference assets are not a claim that FinBridge owns the original Rolly brand or assets, nor that FinBridge is affiliated with Rolly.
+Initial UI prototyping referenced the Rolly application. Component and asset paths have been renamed to FinBridge. The original browser-storage key and old asset URL redirects are retained for compatibility. This path rename does not change the origin or licensing status of the prototype or assets, and does not imply affiliation with Rolly.
 
 Removing unused template tooling or changing a commit title does not establish ownership of third-party assets. Replacement of retained third-party visual assets should be tracked separately from the repository metadata cleanup.
+
+The evidence inventory and unresolved permission checks are in [docs/PROVENANCE_REVIEW.md](docs/PROVENANCE_REVIEW.md).
 
 ## Dependencies
 

@@ -2,10 +2,10 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, Bell, Check, CheckCircle2, ChevronDown, CircleHelp, Database, Mail, PauseCircle, Plus, Search, ShieldCheck, Trash2, TrendingUp, Wallet, Zap } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { FinBridgeHeader } from "@/components/sites/rolly/replica/FinBridgeHeader";
-import { CalendarLedgerModal } from "@/components/sites/rolly/replica/CalendarLedgerModal";
-import { Modal, FinBridgeDropdown } from "@/components/sites/rolly/replica/Ui";
-import { setSetting, useAppState } from "@/components/sites/rolly/replica/store";
+import { FinBridgeHeader } from "@/components/finbridge/workspace/FinBridgeHeader";
+import { CalendarLedgerModal } from "@/components/finbridge/workspace/CalendarLedgerModal";
+import { Modal, FinBridgeDropdown } from "@/components/finbridge/workspace/Ui";
+import { setSetting, useAppState } from "@/components/finbridge/workspace/store";
 import { evaluateSafety, safetyLanguage, safetyRuleSchema, safetySnapshot, type SafetyEvaluation, type SafetyRule } from "@/lib/safety-model";
 import { useSafety } from "./SafetyProvider";
 import { SAFETY_COPY } from "./safety-copy";

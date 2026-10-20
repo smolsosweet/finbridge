@@ -1,10 +1,14 @@
 import { traceAiRequest, type AiRequestTiming } from "@/lib/ai-request-timing";
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { readAiJson } from "@/lib/ai-request";
+import { AI_JSON_BYTES } from "@/lib/ai-limits";
+import { ThinkingLevel } from "@google/genai";
 import { z } from "zod";
-import { getSession } from "@/lib/auth-session";
+import { requireAiSession } from "@/lib/ai-access";
+import { createQuotaGemini } from "@/lib/ai-quota-gemini";
+import { aiQuotaErrorResponse } from "@/lib/ai-quota";
 import { database } from "@/lib/database";
 import { workspaceRepository } from "@/lib/workspace-repository";
-import type { AppState } from "@/components/sites/rolly/replica/store";
+import type { AppState } from "@/components/finbridge/workspace/store";
 import { getGeminiTimeoutMs } from "@/lib/gemini-config";
 import {
   cleanJsonText,
@@ -13,6 +17,9 @@ import {
   calculateScenario,
   scenarioContext,
 } from "@/lib/scenario-planner";
+
+export const runtime = "nodejs";
+export const maxDuration = 40;
 
 const requestSchema = z.object({
   message: z.string().trim().min(1).max(1200),
@@ -30,31 +37,17 @@ const requestSchema = z.object({
   }).strict(),
 }).strict();
 
-function localDemo(request: Request) {
-  if (process.env.NODE_ENV !== "development" || process.env.FINBRIDGE_DEMO_MODE !== "true") return false;
-  const host = request.headers.get("host")?.split(":")[0];
-  const origin = request.headers.get("origin");
-  try { return (host === "localhost" || host === "127.0.0.1") && !!origin && new URL(origin).host === request.headers.get("host"); }
-  catch { return false; }
-}
-
 export async function POST(request: Request) {
   return traceAiRequest("scenario-planner", timing => handleRequest(request, timing));
 }
 
 async function handleRequest(request: Request, timing: AiRequestTiming) {
-  const demo = localDemo(request);
-  const expectedOrigin = process.env.BETTER_AUTH_URL ? new URL(process.env.BETTER_AUTH_URL).origin : new URL(request.url).origin;
-  if (!demo && request.headers.get("origin") !== expectedOrigin) return Response.json({ error: "INVALID_ORIGIN", message: "Please reload the page and try again." }, { status: 403 });
-  const session = demo ? null : await timing.measure("auth", () => getSession());
-  if (!demo && !session) {
-    return Response.json({ error: "UNAUTHENTICATED", message: "Please sign in to use Financial Scenario Planner." }, { status: 401 });
-  }
+  const session = await timing.measure("auth", () => requireAiSession(request));
+  if (session instanceof Response) return session;
 
-  let raw: unknown;
-  try { raw = await request.json(); } catch {
-    return Response.json({ error: "INVALID_REQUEST", message: "Please send a valid scenario request." }, { status: 400 });
-  }
+  const body = await readAiJson(request, AI_JSON_BYTES);
+  if (body instanceof Response) return body;
+  const raw = body.value;
 
   const parsed = requestSchema.safeParse(raw);
   if (!parsed.success) {
@@ -97,7 +90,7 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
   const started = Date.now();
 
   try {
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { retryOptions: { attempts: 1 } } });
+    const ai = createQuotaGemini(apiKey, session.user.id, "scenario-planner");
     const modelContext = {
       wallets: input.context.wallets.map(({ id, name, currency }) => ({ id, name, currency })),
       budgets: input.context.budgets.map(({ id, title, currency, category, wallet }) => ({ id, title, currency, category, wallet })),
@@ -175,6 +168,8 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
     const normalized = timing.measureSync("calculation", () => normalizePlannerResponse(decoded, input));
     return respondPlan(normalized);
   } catch (error) {
+    const quotaResponse = aiQuotaErrorResponse(error, request);
+    if (quotaResponse) return quotaResponse;
     const status = providerStatus(error);
     const timeout = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
     const errorName = error instanceof Error ? error.name : "UnknownError";

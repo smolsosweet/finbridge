@@ -147,7 +147,7 @@ test("resolveCategoryDisplayName handles null / undefined / empty without throwi
 // -------------------------------------------------------------
 console.log("\n--- Section 2: TransactionForm I18N & Normalizer Stress ---");
 
-const transactionsModule = compileTs(path.resolve(__dirname, "../src/components/sites/rolly/replica/Transactions.tsx"));
+const transactionsModule = compileTs(path.resolve(__dirname, "../src/components/finbridge/workspace/Transactions.tsx"));
 const { TRANSACTION_FORM_I18N, normalizeRecurringUnit } = transactionsModule;
 
 test("TRANSACTION_FORM_I18N contains all required keys for vi, en, zh without undefined values", () => {
@@ -184,7 +184,7 @@ test("normalizeRecurringUnit normalizes multi-language strings into canonical un
 // -------------------------------------------------------------
 console.log("\n--- Section 3: Dashboard Date Pickers & Modals Audit ---");
 
-const dashboardModule = compileTs(path.resolve(__dirname, "../src/components/sites/rolly/replica/Dashboard.tsx"));
+const dashboardModule = compileTs(path.resolve(__dirname, "../src/components/finbridge/workspace/Dashboard.tsx"));
 const { DASHBOARD_I18N } = dashboardModule;
 
 test("DASHBOARD_I18N period keys exist in vi, en, zh and have no hardcoded Vietnamese in EN/ZH", () => {
@@ -229,14 +229,14 @@ test("TransactionHistory renders localized text for vi, en, zh without omissions
     }),
   };
 
-  const headerModule = compileTs(path.resolve(__dirname, "../src/components/sites/rolly/replica/FinBridgeHeader.tsx"));
+  const headerModule = compileTs(path.resolve(__dirname, "../src/components/finbridge/workspace/FinBridgeHeader.tsx"));
 
   for (const [langSetting, exp] of [
     ["Tiếng Việt", { eyebrow: "LỊCH SỬ GIAO DỊCH", title: "Lịch sử giao dịch", wallet: "Ví chính", cat: "Thức ăn & Đồ uống" }],
     ["English", { eyebrow: "TRANSACTION HISTORY", title: "Transaction history", wallet: "Main wallet", cat: "Food & Dining" }],
     ["中文", { eyebrow: "交易记录", title: "交易记录", wallet: "主钱包", cat: "餐饮" }],
   ]) {
-    const historyComp = compileTs(path.resolve(__dirname, "../src/components/sites/rolly/replica/TransactionHistory.tsx"), (name) => {
+    const historyComp = compileTs(path.resolve(__dirname, "../src/components/finbridge/workspace/TransactionHistory.tsx"), (name) => {
       if (name === "./store") {
         return {
           useAppState: () => ({

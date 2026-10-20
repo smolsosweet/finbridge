@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Pool } from "pg";
-import type { AppState } from "../components/sites/rolly/replica/store";
+import type { AppState } from "../components/finbridge/workspace/store";
 import { emptyWorkspaceRecord, parseWorkspace, type WorkspaceRecord } from "./workspace-model";
 import { refreshSafetyFromWorkspace } from "./safety-repository";
 import { readFinanceTables, writeFinanceTables } from "./finance-tables";

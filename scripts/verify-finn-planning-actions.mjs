@@ -70,7 +70,7 @@ test("unique explicit currency can resolve its matching wallet; ambiguous or con
 test("forecast comparison renders a real compact table; calculations remain escaped and expandable",()=>{
   const s=state(),{scenario,result}=calculate(s),baseline=calculateScenario(s,{...scenario,changes:[]},today);
   const text=scenarioAnswer(result,scenario,s.wallets,today,"vi",baseline,{detail:"standard",layout:"comparison"});
-  const module={exports:{}},require=createRequire(import.meta.url),code=ts.transpileModule(readFileSync("src/components/sites/rolly/replica/FinancialChatAnswer.tsx","utf8"),{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+  const module={exports:{}},require=createRequire(import.meta.url),code=ts.transpileModule(readFileSync("src/components/finbridge/workspace/FinancialChatAnswer.tsx","utf8"),{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   new Function("require","module","exports",code)(require,module,module.exports);
   const html=renderToStaticMarkup(React.createElement(module.exports.FinancialChatAnswer,{text,calculationDetails:"<script>unsafe</script>"}));
   assert.match(html,/<table>/);assert.match(html,/<th scope="col">/);assert.match(html,/8\.021,05 CNY/);assert.match(html,/-3\.000 CNY/);assert.match(html,/<details>/);assert.doesNotMatch(html,/<script>|<details open/);

@@ -1,17 +1,42 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 import { advanceSafety, evaluateSafety, type SafetyDocument, type SafetyEvent } from "./safety-model";
 import { saveSafety, safetyWorkspace, databaseSafety } from "./safety-repository";
 import { sendSafetyEmail } from "./safety-mail";
 
+// External schedulers can impose a 30-second request limit. Reserve time for
+// cleanup and respond before that limit instead of leaving claimed mail ambiguous.
+const WORKER_BUDGET_MS = 20_000;
+const MINIMUM_MAIL_WINDOW_MS = 9_000;
+const MAX_EVALUATIONS_PER_RUN = 25;
+const MAX_EMAILS_PER_RUN = 1;
+
 export async function runSafetyWorker(pool: Pool, send = sendSafetyEmail, now = new Date()) {
-  const lock = await pool.connect();
   const count = { evaluated: 0, accepted: 0, cancelled: 0, failed: 0, unknown: 0, retried: 0 };
+  const deadline = Date.now() + WORKER_BUDGET_MS;
+  const hasTime = (minimum = 0) => Date.now() + minimum < deadline;
+  const guard = await pool.connect();
+  let lock: PoolClient | undefined;
+  let discardWorker = false;
   try {
-    const acquired = await lock.query("SELECT pg_try_advisory_lock(17961015) AS locked");
+    // A transaction pins one PgBouncer backend. A session lock outside a
+    // transaction can be acquired and unlocked on different Neon backends.
+    // Use a separate key space from the legacy session lock, which may be leaked.
+    await guard.query("BEGIN");
+    await guard.query("SET LOCAL idle_in_transaction_session_timeout = '30s'");
+    const acquired = await guard.query("SELECT pg_try_advisory_xact_lock(17961015, 1) AS locked");
     if (!acquired.rows[0].locked) return { ...count, busy: true };
+    // Keep the guard transaction open while claims/results commit independently.
+    lock = await pool.connect();
     await lock.query("UPDATE finbridge_safety_events SET event=jsonb_set(event,'{emailStatus}','\"unknown\"') WHERE event->>'emailStatus'='sending' AND next_attempt_at < $1", [new Date(now.getTime() - 10 * 60000)]);
-    const docs = await lock.query<{ user_id: string }>("SELECT user_id FROM finbridge_safety WHERE updated_at < $1 ORDER BY updated_at LIMIT 50", [new Date(now.getTime() - 60000)]);
+    const findPending = () => lock!.query<{ id: string; user_id: string }>("SELECT id,user_id FROM finbridge_safety_events WHERE event->>'emailStatus'='pending' AND next_attempt_at <= $1 ORDER BY next_attempt_at,id LIMIT $2", [now, MAX_EMAILS_PER_RUN]);
+    // Deliver already queued mail first; a slow evaluation batch must not starve it.
+    let pending = await findPending();
+    const docs = pending.rows.length ? { rows: [] } : await lock.query<{ user_id: string }>("SELECT user_id FROM finbridge_safety WHERE updated_at < $1 ORDER BY updated_at LIMIT $2", [new Date(now.getTime() - 60000), MAX_EVALUATIONS_PER_RUN]);
     for (const { user_id: userId } of docs.rows) {
+      // Stop evaluating early enough to retain a full email-provider window.
+      // Without this reserve, a long database batch can return 200 while never
+      // reaching the queued mail that the scheduler was invoked to deliver.
+      if (!hasTime(MINIMUM_MAIL_WINDOW_MS)) break;
       await lock.query("BEGIN");
       try {
         await lock.query('SELECT id FROM "user" WHERE id=$1 FOR SHARE', [userId]);
@@ -26,8 +51,9 @@ export async function runSafetyWorker(pool: Pool, send = sendSafetyEmail, now = 
         await lock.query("COMMIT");
       } catch (e) { await lock.query("ROLLBACK"); throw e; }
     }
-    const pending = await lock.query<{ id: string; user_id: string }>("SELECT id,user_id FROM finbridge_safety_events WHERE event->>'emailStatus'='pending' AND next_attempt_at <= $1 ORDER BY next_attempt_at LIMIT 10", [now]);
+    if (!pending.rows.length) pending = await findPending();
     for (const item of pending.rows) {
+      if (!hasTime(MINIMUM_MAIL_WINDOW_MS)) break;
       // A durable claim precedes I/O. Crash/timeout becomes unknown, never blind retry.
       const claim = await lock.query<{ event: SafetyEvent }>("UPDATE finbridge_safety_events SET event=jsonb_set(event,'{emailStatus}','\"sending\"'),attempts=attempts+1,next_attempt_at=$2 WHERE id=$1 AND event->>'emailStatus'='pending' RETURNING event", [item.id, now]);
       if (!claim.rowCount) continue;
@@ -54,5 +80,13 @@ export async function runSafetyWorker(pool: Pool, send = sendSafetyEmail, now = 
       } catch (e) { await lock.query("ROLLBACK"); throw e; }
     }
     return count;
-  } finally { await lock.query("SELECT pg_advisory_unlock(17961015)"); lock.release(); }
+  } catch (error) {
+    discardWorker = true;
+    throw error;
+  } finally {
+    lock?.release(discardWorker);
+    let discardGuard = false;
+    try { await guard.query("ROLLBACK"); } catch { discardGuard = true; }
+    guard.release(discardGuard);
+  }
 }

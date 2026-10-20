@@ -1,5 +1,5 @@
-import type { AppState } from "../components/sites/rolly/replica/store";
-import { budgetSummary, currencyScale, occurrencePayment, plannedOccurrences } from "../components/sites/rolly/replica/planningModel";
+import type { AppState } from "../components/finbridge/workspace/store";
+import { budgetSummary, currencyScale, occurrencePayment, plannedOccurrences } from "../components/finbridge/workspace/planningModel";
 import { trackedBalance } from "./financial-outlook";
 import { balanceAfterObligation } from "./financial-obligation-query";
 import type { AnswerPresentation } from "./assistant-response";

@@ -1,5 +1,5 @@
 import { draftFundingIssues } from "./transaction-funding";
-import type { Transaction } from "../components/sites/rolly/replica/store";
+import type { Transaction } from "../components/finbridge/workspace/store";
 interface DraftWallet { id: string; currency: string; archived?: boolean; initial?: number; type?: string; limit?: number; }
 interface DraftState {
   wallets: DraftWallet[];

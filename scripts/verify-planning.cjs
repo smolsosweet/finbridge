@@ -6,7 +6,7 @@ const ts = require("typescript");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { createRequire } = require("node:module");
-const directory = path.resolve(__dirname, "../src/components/sites/rolly/replica");
+const directory = path.resolve(__dirname, "../src/components/finbridge/workspace");
 const requireLocal = createRequire(path.join(directory, "Planning.tsx"));
 function compile(file, resolve = requireLocal) {
   const source = ts.transpileModule(fs.readFileSync(path.join(directory, file), "utf8"), {
@@ -18,14 +18,14 @@ function compile(file, resolve = requireLocal) {
 }
 const weeks = compile("chartWeek.ts");
 const model = compile("planningModel.ts", (name) => name === "./chartWeek" ? weeks : requireLocal(name));
-const header = compile("FinBridgeHeader.tsx", name => name === "@/components/safety/SafetyProvider" ? { useSafety: () => null } : name === "@/components/safety/safety-copy" ? compile("../../../safety/safety-copy.ts") : name === "./NotificationCenter" ? { NotificationCenter: () => null } : requireLocal(name));
-const setupCopy = compile("../../../../lib/setup-copy.ts");
-const paymentsModel = compile("../../../../lib/fixed-expense-payments.ts", (name) => name === "../components/sites/rolly/replica/planningModel" ? model : requireLocal(name));
-const outlookModel = compile("../../../../lib/financial-outlook.ts", (name) => name === "../components/sites/rolly/replica/planningModel" ? model : name === "./fixed-expense-payments" ? paymentsModel : requireLocal(name));
-const financialChat = compile("../../../../lib/financial-chat.ts", (name) => name === "../components/sites/rolly/replica/planningModel" ? model : name === "./financial-outlook" ? outlookModel : requireLocal(name));
-const safetyCopy = compile("../../../safety/safety-copy.ts");
-const budgetCategories = compile("../../../../lib/budget-categories.ts");
-const scenarioModel = compile("../../../../lib/scenario-planner.ts", name => name === "../components/sites/rolly/replica/planningModel" ? model : name === "./fixed-expense-payments" ? paymentsModel : requireLocal(name));
+const header = compile("FinBridgeHeader.tsx", name => name === "@/components/safety/SafetyProvider" ? { useSafety: () => null } : name === "@/components/safety/safety-copy" ? compile("../../safety/safety-copy.ts") : name === "./NotificationCenter" ? { NotificationCenter: () => null } : requireLocal(name));
+const setupCopy = compile("../../../lib/setup-copy.ts");
+const paymentsModel = compile("../../../lib/fixed-expense-payments.ts", (name) => name === "../components/finbridge/workspace/planningModel" ? model : requireLocal(name));
+const outlookModel = compile("../../../lib/financial-outlook.ts", (name) => name === "../components/finbridge/workspace/planningModel" ? model : name === "./fixed-expense-payments" ? paymentsModel : requireLocal(name));
+const financialChat = compile("../../../lib/financial-chat.ts", (name) => name === "../components/finbridge/workspace/planningModel" ? model : name === "./financial-outlook" ? outlookModel : requireLocal(name));
+const safetyCopy = compile("../../safety/safety-copy.ts");
+const budgetCategories = compile("../../../lib/budget-categories.ts");
+const scenarioModel = compile("../../../lib/scenario-planner.ts", name => name === "../components/finbridge/workspace/planningModel" ? model : name === "./fixed-expense-payments" ? paymentsModel : requireLocal(name));
 const outlookUI = compile("FinancialOutlook.tsx", (name) => {
   if (name === "@/lib/financial-outlook") return outlookModel;
   if (name === "@/lib/notification-center") return { notificationDestination: () => "", notificationReadIds: () => [], markNotificationRead: () => {} };

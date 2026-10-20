@@ -1,6 +1,6 @@
-import type { AppState, Goal } from "@/components/sites/rolly/replica/store";
-import { budgetSummary, currencyScale } from "../components/sites/rolly/replica/planningModel";
-import { validFixedExpense } from "../components/sites/rolly/replica/planningModel";
+import type { AppState, Goal } from "@/components/finbridge/workspace/store";
+import { budgetSummary, currencyScale } from "../components/finbridge/workspace/planningModel";
+import { validFixedExpense } from "../components/finbridge/workspace/planningModel";
 import { nextExpenseDue, fixedExpensePayment, unpaidOccurrences, expenseWallet, fixedExpenseOccurrence, nextScheduledExpenseDue, type ExpenseOccurrenceStatus } from "./fixed-expense-payments";
 import { z } from "zod";
 const days = (a: string, b: string) => Math.round((Date.parse(b + "T12:00:00Z") - Date.parse(a + "T12:00:00Z")) / 86400000);

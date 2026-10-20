@@ -1,4 +1,4 @@
-import type { AppState, Wallet } from "../components/sites/rolly/replica/store";
+import type { AppState, Wallet } from "../components/finbridge/workspace/store";
 import { isClearlyNewTransaction } from "./conversation-intent";
 import { createTimeoutTransactionDraft, normalizeVietnameseMessage, unavailableWalletReply, validateDraftForState, type TransactionDraft } from "./transaction-drafts";
 import { resolveExplicitWallet, resolveUniqueCurrencyWallet } from "./transaction-currency";

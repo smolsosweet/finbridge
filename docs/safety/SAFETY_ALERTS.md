@@ -77,7 +77,8 @@ closure. A PostgreSQL advisory lock serializes worker invocations.
 6. Verify application/database TLS, backups, provider quotas and monitoring, and
    review snapshot retention/privacy policy for the actual deployment.
 
-Each invocation evaluates at most 50 accounts and sends at most 10 queued emails;
+Each invocation has a 20-second processing budget, evaluates at most 25 accounts,
+and sends at most one queued email;
 scheduling capacity must match usage. No real email or scheduler is enabled by
 local feature development. Push/SMS, digests, arbitrary recipients, real-time
 collaborative editing, automatic bank reconciliation and delivery webhooks are outside this version.

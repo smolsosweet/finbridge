@@ -1,4 +1,4 @@
-import type { AppState } from "../components/sites/rolly/replica/store";
+import type { AppState } from "../components/finbridge/workspace/store";
 const normalize = (value: string) => value.normalize("NFKC").trim().toLocaleLowerCase();
 export function expenseCategoriesForWallet(state: AppState, walletId: string) {
   return [...new Set([...(state.walletCategories?.[walletId] || state.categories), ...state.transactions.filter(t => t.wallet === walletId && t.type === "expense").map(t => t.category)])].filter(name => name && state.categoryMeta[name]?.type !== "income" && !state.categoryMeta[name]?.archived);

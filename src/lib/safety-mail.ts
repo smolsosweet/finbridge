@@ -18,7 +18,7 @@ export async function sendSafetyEmail(to: string, language: keyof typeof COPY, e
   const config = readMailConfig(env); if (config?.mode !== "brevo") return "failed";
   const message = renderSafetyEmail(language, env.BETTER_AUTH_URL!);
   try {
-    const response = await fetch("https://api.brevo.com/v3/smtp/email", { method: "POST", signal: AbortSignal.timeout(10000), redirect: "error", headers: { "api-key": config.key, "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ sender: { name: "FinBridge", email: config.from }, to: [{ email: to }], subject: message.subject, htmlContent: message.html, textContent: message.text }) });
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", { method: "POST", signal: AbortSignal.timeout(8000), redirect: "error", headers: { "api-key": config.key, "content-type": "application/json", accept: "application/json" }, body: JSON.stringify({ sender: { name: "FinBridge", email: config.from }, to: [{ email: to }], subject: message.subject, htmlContent: message.html, textContent: message.text }) });
     if (response.ok) return "accepted";
     return response.status === 429 ? "retry" : response.status >= 500 ? "unknown" : "failed";
   } catch { return "unknown"; }

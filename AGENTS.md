@@ -18,7 +18,7 @@ Use README.md for setup, package.json for checks and docs/auth for lifecycle con
 - Keep secrets, tokens, personal data and private backups out of Git/logs.
 - Database tests use only the named isolated local test database.
 - Wallets are manually tracked; never imply bank connectivity or real payments.
-- Existing `sites/rolly` paths and storage keys need an explicit migration before renaming.
+- UI paths were migrated to `components/finbridge` and `public/finbridge`; preserve the legacy asset redirects and browser storage key described in docs/FINBRIDGE_PATH_MIGRATION.md.
 - Retain third-party copyright notices.
 - Use typed TypeScript, named exports, PascalCase components and camelCase helpers.
 - Run relevant checks; report failures and unrun checks honestly.

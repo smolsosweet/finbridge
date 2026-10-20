@@ -1,0 +1,23 @@
+name: Safety email scheduler
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: finbridge-safety-worker
+  cancel-in-progress: false
+jobs:
+  deliver:
+    if: github.ref == 'refs/heads/main' && vars.FINBRIDGE_SAFETY_SCHEDULER_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Evaluate and send opted-in generic reminders
+        env:
+          FINBRIDGE_BASE_URL: ${{ vars.FINBRIDGE_BASE_URL }}
+          SAFETY_CRON_SECRET: ${{ secrets.SAFETY_CRON_SECRET }}
+        run: node scripts/invoke-safety-scheduler.mjs

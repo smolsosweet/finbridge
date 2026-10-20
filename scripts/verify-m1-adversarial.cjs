@@ -5,7 +5,7 @@ const ts = require("typescript");
 const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 
-const directory = path.resolve(__dirname, "../src/components/sites/rolly/replica");
+const directory = path.resolve(__dirname, "../src/components/finbridge/workspace");
 const srcDir = path.resolve(__dirname, "../src");
 
 const VI_CHAR_REGEX = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;

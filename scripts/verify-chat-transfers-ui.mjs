@@ -10,7 +10,7 @@ import { transferChatWriteResult } from "../src/lib/transfer-chat.ts";
 import { TRANSFER_COPY } from "../src/components/transfers/transfer-copy.ts";
 
 const require = createRequire(import.meta.url), module = { exports: {} };
-const code = ts.transpileModule(readFileSync("src/components/sites/rolly/replica/ChatTransferCard.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
+const code = ts.transpileModule(readFileSync("src/components/finbridge/workspace/ChatTransferCard.tsx", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
 new Function("require", "module", "exports", code)(name => {
   if (name === "@/lib/transfer-chat-model") return model;
   if (name.endsWith(".module.css")) return { default: new Proxy({}, { get: (_, key) => String(key) }) };
@@ -47,7 +47,7 @@ test("unknown outcomes retain retry, disable cancellation, and busy state disabl
 // Execute the actual nested ChatPage handlers with synthetic I/O, without
 // duplicating their implementation or needing a real account/payment.
 function clientHarness(fetch) {
-  const source = ts.createSourceFile("Transactions.tsx",readFileSync("src/components/sites/rolly/replica/Transactions.tsx","utf8"),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+  const source = ts.createSourceFile("Transactions.tsx",readFileSync("src/components/finbridge/workspace/Transactions.tsx","utf8"),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
   const names = new Set(["updateTransfer","confirmTransfer","cancelTransfer","chooseTransfer"]), found=[];
   function visit(node){if(ts.isFunctionDeclaration(node)&&node.name&&names.has(node.name.text))found.push(node.getText(source));ts.forEachChild(node,visit);}visit(source);
   assert.equal(found.length,names.size);

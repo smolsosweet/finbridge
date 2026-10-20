@@ -30,8 +30,8 @@ const {
   resolveCategoryDisplayName,
 } = i18nExports;
 
-// --- 2. Compile src/components/sites/rolly/replica/Transactions.tsx to extract normalizeRecurringUnit & TRANSACTION_FORM_I18N ---
-const txSource = fs.readFileSync(path.resolve(__dirname, "../src/components/sites/rolly/replica/Transactions.tsx"), "utf8");
+// --- 2. Compile src/components/finbridge/workspace/Transactions.tsx to extract normalizeRecurringUnit & TRANSACTION_FORM_I18N ---
+const txSource = fs.readFileSync(path.resolve(__dirname, "../src/components/finbridge/workspace/Transactions.tsx"), "utf8");
 const txCompiled = ts.transpileModule(txSource, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020 },
 }).outputText;
@@ -58,8 +58,8 @@ new Function("require", "exports", "module", txCompiled)(mockTransactionsRequire
 
 const { normalizeRecurringUnit, TRANSACTION_FORM_I18N } = txExports;
 
-// --- 3. Compile src/components/sites/rolly/replica/TransactionHistory.tsx to check parity ---
-const histSource = fs.readFileSync(path.resolve(__dirname, "../src/components/sites/rolly/replica/TransactionHistory.tsx"), "utf8");
+// --- 3. Compile src/components/finbridge/workspace/TransactionHistory.tsx to check parity ---
+const histSource = fs.readFileSync(path.resolve(__dirname, "../src/components/finbridge/workspace/TransactionHistory.tsx"), "utf8");
 const histCompiled = ts.transpileModule(histSource, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020 },
 }).outputText;

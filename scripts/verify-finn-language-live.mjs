@@ -1,4 +1,5 @@
-// Manual synthetic-data probe. Real Gemini; stubbed auth/workspace, no database or writes.
+// Manual synthetic-data probe. Real Gemini; stubbed auth/workspace/quota transport, no database or writes.
+// This harness evaluates language interpretation only, not production authorization or quota.
 import assert from "node:assert/strict";
 import {registerHooks} from "node:module";
 import {existsSync} from "node:fs";
@@ -8,7 +9,7 @@ import {randomUUID} from "node:crypto";
 process.loadEnvFile(".env.local");
 const data={wallets:[{id:"vnd",name:"Synthetic wallet",currency:"VND",initial:10000000,type:"cash"}],categories:["Food","Dining","Shopping"],categoryMeta:Object.fromEntries(["Food","Dining","Shopping"].map(name=>[name,{type:"expense",icon:"",children:[]}])),transactions:[{id:"small",title:"Breakfast",amount:25000,type:"expense",wallet:"vnd",category:"Food",date:"2026-10-10",note:""},{id:"large",title:"Laptop",amount:3000000,type:"expense",wallet:"vnd",category:"Shopping",date:"2026-10-15",note:""}],goals:[],fixedExpenses:[],recurring:[],rules:[],settings:{language:"vi"}};
 globalThis.__finnLanguageProbe=data;
-const stubs={"@/lib/auth-session":"export async function getSession(){return {user:{id:'synthetic-owner',emailVerified:true}}}","@/lib/database":"export function database(){return {}}","@/lib/workspace-repository":"export function workspaceRepository(){return {read:async()=>({data:globalThis.__finnLanguageProbe,revision:0})}}"};
+const stubs={"@/lib/ai-quota-gemini":"import {GoogleGenAI} from '@google/genai';export function createQuotaGemini(apiKey){return new GoogleGenAI({apiKey,httpOptions:{retryOptions:{attempts:1}}})}","@/lib/auth-session":"export async function getSession(){return {user:{id:'synthetic-owner',emailVerified:true}}}","@/lib/database":"export function database(){return {}}","@/lib/workspace-repository":"export function workspaceRepository(){return {read:async()=>({data:globalThis.__finnLanguageProbe,revision:0})}}"};
 const root=path.resolve("src"),hooks=registerHooks({resolve(specifier,context,next){
  if(stubs[specifier])return{url:"language-probe:"+specifier,shortCircuit:true};
  if(specifier.startsWith("@/"))return{url:pathToFileURL(path.join(root,specifier.slice(2))+".ts").href,shortCircuit:true};

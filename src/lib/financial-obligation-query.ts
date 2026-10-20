@@ -1,5 +1,5 @@
 import type { FinancialQuery, FinancialState } from "./financial-chat";
-import { currencyScale, occurrencePayment, plannedOccurrences, validPlanningMoney } from "../components/sites/rolly/replica/planningModel";
+import { currencyScale, occurrencePayment, plannedOccurrences, validPlanningMoney } from "../components/finbridge/workspace/planningModel";
 import { trackedBalance, validOutlookDate } from "./financial-outlook";
 
 const normalize = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/đ/g, "d").trim();

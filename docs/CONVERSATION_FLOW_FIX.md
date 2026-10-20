@@ -34,9 +34,9 @@
 
 | File | Vai trò |
 | --- | --- |
-| `src/components/sites/rolly/replica/Transactions.tsx` | Định tuyến UI, mục tiêu theo ID, lựa chọn danh mục, xem trước/xác nhận, trạng thái lưu và retry |
-| `src/components/sites/rolly/replica/Categories.tsx` | Dùng chung quy tắc đổi tên/xóa, giữ phạm vi tạo danh mục của ví đang chọn |
-| `src/components/sites/rolly/replica/store.ts` | Ngữ cảnh hội thoại và thao tác danh mục; yêu cầu writer sẵn sàng khi cần xác nhận lưu |
+| `src/components/finbridge/workspace/Transactions.tsx` | Định tuyến UI, mục tiêu theo ID, lựa chọn danh mục, xem trước/xác nhận, trạng thái lưu và retry |
+| `src/components/finbridge/workspace/Categories.tsx` | Dùng chung quy tắc đổi tên/xóa, giữ phạm vi tạo danh mục của ví đang chọn |
+| `src/components/finbridge/workspace/store.ts` | Ngữ cảnh hội thoại và thao tác danh mục; yêu cầu writer sẵn sàng khi cần xác nhận lưu |
 | `src/lib/conversation-intent.ts` | Các ý định, schema bản vá, ranh giới thao tác và phân giải mục tiêu |
 | `src/lib/category-operations.ts` | Kiểm tra, tác động, phát hiện dữ liệu cũ, di chuyển tham chiếu và lưu trữ danh mục |
 | `src/lib/category-operation-copy.ts` | Nhãn và thông báo EN/VI/ZH cho thao tác danh mục |

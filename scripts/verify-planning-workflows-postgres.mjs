@@ -6,7 +6,7 @@ import { workspaceRepository } from "../src/lib/workspace-repository.ts";
 import { safetyRepository } from "../src/lib/safety-repository.ts";
 import { handleSafety } from "../src/lib/safety-handler.ts";
 import { handleWorkspace } from "../src/lib/workspace-handler.ts";
-import { budgetSummary } from "../src/components/sites/rolly/replica/planningModel.ts";
+import { budgetSummary } from "../src/components/finbridge/workspace/planningModel.ts";
 import { recordFixedExpensePayment } from "../src/lib/fixed-expense-payments.ts";
 const pool=await testPool(), owner=await syntheticUser(pool), other=await syntheticUser(pool), repo=workspaceRepository(pool), safety=safetyRepository(pool), origin="https://finbridge.invalid";
 after(async()=>{await cleanupFinance(pool,[owner,other]);await pool.end();});

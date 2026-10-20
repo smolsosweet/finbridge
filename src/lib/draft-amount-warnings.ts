@@ -1,6 +1,6 @@
-import type { AppState } from "../components/sites/rolly/replica/store";
+import type { AppState } from "../components/finbridge/workspace/store";
 import type { TransactionDraft } from "./transaction-drafts";
-import { currencyScale } from "../components/sites/rolly/replica/planningModel";
+import { currencyScale } from "../components/finbridge/workspace/planningModel";
 import { validOutlookDate } from "./financial-outlook";
 import { availableTransactionFunds } from "./transaction-funding";
 

@@ -1,4 +1,4 @@
-import type { AppState, ChatMessage } from "../components/sites/rolly/replica/store";
+import type { AppState, ChatMessage } from "../components/finbridge/workspace/store";
 import { calculateSpendingPlan } from "./financial-outlook";
 
 /** Request parameters and entity names only; confirmations in history authorize nothing. */

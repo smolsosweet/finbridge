@@ -78,3 +78,16 @@ essential to reviewing model-selected category references.
 When moving these commits to main, follow the migrated `components/finbridge`
 paths and retain main's verified-session, input limits and PostgreSQL quota wrapper.
 Do not replace those guards with this branch's historical local demo routing.
+
+## Main integration verification
+
+Merged origin/main through 9bea62e, resolving the assistant route to use only
+the verified account workspace and retaining the PostgreSQL quota wrapper, origin
+checks and bounded input handling. New source/tests use migrated FinBridge paths.
+The manual language probe explicitly stubs the quota transport and does not verify
+production authorization or database quota; offline quota route regressions do.
+
+After merge: 245 focused regressions passed; 127 supplementary tests passed with
+2 existing TODOs. Typecheck, scoped lint and webpack production build passed.
+The full business command stopped at onboarding because AUTH_TEST_DATABASE_URL
+is absent; no database integration or Vercel deployment verification is claimed.

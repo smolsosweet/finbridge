@@ -1,7 +1,11 @@
 import { traceAiRequest, type AiRequestTiming } from "@/lib/ai-request-timing";
-import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
+import { readAiJson } from "@/lib/ai-request";
+import { AI_JSON_BYTES } from "@/lib/ai-limits";
+import { ThinkingLevel, Type } from "@google/genai";
 import { z } from "zod";
-import { getSession } from "@/lib/auth-session";
+import { requireAiSession } from "@/lib/ai-access";
+import { createQuotaGemini } from "@/lib/ai-quota-gemini";
+import { aiQuotaErrorResponse } from "@/lib/ai-quota";
 import { database } from "@/lib/database";
 import { getGeminiModelCandidates, getGeminiTimeoutMs } from "@/lib/gemini-config";
 import { resolveScenarioLanguage } from "@/lib/scenario-format";
@@ -12,7 +16,7 @@ import { conversationIntents, draftPatchSchema, isCategoryManagementMessage, isC
 import { categoryCommandSchema, prepareCategoryOperation } from "@/lib/category-operations";
 import { categoryChoiceSchema, categoryDialogueResult, inspectCategoryDialogue, resolveCategoryChoice } from "@/lib/category-dialogue";
 import { categoryOperationError } from "@/lib/category-operation-copy";
-import type { AppState } from "@/components/sites/rolly/replica/store";
+import type { AppState } from "@/components/finbridge/workspace/store";
 import { workspaceRepository } from "@/lib/workspace-repository";
 import { spendingPlanAdjustmentSchema, spendingPlanOptionsSchema } from "@/lib/financial-outlook";
 import { financialConversationEntities, resolveObligationReference } from "@/lib/financial-obligation-query";
@@ -29,6 +33,7 @@ import { detectRelativeOrder, explicitlyRequestsDeleteAll, transactionDeletionSe
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 40;
 
 const pendingDraftSchema = z.object({
   id: z.string().min(1).max(100), title: z.string().min(1).max(160), amount: z.number().positive().nullable(),
@@ -171,30 +176,17 @@ function inferRelativeDeletionDate(message: string, today: string): string | nul
   return date.toISOString().slice(0, 10);
 }
 
-function isLocalDemoRequest(request: Request) {
-  if (process.env.NODE_ENV !== "development" || process.env.FINBRIDGE_DEMO_MODE !== "true") return false;
-  const host = request.headers.get("host")?.split(":")[0];
-  const origin = request.headers.get("origin");
-  if (host !== "localhost" && host !== "127.0.0.1") return false;
-  try { return !!origin && new URL(origin).host === request.headers.get("host"); }
-  catch { return false; }
-}
-
 export async function POST(request: Request) {
   return traceAiRequest("assistant", timing => handleRequest(request, timing));
 }
 
 async function handleRequest(request: Request, timing: AiRequestTiming) {
-  const origin = request.headers.get("origin");
-  const expectedOrigin = process.env.BETTER_AUTH_URL ? new URL(process.env.BETTER_AUTH_URL).origin : new URL(request.url).origin;
-  if (origin !== expectedOrigin && !isLocalDemoRequest(request)) return Response.json({ error: "INVALID_ORIGIN", message: "Hãy tải lại trang rồi thử lại." }, { status: 403 });
-  const localDemo = isLocalDemoRequest(request);
-  const session = localDemo ? null : await timing.measure("auth", () => getSession());
-  if (!localDemo && !session) return Response.json({ error: "UNAUTHENTICATED", message: "Hãy đăng nhập để dùng FinBridge AI." }, { status: 401 });
+  const session = await timing.measure("auth", () => requireAiSession(request));
+  if (session instanceof Response) return session;
   if (session && request.headers.get("x-finbridge-workspace-owner") !== session.user.id) return Response.json({ error: "ACCOUNT_CHANGED", message: "Tài khoản đã thay đổi. Hãy tải lại trang." }, { status: 409 });
-  let raw: unknown;
-  try { raw = await request.json(); }
-  catch { return Response.json({ error: "INVALID_REQUEST", message: "Tin nhắn không hợp lệ." }, { status: 400 }); }
+  const body = await readAiJson(request, AI_JSON_BYTES);
+  if (body instanceof Response) return body;
+  const raw = body.value;
   const parsed = requestSchema.safeParse(raw);
   if (!parsed.success) return Response.json({ error: "INVALID_REQUEST", message: "Thông tin ví hoặc ngữ cảnh chat không hợp lệ." }, { status: 400 });
   const input = parsed.data;
@@ -205,7 +197,7 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
   if (directTransfer) {
     const { readTransferChat } = await import("@/lib/transfer-chat-runtime");
     const language = input.language || (/[\u3400-\u9fff]/.test(input.message) ? "zh" : /[à-ỹđ]|ty gia|bao nhieu|quy doi|\bdoi\b/i.test(input.message) ? "vi" : "en");
-    const transfer = await timing.measure("calculation", () => readTransferChat({owner:session?.user.id || "finbridge-local-demo",demo:localDemo,request:directTransfer,id:input.batchId,language}));
+    const transfer = await timing.measure("calculation", () => readTransferChat({owner:session.user.id,demo:false,request:directTransfer,id:input.batchId,language}));
     return Response.json({intent:"international_transfer",operationIntent:"international_transfer",drafts:[],reply:"",transfer});
   }
   const apiKey = process.env.GEMINI_API_KEY;
@@ -224,7 +216,7 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
     } catch { return Response.json({ error: "FINANCIAL_DATA_UNAVAILABLE", message: "Chưa đọc được dữ liệu tài khoản. Hãy tải lại trang rồi thử lại." }, { status: 503 }); }
   }
   const allowedWallets = new Set(input.wallets.map((wallet) => wallet.id));
-  const categoryState = authorizedWorkspace || (localDemo ? { wallets:[], transactions:[], goals:[], fixedExpenses:[], recurring:[], rules:[], settings:{}, categories:input.categories.map(c=>c.name), categoryMeta:Object.fromEntries(input.categories.map(c=>[c.name,{type:c.type,archived:c.archived,icon:"",children:[]}])) } as unknown as AppState : null);
+  const categoryState = authorizedWorkspace;
   if (input.categoryChoice) {
     const choiceLanguage=resolveScenarioLanguage(input.message,input.language || "en");
     const choiceError={vi:"Lựa chọn không còn hợp lệ. Hãy mở lại yêu cầu danh mục để chọn từ dữ liệu hiện tại.",en:"This choice is no longer available. Reopen the category request to choose from current data.",zh:"此选项已不可用，请重新打开类别请求，按当前数据选择。"}[choiceLanguage];
@@ -241,7 +233,10 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
     if (directCategory === "list_categories") return Response.json({intent:"general",operationIntent:"list_categories",drafts:[],reply:"",categoryList:categoryState.categories.filter(name=>!categoryState.categoryMeta[name]?.archived)});
     return Response.json({intent:"general",operationIntent:directCategory.operation,drafts:[],...categoryDialogueResult(directCategory,categoryState,resolveScenarioLanguage(input.message,input.language || "en"),input.batchId)});
   }
-  const deletionState = authorizedWorkspace || (localDemo && input.planningContext ? { ...input.planningContext, wallets: input.wallets, transactions: [], categories: input.categories.map(c => c.name), categoryMeta: {}, settings: {}, recurring: [], rules: [] } as unknown as AppState : null);
+  // AI routes require a verified session and always use the persisted workspace.
+  // Do not retain the legacy local-demo bypass here: it would circumvent the
+  // shared authentication and quota boundary.
+  const deletionState = authorizedWorkspace;
   const allowedCategories = new Set(input.categories.filter(c => !c.archived).map((category) => `${category.type}:${category.name}`));
 
   const themeRequested = isSettingsThemeMessage(input.message);
@@ -350,7 +345,7 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
   const timeoutMs = getGeminiTimeoutMs("GEMINI_CHAT_TIMEOUT_MS", 20_000, 25_000);
   const startedAt = Date.now();
   try {
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { retryOptions: { attempts: 1 } } });
+    const ai = createQuotaGemini(apiKey, session.user.id, "assistant");
     let result: Awaited<ReturnType<typeof ai.models.generateContent>> | undefined;
     let lastModelError: unknown;
     for (const model of candidateModels) {
@@ -422,7 +417,7 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
     if (output.data.intent === "international_transfer") {
       const { readTransferChat } = await import("@/lib/transfer-chat-runtime");
       const language = /zh|中文/.test(String(authorizedWorkspace?.settings.language)) ? "zh" : /vi|Việt/.test(String(authorizedWorkspace?.settings.language)) ? "vi" : authorizedWorkspace ? "en" : /[à-ỹđ]/i.test(input.message) ? "vi" : "en";
-      const transfer = await timing.measure("calculation", () => readTransferChat({ owner: session?.user.id || "finbridge-local-demo", demo: localDemo, request: output.data.transferRequest || {operation:"open"}, previous: input.transferContext, id: input.batchId, language }));
+      const transfer = await timing.measure("calculation", () => readTransferChat({ owner: session.user.id, demo: false, request: output.data.transferRequest || {operation:"open"}, previous: input.transferContext, id: input.batchId, language }));
       return Response.json({ intent: "international_transfer", operationIntent: "international_transfer", drafts: [], reply: "", transfer });
     }
     let operationIntent = output.data.scenarioPlan ? "simulate_financial_scenario" as const : output.data.intent;
@@ -638,12 +633,14 @@ async function handleRequest(request: Request, timing: AiRequestTiming) {
       deletion,
     });
   } catch (error) {
+    const quotaResponse = aiQuotaErrorResponse(error, request);
+    if (quotaResponse) return quotaResponse;
     const status = error && typeof error === "object" && "status" in error && typeof error.status === "number" ? error.status : null;
     const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
     console.error("[FinBridge AI] assistant failed", { durationMs: Date.now() - startedAt, status, name: error instanceof Error ? error.name : "UnknownError" });
     if (!request.signal.aborted && (timedOut || status === 500 || status === 502 || status === 503 || status === 504)) {
       const language = input.language || (/zh|中文/.test(String(authorizedWorkspace?.settings.language)) ? "zh" : /en|English/.test(String(authorizedWorkspace?.settings.language)) ? "en" : "vi");
-      const recoveryState = authorizedWorkspace || (localDemo ? { wallets:input.wallets, categories:input.categories.map(c=>c.name), categoryMeta:Object.fromEntries(input.categories.map(c=>[c.name,{type:c.type,icon:"",children:[],archived:c.archived}])), goals:input.planningContext?.goals || [], fixedExpenses:input.planningContext?.fixedExpenses || [] } : null);
+      const recoveryState = authorizedWorkspace;
       const recovered = recoveryState ? recoverTransactionDraft({message:input.message,batchId:input.batchId,today:input.today,selectedWalletId:input.selectedWalletId,pendingDrafts:(input.pendingDrafts || (input.pendingDraft?[input.pendingDraft]:[])) as TransactionDraft[],pendingScenario:input.pendingScenario,language},recoveryState) : null;
       if (recovered) return Response.json(recovered);
     }

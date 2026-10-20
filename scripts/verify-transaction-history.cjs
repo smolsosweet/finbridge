@@ -7,7 +7,7 @@ const React = require("react");
 const { renderToStaticMarkup } = require("react-dom/server");
 const { createRequire } = require("node:module");
 
-const directory = path.resolve(__dirname, "../src/components/sites/rolly/replica");
+const directory = path.resolve(__dirname, "../src/components/finbridge/workspace");
 const componentFile = path.join(directory, "TransactionHistory.tsx");
 const localRequire = createRequire(componentFile);
 const wallets = [
@@ -36,7 +36,10 @@ function compile(file, resolve) {
   return result.exports;
 }
 const weeks = compile(path.join(directory, "chartWeek.ts"), localRequire);
-const header = compile(path.join(directory, "FinBridgeHeader.tsx"), localRequire);
+const header = compile(path.join(directory, "FinBridgeHeader.tsx"), (name) => {
+  if (name === "./NotificationCenter") return { NotificationCenter: () => null };
+  return localRequire(name);
+});
 const periods = compile(path.join(directory, "HistoryPeriodPicker.tsx"), (name) => {
   if (name === "./chartWeek") return weeks;
   if (name === "./Ui") return { Modal: () => null };
@@ -59,10 +62,16 @@ const testReact = {
 };
 const state = () => ({ wallets, transactions: input, settings: { language } });
 const component = compile(componentFile, (name) => {
+  if (name === "@/lib/i18n") return {
+    resolveLanguage: (value) => String(value).includes("English") ? "en" : String(value).includes("中文") ? "zh" : "vi",
+    resolveWalletDisplayName: (value) => value,
+    resolveCategoryDisplayName: (value) => value,
+  };
   if (name === "./Dashboard") return { DASHBOARD_SAMPLE: sample };
   if (name === "./CalendarLedgerModal") return { CalendarLedgerModal: () => null };
   if (name === "./FinBridgeHeader") return header;
-  if (name === "./store") return { useAppState: state };
+  if (name === "./Ui") return { Modal: () => null };
+  if (name === "./store") return { useAppState: state, updateState: (update) => { input = update(state()).transactions; } };
   if (name === "./chartWeek") return weeks;
   if (name === "./HistoryPeriodPicker") return periods;
   if (name === "react") return testReact;
@@ -80,6 +89,8 @@ assert.match(html, /−30 CNY/, "expense is a separate CNY row");
 assert.match(html, /600,000 VND/, "transfers do not inflate expenses");
 assert.ok(html.indexOf("Alipay lunch") < html.indexOf("Move funds"), "newest first");
 assert.doesNotMatch(html, /99%|Automatically categorized|empty_list|r-mascot/, "missing metadata is not invented");
+assert.match(html, /Edit transaction:/, "saved transactions expose an edit action");
+assert.match(html, /Delete:/, "saved transactions expose a delete action");
 
 query = "wallet=bank&type=income";
 html = render();
@@ -101,6 +112,8 @@ assert.equal(rowCount(html), 1);
 assert.match(html, /Synthetic Data/);
 assert.match(html, /120,000 VND/);
 assert.match(html, /Bank A Everyday/);
+assert.doesNotMatch(html, /Edit transaction:/, "sample transactions cannot be edited");
+assert.doesNotMatch(html, /Delete:/, "sample transactions cannot be deleted");
 query = "source=sample&wallet=ali";
 assert.equal(rowCount(render()), 0, "sample is not falsely assigned to another wallet");
 
@@ -122,7 +135,8 @@ assert.equal(transactions.length, 10, "fixtures and stored records are not modif
 
 // Exercise the real component event handlers using controlled hook state.
 input = transactions; language = "English"; query = ""; controlled = true;
-function tree() { cursor = 0; return component({ navigate: () => {} }); }
+let lastNavigation = "";
+function tree() { cursor = 0; return component({ navigate: (path) => { lastNavigation = path; } }); }
 function find(node, predicate) {
   if (!React.isValidElement(node)) return undefined;
   if (predicate(node)) return node;
@@ -137,9 +151,10 @@ function select(label) {
 }
 const categoryOptions = () => React.Children.toArray(select("Category").props.children).flatMap((node) => React.isValidElement(node) ? [node.props.value] : []);
 assert.deepEqual(categoryOptions(), ["all", "Food", "Salary", "Shopping", "Transfer"], "all-wallet categories are deduplicated");
-find(tree(), (node) => node.type === "button" && node.props["aria-label"] === "Next page").props.onClick();
-assert.equal(rowCount(render()), 5);
-assert.match(render(), /Showing 6–10/);
+find(tree(), (node) => node.type === "button" && String(node.props["aria-label"] || "").startsWith("Edit transaction:")).props.onClick();
+assert.equal(lastNavigation, "editTransaction?id=ali-food", "edit action opens the selected transaction form");
+find(tree(), (node) => node.type === "button" && String(node.props.className || "").includes("fb-load-more-btn")).props.onClick();
+assert.equal(rowCount(render()), 10);
 select("Source wallet").props.onChange({ target: { value: "bank" } });
 assert.deepEqual(categoryOptions(), ["all", "Salary", "Shopping", "Transfer"], "wallet categories contain income and expense categories");
 assert.match(render(), /Showing 1–5/, "filter change resets pagination");
@@ -170,4 +185,10 @@ assert.equal(periods.matchesHistoryPeriod("2025-10-12", { ...period, kind: "year
 assert.equal(periods.matchesHistoryPeriod("2026-10-18", { ...period, kind: "week" }), true);
 assert.equal(periods.matchesHistoryPeriod("2026-10-19", { ...period, kind: "week" }), false);
 assert.equal(periods.matchesHistoryPeriod("2026-10-03", { ...period, kind: "custom" }), true);
+input = transactions; query = ""; slots.length = 0;
+find(tree(), (node) => node.type === "button" && String(node.props["aria-label"] || "").startsWith("Delete:")).props.onClick();
+const confirmDelete = find(tree(), (node) => node.type === "button" && node.props.className === "r-danger" && node.props.children === "Delete");
+assert.ok(confirmDelete, "delete action asks for confirmation");
+confirmDelete.props.onClick();
+assert.equal(input.some((transaction) => transaction.id === "ali-food"), false, "confirmed deletion removes only the selected transaction");
 console.log("PASS: 10 isolated transactions; filter handlers, categories by wallet, deduplication, aligned currency totals, zero rows, pagination, logo/FAB, date-period boundaries and VI/EN/ZH render.");

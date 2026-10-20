@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { workspaceFixture } from "./workspace-fixtures.mjs";
-import { budgetSummary, plannedOccurrences, weeklySpendingRows, validBudget } from "../src/components/sites/rolly/replica/planningModel.ts";
+import { budgetSummary, plannedOccurrences, weeklySpendingRows, validBudget } from "../src/components/finbridge/workspace/planningModel.ts";
 import { recordFixedExpensePayment, nextExpenseDue, unpaidOccurrences, validateFixedPaymentChanges } from "../src/lib/fixed-expense-payments.ts";
 import { validatePlanningChanges } from "../src/lib/planning-validation.ts";
 import { detectProactiveAlerts } from "../src/lib/proactive-alerts.ts";

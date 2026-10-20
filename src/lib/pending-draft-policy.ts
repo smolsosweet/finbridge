@@ -1,4 +1,4 @@
-import type { AppState, ChatMessage } from "../components/sites/rolly/replica/store";
+import type { AppState, ChatMessage } from "../components/finbridge/workspace/store";
 import type { TransactionDraft } from "./transaction-drafts";
 import { formatTransactionMoney, parseTransactionAmounts } from "./transaction-drafts";
 import { isClearlyNewTransaction, isDraftCorrection, isHypotheticalMessage } from "./conversation-intent";
