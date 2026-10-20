@@ -21,7 +21,10 @@ export async function runSafetyWorker(pool: Pool, send = sendSafetyEmail, now = 
     await lock.query("UPDATE finbridge_safety_events SET event=jsonb_set(event,'{emailStatus}','\"unknown\"') WHERE event->>'emailStatus'='sending' AND next_attempt_at < $1", [new Date(now.getTime() - 10 * 60000)]);
     const docs = await lock.query<{ user_id: string }>("SELECT user_id FROM finbridge_safety WHERE updated_at < $1 ORDER BY updated_at LIMIT $2", [new Date(now.getTime() - 60000), MAX_EVALUATIONS_PER_RUN]);
     for (const { user_id: userId } of docs.rows) {
-      if (!hasTime()) break;
+      // Stop evaluating early enough to retain a full email-provider window.
+      // Without this reserve, a long database batch can return 200 while never
+      // reaching the queued mail that the scheduler was invoked to deliver.
+      if (!hasTime(MINIMUM_MAIL_WINDOW_MS)) break;
       await lock.query("BEGIN");
       try {
         await lock.query('SELECT id FROM "user" WHERE id=$1 FOR SHARE', [userId]);
