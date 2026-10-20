@@ -26,9 +26,10 @@ does not follow HTTP redirects and never prints the bearer secret or response te
 Its concurrency group prevents overlapping workflow runs; the DB advisory lock also
 serializes worker calls from any source. No GET endpoint is introduced.
 
-The worker has maxDuration=180 seconds; check Fluid Compute is enabled on Vercel.
-It evaluates at most 50 accounts and sends at most 10 queued messages per call.
-For larger traffic or a strict timing requirement use a dedicated scheduler/queue.
+The worker returns within a 20-second budget and the route has maxDuration=25 seconds,
+which keeps it compatible with external schedulers that allow a 30-second request.
+It evaluates at most 25 accounts and sends at most one queued message per call.
+For larger traffic use a dedicated queue that can acknowledge work before delivery.
 
 Until the scheduler and delivery are actually tested, keep SAFETY_EMAIL_ENABLED=false
 and describe only in-app alerts. Adding this workflow locally does not activate it;

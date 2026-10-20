@@ -3,15 +3,25 @@ import { advanceSafety, evaluateSafety, type SafetyDocument, type SafetyEvent } 
 import { saveSafety, safetyWorkspace, databaseSafety } from "./safety-repository";
 import { sendSafetyEmail } from "./safety-mail";
 
+// External schedulers can impose a 30-second request limit. Reserve time for
+// cleanup and respond before that limit instead of leaving claimed mail ambiguous.
+const WORKER_BUDGET_MS = 20_000;
+const MINIMUM_MAIL_WINDOW_MS = 9_000;
+const MAX_EVALUATIONS_PER_RUN = 25;
+const MAX_EMAILS_PER_RUN = 1;
+
 export async function runSafetyWorker(pool: Pool, send = sendSafetyEmail, now = new Date()) {
   const lock = await pool.connect();
   const count = { evaluated: 0, accepted: 0, cancelled: 0, failed: 0, unknown: 0, retried: 0 };
+  const deadline = Date.now() + WORKER_BUDGET_MS;
+  const hasTime = (minimum = 0) => Date.now() + minimum < deadline;
   try {
     const acquired = await lock.query("SELECT pg_try_advisory_lock(17961015) AS locked");
     if (!acquired.rows[0].locked) return { ...count, busy: true };
     await lock.query("UPDATE finbridge_safety_events SET event=jsonb_set(event,'{emailStatus}','\"unknown\"') WHERE event->>'emailStatus'='sending' AND next_attempt_at < $1", [new Date(now.getTime() - 10 * 60000)]);
-    const docs = await lock.query<{ user_id: string }>("SELECT user_id FROM finbridge_safety WHERE updated_at < $1 ORDER BY updated_at LIMIT 50", [new Date(now.getTime() - 60000)]);
+    const docs = await lock.query<{ user_id: string }>("SELECT user_id FROM finbridge_safety WHERE updated_at < $1 ORDER BY updated_at LIMIT 25", [new Date(now.getTime() - 60000)]);
     for (const { user_id: userId } of docs.rows) {
+      if (!hasTime()) break;
       await lock.query("BEGIN");
       try {
         await lock.query('SELECT id FROM "user" WHERE id=$1 FOR SHARE', [userId]);
@@ -26,8 +36,9 @@ export async function runSafetyWorker(pool: Pool, send = sendSafetyEmail, now = 
         await lock.query("COMMIT");
       } catch (e) { await lock.query("ROLLBACK"); throw e; }
     }
-    const pending = await lock.query<{ id: string; user_id: string }>("SELECT id,user_id FROM finbridge_safety_events WHERE event->>'emailStatus'='pending' AND next_attempt_at <= $1 ORDER BY next_attempt_at LIMIT 10", [now]);
+    const pending = await lock.query<{ id: string; user_id: string }>("SELECT id,user_id FROM finbridge_safety_events WHERE event->>'emailStatus'='pending' AND next_attempt_at <= $1 ORDER BY next_attempt_at LIMIT 1", [now]);
     for (const item of pending.rows) {
+      if (!hasTime(MINIMUM_MAIL_WINDOW_MS)) break;
       // A durable claim precedes I/O. Crash/timeout becomes unknown, never blind retry.
       const claim = await lock.query<{ event: SafetyEvent }>("UPDATE finbridge_safety_events SET event=jsonb_set(event,'{emailStatus}','\"sending\"'),attempts=attempts+1,next_attempt_at=$2 WHERE id=$1 AND event->>'emailStatus'='pending' RETURNING event", [item.id, now]);
       if (!claim.rowCount) continue;
