@@ -2,6 +2,84 @@
 
 FinBridge is a multilingual personal finance workspace for wallets, transactions, budgets and recurring bills across currencies. English is the default; Vietnamese and Chinese are also available.
 
+## Quick access for judges
+
+**Use the hosted application for evaluation. No installation or database setup is required.**
+
+| Resource | Link |
+| --- | --- |
+| Live application | [Open FinBridge](https://finbridge-orcin-phi.vercel.app) |
+| Email/password login | [Sign in](https://finbridge-orcin-phi.vercel.app/login) |
+| Source repository | [smolsosweet/finbridge](https://github.com/smolsosweet/finbridge) |
+| Source download | [Download main as ZIP](https://github.com/smolsosweet/finbridge/archive/refs/heads/main.zip) |
+| Deployed version | [Release metadata](https://finbridge-orcin-phi.vercel.app/api/release) |
+
+### Two judge accounts
+
+Use **email and password**, rather than Google sign-in, for these pre-provisioned accounts.
+
+| Profile | Login email | Starting experience | Password |
+| --- | --- | --- | --- |
+| `demo_no_data` | `demo_no_data@demo.finbridge.invalid` | Empty account; complete the normal setup wizard, then enter synthetic records. | Supplied in the private judge access sheet. |
+| `demo_with_data` | `demo_with_data@demo.finbridge.invalid` | Five VND/USD/CNY wallets, varied categories, transactions across the previous and current calendar months, budgets, fixed bills, thresholds and historical in-app alerts. | Supplied in the private judge access sheet. |
+
+The submission provides a **separate private access sheet** with both passwords. Passwords are excluded from this public repository. If the sheet is missing, contact the submitting team through the competition channel.
+
+1. Open the [login page](https://finbridge-orcin-phi.vercel.app/login).
+2. Enter the full email above and its password from the private access sheet.
+3. Start with `demo_with_data` to explore the records. Use `demo_no_data` to evaluate onboarding and manual entry.
+4. Use separate browser profiles for the two accounts. Edits to a shared demo account are visible to everyone using that same account.
+5. Sign out when finished. The team resets data between evaluation sessions; do not close a demo account during judging.
+
+The `.invalid` addresses are reserved login identities, not real mailboxes. They cannot receive verification, recovery or alert email; demo threshold email consent starts off. Test actual email delivery separately using a registered account with a real inbox.
+
+### Suggested evaluation walkthrough
+
+- Inspect the dashboard, wallet/currency filters and transaction history.
+- Add a synthetic transaction, reload, then edit/delete it and check the balance.
+- Inspect budgets, fixed expenses, reserve thresholds and historical alerts. Marking an alert read does not mean a bill was paid.
+- Ask the AI assistant for one short synthetic transaction draft; review it before confirming the save. AI depends on the configured provider and shared quota.
+- If enabled, create an education sandbox bill, compare example quotes, review/approve a plan, execute the simulation and inspect its receipt. Server checks enforce quote and approval expiry.
+
+Use synthetic data only. The sandbox moves no real money. Email-provider acceptance is not proof of inbox delivery; opening a bank app or QR code is not proof of payment.
+
+## Download the source
+
+Requirements: **Node.js 24+** and npm. Full authenticated operation additionally requires PostgreSQL.
+
+With Git:
+
+```bash
+git clone https://github.com/smolsosweet/finbridge.git
+cd finbridge
+npm ci
+```
+
+Without Git: [download the ZIP](https://github.com/smolsosweet/finbridge/archive/refs/heads/main.zip), extract it, open a terminal inside `finbridge-main` (the directory containing `package.json`), and run `npm ci`.
+
+A clone/ZIP contains neither production credentials nor production database records. The hosted judge accounts do not automatically exist in a local database.
+
+## Local demonstration without a database
+
+Use a **fresh checkout** for this limited development mode. It uses device storage and temporary server memory, without authenticated database persistence, Google login, live email delivery or anonymous Gemini access.
+
+1. Install dependencies using the steps above.
+2. Create a new `.env.local` in the project root containing only:
+
+   ```dotenv
+   FINBRIDGE_DEMO_MODE=true
+   ```
+
+3. Run:
+
+   ```bash
+   npm run dev -- --port 3000
+   ```
+
+4. Open [http://localhost:3000/app](http://localhost:3000/app). No judge password is required in this local mode.
+
+This mode requires `next dev` on localhost and is disabled in production builds. Do not overwrite an existing environment file or connect this demonstration to the hosted database. For the full judged experience, use the live application above.
+
 ## Features
 
 - Google sign-in, verified email/password accounts, recovery, logout and soft account closure.
@@ -21,7 +99,7 @@ PostgreSQL stores authenticated financial workspaces in relational tables: walle
 
 Existing account-owned browser records are offered for a one-time explicit import; the original stays unchanged. Authenticated edits no longer write the financial workspace to browser storage. Language preference and the explicit local demo still use browser storage. Devices load current records when opening the app; concurrent edits cause a visible conflict instead of silent merging.
 
-Email needs a configured Brevo HTTPS or SMTP sender. Local outbox mode is development-only. Secrets belong in ignored environment files or hosting settings.
+Email needs a configured Brevo HTTPS or SMTP sender. Opted-in safety email may include rule/target names, financial amounts, thresholds, currency and period. Local outbox mode is development-only. Secrets belong in ignored environment files or hosting settings.
 
 All Gemini calls use [shared PostgreSQL AI quotas](docs/AI_QUOTAS.md). Set the required global budgets from the actual AI Studio project limits and migrate the quota schema before deploying. Unconfigured quotas block AI calls; manual entry remains available.
 
@@ -29,18 +107,80 @@ See [AI upload/browser security](docs/AI_INPUT_SECURITY.md), [judge account prov
 
 Forwarded-IP trust in auth rate limiting remains open before public deployment. See [auth acceptance](docs/auth/AUTH_FLOW_ACCEPTANCE_2026-10-14.md). Local tests do not establish production security or provider availability.
 
-## Local setup
+## Local setup with PostgreSQL and authentication
 
-Requirements: Node.js 24+, npm and PostgreSQL.
+Use your own PostgreSQL application database and role; PostgreSQL 17 is used by CI. Keep application, automated-test and production databases separate.
 
-1. Run `npm ci`.
-2. Copy `.env.example` to ignored `.env.local`; supply auth, Google and database settings.
-3. Start PostgreSQL, then run `npm run auth:migrate`.
-4. Run `npm run dev` and open http://localhost:3000.
+### 1. Configure the environment
 
-Set `BETTER_AUTH_URL` to the app origin and register its `/api/auth/callback/google` in Google OAuth. Configure real email before testing signup/recovery.
+After `npm ci`, copy `.env.example` to `.env.local`:
 
-On the current Windows machine, PostgreSQL runs separately on port 5434. See [database startup](docs/auth/GOOGLE_LOGIN_SETUP.md). A Git clone does not include credentials or database contents.
+```powershell
+# Windows PowerShell
+Copy-Item .env.example .env.local
+```
+
+```bash
+# macOS / Linux
+cp .env.example .env.local
+```
+
+Edit these settings before starting the app:
+
+| Variable | Local value / purpose |
+| --- | --- |
+| `BETTER_AUTH_URL` | `http://localhost:3000`. Update the example file's different port to match this guide. |
+| `BETTER_AUTH_SECRET` | Your own random secret of at least 32 characters. |
+| `DATABASE_URL` | Your local application database connection string; replace the example role, password, port and database. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Your own OAuth credentials. The current auth configuration requires both variables, including for email/password login. |
+| `AUTH_EMAIL_MODE` | `local` in development: verification/reset messages are saved in `.local/mail-outbox/`, not emailed. |
+| `FINBRIDGE_DEMO_MODE` | Leave unset or set to `false` for authenticated operation. |
+| `GEMINI_API_KEY`, `AI_QUOTA_*` | Needed for AI calls. Set required global budgets from your own provider allowance. |
+| `SAFETY_EMAIL_ENABLED` | Keep `false` until you configure and verify a real sender and scheduler. |
+
+Generate your auth secret locally:
+
+```bash
+node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+```
+
+For Google sign-in, register `http://localhost:3000/api/auth/callback/google` in your own OAuth project. Keep `.env.local`, mail-outbox files and generated passwords private.
+
+### 2. Initialize the schema
+
+Confirm `DATABASE_URL` targets your intended local application database, then run:
+
+```bash
+npm run auth:migrate
+```
+
+Expected completion: `FinBridge schema migrated. Existing data was not reset.` This initializes the auth and application schemas; it does not import hosted demo users or records.
+
+### 3. Start and sign in
+
+```bash
+npm run dev -- --port 3000
+```
+
+Open [http://localhost:3000](http://localhost:3000), register your own account, open its verification URL from the private `.local/mail-outbox/` JSON file in your browser, then sign in. Local outbox mode does not deliver email to an inbox.
+
+To provision local empty/populated judge profiles, follow [Demo accounts](docs/DEMO_ACCOUNTS.md), with `DEMO_DATABASE_URL` explicitly pointing to your **local** database. The tool generates separate local passwords. Hosted demo credentials are not copied automatically.
+
+For a production-style build, use `npm run build` followed by `npm start` with suitable runtime settings. Anonymous demo and local outbox modes are development-only; production authentication mail needs a supported real sender. See [email setup](docs/auth/EMAIL_PASSWORD_SETUP.md).
+
+On Windows, use `npm.cmd` instead of `npm` if PowerShell blocks `npm.ps1` under its execution policy.
+
+## Hosted deployment
+
+The live application uses **Vercel + Neon PostgreSQL**. Store server-only secrets in hosting environment settings; keep Production and Preview database targets separate.
+
+1. Configure the intended database, canonical `BETTER_AUTH_URL`, auth secret and Google OAuth callback.
+2. Initialize the schema against the confirmed target before enabling dependent features.
+3. Configure email, Gemini and shared AI quotas for the features you intend to enable, using actual provider limits.
+4. Enable the clearly labelled transfer sandbox if needed. Configure only one email scheduler and verify delivery separately.
+5. Deploy, compare `/api/release` with the intended commit, then check login, save/reload and a sandbox receipt. Preserve a compatible prior deployment for rollback.
+
+See [AI quotas](docs/AI_QUOTAS.md), [scheduler setup](docs/safety/SCHEDULER.md) and the [release checklist](docs/RELEASE_CHECKLIST_VI.md). Historical checklists contain dated examples; current code and verified deployment settings take precedence.
 
 ## Commands
 
@@ -49,6 +189,8 @@ On the current Windows machine, PostgreSQL runs separately on port 5434. See [da
 | `npm run dev` | Development |
 | `npm run build` / `npm start` | Build / serve production |
 | `npm run typecheck` / `npm run lint` | Static checks |
+| `npm run test:business:unit` | Business unit suites |
+| `npm run test:business:postgres` | Business PostgreSQL suites against the isolated local test database |
 | `npm run auth:migrate` | Database schema |
 | `npm run test:auth` | Auth unit tests |
 | `npm run test:auth:postgres` | Isolated database tests |
@@ -62,6 +204,8 @@ On the current Windows machine, PostgreSQL runs separately on port 5434. See [da
 | `npm run test:transfers:ui` | Isolated browser approval and receipt workflow |
 
 Database tests require `AUTH_TEST_DATABASE_URL` targeting local `finbridge_auth_test`. Never run them against app/production data.
+
+Test commands are not a claim that every suite or production workflow has passed. The submission test report records actual results, known gaps and remaining checks.
 
 ## Documentation and provenance
 
