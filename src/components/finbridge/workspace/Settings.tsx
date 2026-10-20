@@ -13,19 +13,15 @@ import {
   ChevronLeft,
   ChevronRight,
   LogOut,
-  Moon,
   Pencil,
-  Sun,
   Trash2,
   UserCheck,
-  UserRound,
   Users,
 } from "lucide-react";
 import { FinBridgeHeader } from "./FinBridgeHeader";
 import { SettingsOverview, settingsLanguage } from "./SettingsOverview";
-import { Field, Icon, Modal, Toggle } from "./Ui";
-import { CurrencySelect } from "./Tools";
-import { setSetting, money, updateState, useAppState, type Wallet } from "./store";
+import { Modal, Toggle } from "./Ui";
+import { setSetting, money, updateState, useAppState } from "./store";
 import { formatCurrencyInput, parseCurrencyInput } from "@/lib/currency-format";
 
 export const settingRows = [
@@ -617,7 +613,6 @@ const COPY_WALLET_SCREEN = {
 };
 
 export function WalletScreen({
-  screen,
   walletId,
   navigate,
 }: {

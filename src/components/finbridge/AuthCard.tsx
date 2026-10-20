@@ -19,7 +19,7 @@ type FormMessage = keyof typeof AUTH_FORM_COPY.en;
 type AuthError = FormMessage | "googleFailure" | "googleVerificationRequired" | "";
 type AuthNotice = FormMessage | "checkSignup" | "";
 
-export function AuthCard({ onBack, lang = "en", configured = false, initialErrorCode = "", mode = "login", mailMode = "unavailable", token = "", verified: _verified = false, preferStoredLanguage = true }: {
+export function AuthCard({ onBack, lang = "en", configured = false, initialErrorCode = "", mode = "login", mailMode = "unavailable", token = "", preferStoredLanguage = true }: {
   onBack: () => void; lang?: string; configured?: boolean; initialErrorCode?: string; preferStoredLanguage?: boolean;
   mode?: AuthMode; mailMode?: "local" | "smtp" | "brevo" | "unavailable"; token?: string; verified?: boolean;
 }) {

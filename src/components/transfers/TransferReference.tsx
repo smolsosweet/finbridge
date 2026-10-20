@@ -57,12 +57,9 @@ export function TransferReference({ owner, lang }: { owner: string; lang: AppLan
   const [selected, setSelected] = useState<ReferenceEstimate | null>(null);
   const [count, setCount] = useState(5);
   const [pending, setPending] = useState<EstimateInput | null>(null), [now, setNow] = useState(0);
-  const [metaMap, setMetaMap] = useState<Record<string, EstimateMeta>>({});
+  const [metaMap, setMetaMap] = useState<Record<string, EstimateMeta>>(() => readMetaStorage());
   const active = useRef(true), locked = useRef(false), offset = useRef(0);
 
-  useEffect(() => {
-    setMetaMap(readMetaStorage());
-  }, []);
 
   const money = (value: string | number, unit: string) => {
     const num = Number(value);
