@@ -19,7 +19,7 @@ const copy: Record<Language, { conclusion: string; figures: string; analysis: st
   zh: { conclusion: "结论", figures: "相关数据", analysis: "分析", suggestions: "建议", limits: "假设/限制", noWallet: "没有可用于计算的活跃钱包。", noTransactions: "此时间段没有符合条件的交易。", noBudgets: "所选钱包没有符合条件的预算。", assumptions: "根据 FinBridge 已保存的数据计算；不同币种的钱包分别计算，不进行换算。", balanceConclusion: "余额根据钱包初始余额和已保存交易计算。", income: "收入", expense: "支出", transferOut: "转出", transferIn: "转入", incomplete: "跨币种转账缺少收款金额；此余额不完整", malformed: "已跳过金额无效的交易", period: "期间", wallet: "钱包", summary: (range) => `${range}的已记录收入与支出。`, totalIncome: "收入", totalExpense: "支出", noBudgetSuggestion: "请在计划页面创建预算以跟踪限额和固定支出。", budgetConclusion: "当前周期的预算和固定支出情况。", budgetLimit: "限额", spent: "已支出", fixed: "预计固定支出", afterFixed: "扣除固定支出后剩余", over: "可能超出限额", upcoming: "即将到期", extraFixed: "未来30天内未关联预算的固定支出", budgetAnalysis: "预算限额不等于钱包余额。固定支出与已记录支出分开显示。" },
 };
 export type FinancialState = Pick<AppState, "wallets" | "transactions" | "goals" | "fixedExpenses" | "settings">;
-export type FinancialAction = "balance" | "balance_after_obligation" | "spending_summary" | "category_breakdown" | "top_category" | "category_savings" | "transactions" | "largest_transaction" | "budget_status" | "safe_daily_allowance" | "upcoming_obligations" | "goals" | "spending_trend" | "anomalies" | "explain" | "unknown";
+export type FinancialAction = "balance" | "balance_after_obligation" | "spending_summary" | "category_breakdown" | "top_category" | "category_savings" | "savings_advice" | "transactions" | "largest_transaction" | "budget_status" | "safe_daily_allowance" | "upcoming_obligations" | "goals" | "spending_trend" | "anomalies" | "explain" | "unknown";
 export interface FinancialQuery {
   action: FinancialAction;
   actions?: FinancialAction[];
@@ -40,6 +40,9 @@ export function resolveFinancialFollowup(message: string, query: FinancialQuery,
   const text = normalizeVietnameseMessage(message);
   const latestContext = [...history].reverse().find(item => item.role === "assistant" && item.text.startsWith("Previous financial result context"));
   const priorWallet = latestContext?.text.match(/; walletId=("(?:[^"\\]|\\.)*"); scope=selected/);
+  const priorAction = latestContext?.text.match(/action=([^;]+)/)?.[1]?.trim();
+  const priorCategory = latestContext?.text.match(/; category=([^;]+); period=/)?.[1]?.trim();
+  const priorPeriod = latestContext?.text.match(/period=(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})/);
   if (!query.walletId && !asksForAllWalletBalances(message) && priorWallet) {
     try {
       const walletId: unknown = JSON.parse(priorWallet[1]);
@@ -52,13 +55,18 @@ export function resolveFinancialFollowup(message: string, query: FinancialQuery,
     return { ...query, action: "balance_after_obligation", actions: ["balance_after_obligation"] };
   }
   const breakdown = /\b(?:chi(?: tieu)? (?:cho|vao|theo) (?:nhung |cac )?(?:danh )?muc (?:gi|nao)|chi (?:cho )?(?:nhung |cac )?danh muc nao|chi gom (?:nhung |cac )?(?:cai|muc) gi|danh muc (?:da chi|chi tieu)|spending (?:by|breakdown)|(?:which|what) categories|where did my money go)\b|支出类别|按类别/.test(text);
+  const percentageFollowup = /(?:\b\d+(?:[.,]\d+)?\s*%|(?:giam|tiet kiem|reduce|save|少花|减少)\s*\d+)/.test(text);
+  const refersToPriorCategory = /(?:\b(?:do|nay|no|ay|vua roi|danh muc do|khoan do|that|those|it|same|previous)\b|刚才|那个|这个)/.test(text);
+  if (query.action === "category_savings" && !query.category && percentageFollowup && refersToPriorCategory && priorAction === "category_savings" && priorCategory && priorCategory !== "unspecified") {
+    const changesPeriod = /\b(?:thang|tuan|hom|ngay|month|week|today|yesterday|between|since)\b|\d{1,4}[/-]\d{1,2}|本月|上月|今天|本周/.test(text);
+    query = { ...query, category: priorCategory, ...(!changesPeriod && priorPeriod ? { periodStart: query.periodStart || priorPeriod[1], periodEnd: query.periodEnd || priorPeriod[2] } : {}) };
+  }
   if (!breakdown || !["spending_summary", "category_breakdown", "top_category", "explain", "unknown"].includes(query.action)) return query;
   if (query.actions && new Set(query.actions).size > 1) return query;
   // Only inherit an omitted period on a contextual question, never replace an
   // explicit model-parsed date range or use prior calculated monetary values.
-  const context = [...history].reverse().find(item => item.role === "assistant" && item.text.startsWith("Previous financial result context"));
   const changesPeriod = /\b(?:thang|tuan|hom|ngay|month|week|today|yesterday|between|since)\b|\d{1,4}[/-]\d{1,2}|本月|上月|今天|本周/.test(text);
-  const period = !changesPeriod ? context?.text.match(/period=(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})/) : null;
+  const period = !changesPeriod ? priorPeriod : null;
   return { ...query, action: "category_breakdown", actions: ["category_breakdown"], category: null, searchTerm: null, transactionType: "expense",
     periodStart: query.periodStart || period?.[1] || null, periodEnd: query.periodEnd || period?.[2] || null };
 }
@@ -408,6 +416,76 @@ function answerFinancialQuerySection(
       figures: results.join("\n"),
       analysis: localized(lang, `Tính theo khoản đã ghi nhận trong ${range}; đây là mức giảm giả định, chưa thay đổi ngân sách hay tạo kế hoạch.`, `Based on recorded spending for ${range}; this is a hypothetical reduction, not a budget change or a saved plan.`, `根据${range}的已记录支出计算；这是假设调整，尚未修改预算或创建计划。`),
       suggestions: localized(lang, "Bạn muốn thử mức giảm khác hay xem khoản nào trong danh mục này chi nhiều nhất?", "Would you like to try another percentage or see the largest expenses in this category?", "你想试试其他比例，还是看看这个类别中金额最大的支出？"),
+    };
+  }
+
+  if (action === "savings_advice") {
+    const expenses = records.filter((item) => item.type === "expense");
+    const grouped = new Map<string, { walletId: string; category: string; amount: number; count: number }>();
+    for (const item of expenses) {
+      const key = `${item.wallet}\0${item.category || ""}`;
+      const current = grouped.get(key) || { walletId: item.wallet, category: item.category || localized(lang, "Chưa phân loại", "Uncategorized", "未分类"), amount: 0, count: 0 };
+      const wallet = state.wallets.find((candidate) => candidate.id === item.wallet);
+      if (!wallet) continue;
+      const scale = currencyScale(wallet.currency);
+      current.amount = Math.round((current.amount + item.amount) * scale) / scale;
+      current.count++;
+      grouped.set(key, current);
+    }
+    const balances = wallets.map((wallet) => {
+      const result = trackedBalance(state, wallet.id, today);
+      return Number.isFinite(result.amount) ? `• ${walletName(wallet.name, lang)}: **${money(result.amount, wallet.currency)}**` : "";
+    }).filter(Boolean);
+    const cashflow = wallets.map((wallet) => {
+      const own = records.filter(item => item.wallet === wallet.id);
+      if (!own.length) return "";
+      return `• ${walletName(wallet.name, lang)} · ${wallet.currency}: ${localized(lang, "thu", "income", "收入")} ${money(total(own.filter(item => item.type === "income"), wallet.currency), wallet.currency)} · ${localized(lang, "chi", "spent", "支出")} ${money(total(own.filter(item => item.type === "expense"), wallet.currency), wallet.currency)}.`;
+    }).filter(Boolean);
+    const recommendations: string[] = [];
+    // Offer up to three options, taking one at a time per wallet so currencies
+    // are never ranked against one another by their raw numeric amounts.
+    for (let rank = 0; rank < 2 && recommendations.length < 3; rank++) {
+      for (const wallet of wallets) {
+        if (recommendations.length >= 3) break;
+        const item = [...grouped.values()].filter((entry) => entry.walletId === wallet.id).sort((a, b) => b.amount - a.amount)[rank];
+        if (!item || item.amount <= 0) continue;
+        const possibleSavings = Math.round(item.amount * 0.1 * currencyScale(wallet.currency)) / currencyScale(wallet.currency);
+        recommendations.push(localized(lang,
+          `• Thử giảm **10%** ở “${item.category}”: kỳ này đã chi ${money(item.amount, wallet.currency)} qua ${item.count} giao dịch; mức giảm giả định tương đương **${money(possibleSavings, wallet.currency)}**.`,
+          `• Consider a **10%** reduction in “${item.category}”: recorded spending is ${money(item.amount, wallet.currency)} across ${item.count} transactions this period; that would free about **${money(possibleSavings, wallet.currency)}** in this hypothetical.`,
+          `• 可尝试将“${item.category}”支出减少 **10%**：本期记录为 ${money(item.amount, wallet.currency)}，共 ${item.count} 笔；按此假设可少支出约 **${money(possibleSavings, wallet.currency)}**。`));
+      }
+    }
+    const budgetLines = state.goals.filter((goal) => goal.kind === "budget" && wallets.some((wallet) => wallet.id === goal.wallet && wallet.currency === goal.currency)).map((budget) => {
+      const wallet = wallets.find((item) => item.id === budget.wallet);
+      if (!wallet) return "";
+      const summary = budgetSummary(state, budget, today);
+      return summary.matchingCurrency
+        ? `• ${budget.title} · ${wallet.currency}: ${localized(lang, "đã chi", "spent", "已支出")} ${money(summary.actual, wallet.currency)} / ${money(budget.amount, wallet.currency)}; ${localized(lang, "còn sau khoản cố định chưa trả", "left after unpaid fixed expenses", "扣除未付固定支出后剩余")} ${money(summary.afterCommitments, wallet.currency)}${summary.afterCommitments < 0 ? ` · ${localized(lang, "cần giảm ít nhất", "reduce by at least", "至少需减少")} ${money(Math.abs(summary.afterCommitments), wallet.currency)}` : ""}.`
+        : `• ${budget.title}: ${localized(lang, "ví hoặc tiền tệ ngân sách chưa khớp nên Finn chưa tính.", "wallet or budget currency does not match, so Finn could not calculate it.", "钱包或预算币种不匹配，Finn 暂无法计算。")}`;
+    }).filter(Boolean);
+    const unpaidByWallet = wallets.map((wallet) => {
+      const fixed = (state.fixedExpenses || []).filter((item) => item.active && (item.walletId === wallet.id || state.goals.some(goal => goal.kind === "budget" && goal.id === item.budgetId && goal.wallet === wallet.id)));
+      const monthEnd = `${today.slice(0, 7)}-${String(new Date(Date.UTC(Number(today.slice(0, 4)), Number(today.slice(5, 7)), 0)).getUTCDate()).padStart(2, "0")}`;
+      const monthStart = `${today.slice(0, 7)}-01`;
+      const unpaid = fixed.flatMap((item) => unpaidOccurrences(state, item, monthStart, monthEnd).map(date => ({ item, date })));
+      const amount = total(unpaid.map(({ item }) => ({ amount: item.amount })), wallet.currency);
+      const upcoming = unpaid.slice(0, 2).map(({ item, date }) => `${date} · ${item.title} · ${money(item.amount, wallet.currency)}`).join("; ");
+      return amount > 0 ? `• ${walletName(wallet.name, lang)} · ${localized(lang, "hóa đơn chưa trả trong tháng", "unpaid bills this month", "本月未付账单")}: ${money(amount, wallet.currency)} (${unpaid.length})${upcoming ? ` · ${localized(lang, "gần nhất", "next", "最近")}: ${upcoming}` : ""}.` : "";
+    }).filter(Boolean);
+    const goalLines = state.goals.filter(goal => goal.kind !== "budget" && wallets.some(wallet => wallet.id === goal.wallet && wallet.currency === goal.currency)).map(goal => {
+      const wallet = wallets.find(item => item.id === goal.wallet)!;
+      if (!Number.isFinite(goal.amount) || !Number.isFinite(goal.saved) || goal.amount < 0 || goal.saved < 0) return "";
+      return `• ${goal.title} · ${wallet.currency}: ${localized(lang, "đã dành", "saved", "已存")} ${money(goal.saved, wallet.currency)} / ${money(goal.amount, wallet.currency)}.`;
+    }).filter(Boolean);
+    const savings = recommendations.length
+      ? recommendations.join("\n")
+      : localized(lang, "Chưa có giao dịch chi trong kỳ để Finn đề xuất mức giảm có căn cứ.", "There is no recorded spending in this period to support a reduction estimate.", "本期暂无已记录支出，Finn 无法据此估算可减少的金额。");
+    return {
+      conclusion: localized(lang, "Finn đã xem số dư, khoản chi, ngân sách và hóa đơn hiện có. Đây là vài hướng tiết kiệm có thể cân nhắc:", "Finn reviewed your available balances, recorded spending, budgets and bills. Here are a few grounded ways to save:", "Finn 已查看当前余额、已记录支出、预算和账单，可以考虑以下做法："),
+      figures: [balances.length ? `${localized(lang, "Số dư hiện tại", "Current balances", "当前余额")}:\n${balances.join("\n")}` : "", cashflow.length ? `${localized(lang, "Thu và chi trong kỳ", "Income and spending this period", "本期收入与支出")}:\n${cashflow.join("\n")}` : "", budgetLines.length ? `${localized(lang, "Ngân sách", "Budgets", "预算")}:\n${budgetLines.join("\n")}` : "", unpaidByWallet.length ? `${localized(lang, "Khoản cần ưu tiên", "Bills to plan for", "需要优先安排的账单")}:\n${unpaidByWallet.join("\n")}` : "", goalLines.length ? `${localized(lang, "Mục tiêu đang theo dõi", "Tracked goals", "正在跟踪的目标")}:\n${goalLines.join("\n")}` : "", `${localized(lang, "Gợi ý theo chi tiêu đã ghi nhận", "Suggestions from recorded spending", "根据已记录支出的建议")}:\n${savings}`].filter(Boolean).join("\n\n"),
+      analysis: localized(lang, `Các khoản chi được tính trong ${range}. Mức giảm 10% chỉ là ví dụ mô phỏng; Finn chưa thay đổi ngân sách, mục tiêu hay giao dịch.`, `Spending is measured for ${range}. The 10% reduction is only a hypothetical example; Finn has not changed budgets, goals or transactions.`, `支出统计期间为 ${range}。减少 10% 仅为假设示例，Finn 未更改预算、目标或交易。`),
+      suggestions: recommendations.length ? localized(lang, "Bạn muốn Finn thử một tỷ lệ khác hoặc tính kế hoạch đến cuối tháng không?", "Would you like Finn to try a different reduction or project the plan through month-end?", "你想让 Finn 换一个减少比例，还是测算到月底的计划？") : undefined,
     };
   }
 

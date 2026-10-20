@@ -5,7 +5,7 @@ import { scenarioCalculationExplanation } from "../src/lib/scenario-explanation.
 import { calculateScenario, findPreviousScenarioFromHistory, scenarioContext } from "../src/lib/scenario-planner.ts";
 import { calculateSpendingPlan } from "../src/lib/financial-outlook.ts";
 import { scenarioAnswer } from "../src/lib/scenario-answer.ts";
-import { answerFinancialQuery } from "../src/lib/financial-chat.ts";
+import { answerFinancialQuery, resolveFinancialFollowup } from "../src/lib/financial-chat.ts";
 import { modelHistory } from "../src/lib/chat-local-plan.ts";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -134,4 +134,38 @@ test("balance inputs exclude future income just like the balance itself", () => 
   const query={action:"balance",walletId:"vnd",scope:"selected",periodStart:null,periodEnd:null,category:null,searchTerm:null,transactionType:null};
   const answer=answerFinancialQuery(query,s,"vnd","2026-10-19");
   assert.doesNotMatch(answer,/999,999,999|999\.999\.999/);assert.match(answer,/9,104,378 VND/);
+});
+
+test("savings advice is calculated from current wallet, ledger, budgets, unpaid bills and goals without mixing currencies or mutating data", () => {
+  const s=state();
+  s.transactions.push(
+    {id:"shopping",title:"Shoes",amount:200000,type:"expense",wallet:"vnd",category:"Mua sắm",date:"2026-10-18",note:""},
+    {id:"cny-food",title:"Lunch",amount:100,type:"expense",wallet:"cny",category:"Ăn uống",date:"2026-10-18",note:""},
+  );
+  s.goals=[
+    {id:"b",kind:"budget",title:"Living",amount:700000,saved:0,currency:"VND",date:"2026-10-01",cycle:"monthly",category:"",wallet:"vnd",direction:"",person:""},
+    {id:"g",kind:"savings",title:"Laptop fund",amount:5000000,saved:1000000,currency:"VND",date:"2026-12-01",cycle:"monthly",category:"",wallet:"vnd",direction:"",person:""},
+  ];
+  s.fixedExpenses=[{id:"rent",title:"Rent",amount:300000,walletId:"vnd",budgetId:"b",category:"Nhà",dueDate:"2026-10-20",recurrence:"monthly",active:true,reminderDays:3}];
+  const before=structuredClone(s);
+  const answer=answerFinancialQuery({action:"savings_advice",walletId:null,scope:"all",periodStart:"2026-10-01",periodEnd:"2026-10-19",category:null,searchTerm:null,transactionType:null},s,"","2026-10-19");
+  assert.match(answer,/8,904,378 VND/);assert.match(answer,/9,900 CNY/);
+  assert.match(answer,/chi 895,622 VND/);assert.match(answer,/Mua sắm.*200,000 VND/);
+  assert.match(answer,/20,000 VND/);assert.match(answer,/300,000 VND \(1\)/);assert.match(answer,/Laptop fund/);
+  assert.doesNotMatch(answer,/1,000,000 CNY[^\n]*VND|CNY[^\n]*VND/);
+  assert.match(answer,/mô phỏng|hypothetical/);assert.deepEqual(s,before);
+});
+
+test("savings advice states when spending data is missing and does not invent a savings amount", () => {
+  const s=state();s.transactions=[];
+  const answer=answerFinancialQuery({action:"savings_advice",walletId:"vnd",scope:"selected",periodStart:null,periodEnd:null,category:null,searchTerm:null,transactionType:null},s,"vnd","2026-10-19");
+  assert.match(answer,/Chưa có giao dịch chi/);assert.doesNotMatch(answer,/mức giảm giả định tương đương/);
+});
+
+test("a contextual savings adjustment inherits only the prior category and period, never prior calculated amounts", () => {
+  const history=[{role:"assistant",text:'Previous financial result context (recalculate from current data; do not reuse prior amounts): action=category_savings; category=Ăn uống; period=2026-10-01..2026-10-19; percentage=10; walletId="vnd"; scope=selected; bill=null.'}];
+  for (const message of ["giảm mục đó xuống 20% nhé","把那个类别减少到20%"]){
+    const query=resolveFinancialFollowup(message,{action:"category_savings",walletId:null,scope:"selected",periodStart:null,periodEnd:null,category:null,searchTerm:null,transactionType:"expense",percentage:20},history);
+    assert.equal(query.category,"Ăn uống");assert.equal(query.walletId,"vnd");assert.equal(query.periodStart,"2026-10-01");assert.equal(query.periodEnd,"2026-10-19");assert.equal(query.percentage,20);
+  }
 });

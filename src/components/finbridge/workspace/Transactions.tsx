@@ -1639,7 +1639,7 @@ export function ChatPage({ navigate }: { navigate: (screen: string) => void }) {
         return;
       }
       if (ai.intent === "financial") {
-        const allowedActions: FinancialAction[] = ["balance", "balance_after_obligation", "spending_summary", "category_breakdown", "top_category", "category_savings", "transactions", "largest_transaction", "budget_status", "safe_daily_allowance", "upcoming_obligations", "goals", "spending_trend", "anomalies", "explain", "unknown"];
+        const allowedActions: FinancialAction[] = ["balance", "balance_after_obligation", "spending_summary", "category_breakdown", "top_category", "category_savings", "savings_advice", "transactions", "largest_transaction", "budget_status", "safe_daily_allowance", "upcoming_obligations", "goals", "spending_trend", "anomalies", "explain", "unknown"];
         const actions = (ai.actions || [ai.action]).filter((action): action is FinancialAction => allowedActions.includes(action as FinancialAction));
         const presentation = answerPresentationSchema.safeParse((result as { presentation?: unknown }).presentation);
         const localAnswer = answerFinancialQuery({

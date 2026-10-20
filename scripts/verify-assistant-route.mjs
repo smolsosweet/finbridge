@@ -283,6 +283,22 @@ test("category follow-up repairs a repeated summary action and computes fresh se
   assert.deepEqual(fixture.data, before);
 });
 
+test("natural savings requests route to deterministic advice from the authorized workspace", async () => {
+  const original=structuredClone(fixture.data);
+  fixture.data.transactions=[
+    {id:"food",title:"Lunch",type:"expense",amount:300000,category:"Thức ăn & Đồ uống",wallet:"vnd",date:"2026-10-17",note:""},
+    {id:"shopping",title:"Shoes",type:"expense",amount:200000,category:"Mua sắm",wallet:"vnd",date:"2026-10-18",note:""},
+  ];
+  fixture.data.fixedExpenses=[{id:"rent",title:"Rent",amount:400000,category:"Nhà",walletId:"vnd",budgetId:"",dueDate:"2026-10-25",recurrence:"monthly",active:true,reminderDays:3}];
+  const before=structuredClone(fixture.data);
+  fixture.output=response({intent:"query_financial_data",action:"savings_advice",actions:["savings_advice"],walletId:"vnd",scope:"selected"});
+  const result=await(await POST(request(body("Finn gợi ý giúp mình cách tiết kiệm tiền nhé",{language:"vi"})))).json();
+  assert.equal(result.action,"savings_advice");assert.equal(result.actions[0],"savings_advice");assert.equal(fixture.calls.length,1);
+  assert.match(result.financialAnswer,/300,000 VND/);assert.match(result.financialAnswer,/30,000 VND/);assert.match(result.financialAnswer,/200,000 VND/);assert.match(result.financialAnswer,/20,000 VND/);assert.match(result.financialAnswer,/400,000 VND/);
+  assert.deepEqual(fixture.data,before);
+  fixture.data=original;
+});
+
 test("scheduled-payment follow-up repairs a balance tool, resolves the authorized bill and leaves actual data unchanged", async () => {
   fixture.data.fixedExpenses = [{ id: "parking", title: "Tiền gửi xe", amount: 147000, walletId: "vnd", budgetId: "", category: "Mua sắm", dueDate: "2026-10-20", recurrence: "monthly", active: true }];
   const before = structuredClone(fixture.data);

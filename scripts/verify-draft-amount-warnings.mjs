@@ -141,7 +141,7 @@ test("the actual chat confirmation button is disabled for insufficient funds, in
   // test implementation of its disabled condition.
   const code = ts.transpileModule(`export function ActualConfirm({draft,state,committing=false,uncertainDraftIds=[]}) { const id=draft.id; const confirmDrafts=()=>{}; ${fundingDeclaration} ${validDeclaration} return (${button}); }`, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
   const module = { exports: {} }, require = createRequire(import.meta.url);
-  new Function("require", "module", "exports", "draftFundingIssues", "readyDrafts", "resolveLanguage", "today", code)(require, module, module.exports, funding.draftFundingIssues, readyDrafts, () => "vi", () => today);
+  new Function("require", "module", "exports", "draftFundingIssues", "readyDrafts", "resolveLanguage", "today", "uiText", code)(require, module, module.exports, funding.draftFundingIssues, readyDrafts, () => "vi", () => today, value => value);
   const s = state(); s.settings = { language: "Tiếng Việt" }; s.wallets[0].type = "credit"; s.wallets[0].limit = 10_000_000;
   const render = d => renderToStaticMarkup(React.createElement(module.exports.ActualConfirm, { state: s, draft: d }));
   assert.match(render(draft({ amount: 100_000_000 })), /disabled=""/);

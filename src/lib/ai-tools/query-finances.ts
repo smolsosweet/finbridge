@@ -10,6 +10,7 @@ export const queryFinancesInputSchema = z.object({
     "category_breakdown",
     "top_category",
     "category_savings",
+    "savings_advice",
     "transactions",
     "largest_transaction",
     "budget_status",
