@@ -85,8 +85,8 @@ export async function runSafetyWorker(pool: Pool, send = sendSafetyEmail, now = 
             currency: evaluation.currency,
             targetName: targetObj && "title" in targetObj ? targetObj.title : (targetObj && "name" in targetObj ? targetObj.name : undefined),
             category: targetObj && "category" in targetObj ? targetObj.category : undefined,
-            periodStart: evaluation.start,
-            periodEnd: evaluation.end,
+            periodStart: evaluation.start === "reserve" ? undefined : evaluation.start,
+            periodEnd: evaluation.end === "reserve" ? undefined : evaluation.end,
             timeZone: doc?.snapshot?.timeZone,
           };
 

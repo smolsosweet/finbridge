@@ -312,10 +312,15 @@ export function renderSafetyEmail(
     }
   }
 
-  const periodText =
-    details.periodStart && details.periodEnd
-      ? `${details.periodStart} → ${details.periodEnd}`
-      : "";
+  const hasValidPeriod =
+    !isReserve &&
+    Boolean(details.periodStart && details.periodEnd) &&
+    details.periodStart !== "reserve" &&
+    details.periodEnd !== "reserve";
+
+  const periodText = hasValidPeriod
+    ? `${details.periodStart} → ${details.periodEnd}`
+    : "";
 
   // Plain Text Version
   const textSections = [
